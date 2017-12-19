@@ -1,6 +1,11 @@
 # nmap_vulners
-NSE script using some well-known service to provide info on vulnerabilities
 
+[![Current Release](https://img.shields.io/github/release/vulnersCom/nmap-vulners.svg "Current Release")](https://github.com/vulnersCom/nmap-vulners/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/vulnersCom/nmap-vulners/total.svg "Downloads")](https://github.com/vulnersCom/nmap-vulners/releases) [![PayPal](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/videns)
+
+## Description
+
+NSE script using some well-known service to provide info on vulnerabilities
 
 ## Dependencies:
      nmap libraries:
