@@ -23,7 +23,7 @@ Its work is pretty simple:
 -- |_    CVE-2016-0778        https://vulners.com/cve/CVE-2016-0778 
 --
 
-author = 'gmedian at somewhere else'
+author = 'gmedian AT vulners DOT com'
 license = "Same as Nmap--See https://nmap.org/book/man-legal.html"
 categories = {"vuln", "safe"}
 
@@ -32,7 +32,7 @@ local http = require "http"
 local json = require "json"
 local string = require "string"
 
-local api_version="0.2"
+local api_version="0.3"
 
 
 portrule = function(host, port)
@@ -72,8 +72,7 @@ function get_results(what, vers, type)
 
     option['header']['User-Agent'] = string.format('Vulners NMAP Plugin %s', api_version)
 
-    -- NOTE[gmedian]: add quotes to version so that it is always a string for the backend
-    path = '/api/v3/burp/software/' .. '?software=' .. what .. '&version="' .. vers .. '"&type=' .. type
+    path = '/api/v3/burp/software/' .. '?software=' .. what .. '&version=' .. vers .. '&type=' .. type
 
     response = http.get(v_host, v_port, path, option)
     status, vulns = json.parse(response.body)
