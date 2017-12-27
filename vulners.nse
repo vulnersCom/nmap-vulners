@@ -32,7 +32,7 @@ local http = require "http"
 local json = require "json"
 local string = require "string"
 
-local api_version="0.3"
+local api_version="1.0"
 
 
 portrule = function(host, port)

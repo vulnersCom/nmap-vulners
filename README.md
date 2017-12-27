@@ -7,6 +7,8 @@
 
 NSE script using some well-known service to provide info on vulnerabilities
 
+![Result example](example.png)
+
 ## Dependencies:
      nmap libraries:
          http
