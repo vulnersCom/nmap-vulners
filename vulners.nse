@@ -1,5 +1,5 @@
 description = [[
-For each availible cpe it prints the known vulns (links to the correspondent info).
+For each available cpe it prints the known vulns (links to the correspondent info).
 
 Its work is pretty simple:
 - work only when some software version is identified for an open port
@@ -14,13 +14,16 @@ Its work is pretty simple:
 --
 -- @output
 --
--- 22/tcp open  ssh     OpenSSH 6.7p1 Debian 5+deb8u4 (protocol 2.0)
+-- 53/tcp   open     domain             ISC BIND DNS
 -- | vulners:
--- |   cpe:/a:openbsd:openssh:6.7p1:
--- |     CVE-2016-8858        https://vulners.com/cve/CVE-2016-8858
--- |     CVE-2016-0777        https://vulners.com/cve/CVE-2016-0777
--- |     CVE-2017-15906       https://vulners.com/cve/CVE-2017-15906
--- |_    CVE-2016-0778        https://vulners.com/cve/CVE-2016-0778 
+-- |   ISC BIND DNS:
+-- |     CVE-2012-1667        8.5        https://vulners.com/cve/CVE-2012-1667
+-- |     CVE-2002-0651        7.5        https://vulners.com/cve/CVE-2002-0651
+-- |     CVE-2002-0029        7.5        https://vulners.com/cve/CVE-2002-0029
+-- |     CVE-2015-5986        7.1        https://vulners.com/cve/CVE-2015-5986
+-- |     CVE-2010-3615        5.0        https://vulners.com/cve/CVE-2010-3615
+-- |     CVE-2006-0987        5.0        https://vulners.com/cve/CVE-2006-0987
+-- |     CVE-2014-3214        5.0        https://vulners.com/cve/CVE-2014-3214
 --
 
 author = 'gmedian AT vulners DOT com'
@@ -31,14 +34,16 @@ categories = {"vuln", "safe"}
 local http = require "http"
 local json = require "json"
 local string = require "string"
+local table = require "table"
 
-local api_version="1.0"
+local api_version="1.1"
 
 
 portrule = function(host, port)
         local vers=port.version
         return vers ~= nil and vers.version ~= nil
 end
+
 
 ---
 -- Return a string with all the found cve's and correspondent links
@@ -47,11 +52,32 @@ end
 --
 function make_links(vulns)
     local output_str=""
+    local is_exploit=false
+    local cvss_score=""
 
-    for _, vuln in ipairs(vulns.data.search) do
-        output_str = string.format("%s\n\t%s", output_str, vuln._source.id .. '\t\thttps://vulners.com/' .. vuln._source.type .. '/' .. vuln._source.id)
+    -- NOTE[gmedian]: data.search is a "list" already, so just use table.sort with a custom compare function
+    -- However, for the future it might be wiser to create a copy rather than do it in-place
+
+    local vulns_result = {} 
+    for _, v in ipairs(vulns.data.search) do
+        table.insert(vulns_result, v)
     end
 
+	-- Sort the acquired vulns by the CVSS score
+    table.sort(vulns_result, function(a, b)
+    							return a._source.cvss.score > b._source.cvss.score
+							 end
+	)
+
+    for _, vuln in ipairs(vulns_result) do
+        -- Mark the exploits out
+        is_exploit = vuln._source.bulletinFamily:lower() == "exploit"
+
+        -- Sometimes it might happen, so check the score availability
+        cvss_score = vuln._source.cvss and ("\t\t" .. vuln._source.cvss.score) or ""
+        output_str = string.format("%s\n\t%s", output_str, vuln._source.id .. cvss_score .. '\t\thttps://vulners.com/' .. vuln._source.type .. '/' .. vuln._source.id .. (is_exploit and '\t\t*EXPLOIT*' or ''))
+    end
+    
     return output_str
 end
 
@@ -59,7 +85,7 @@ end
 ---
 -- Issues the requests, receives json and parses it, calls <code>make_links</code> when successfull
 --
--- @param what String, future value for the software query argument
+-- @param what string, future value for the software query argument
 -- @param vers string, the version query argument
 -- @param type string, the type query argument
 --
@@ -67,7 +93,8 @@ function get_results(what, vers, type)
     local v_host="vulners.com"
     local v_port=443 
     local response, path
-    local status, vulns
+    local status, error
+    local vulns
     local option={header={}}
 
     option['header']['User-Agent'] = string.format('Vulners NMAP Plugin %s', api_version)
@@ -75,6 +102,20 @@ function get_results(what, vers, type)
     path = '/api/v3/burp/software/' .. '?software=' .. what .. '&version=' .. vers .. '&type=' .. type
 
     response = http.get(v_host, v_port, path, option)
+
+    status = response.status
+    if status == nil then
+        -- Something went really wrong out there
+        -- According to the NSE way we will die silently rather than spam user with error messages
+        return ""
+    elseif status == 418 then
+        -- Too many requests
+        return "You are doing it too fast. Lower the rate or contact isox AT vulners DOT com."
+    elseif status ~= 200 then
+        -- Again just die silently
+        return ""
+    end
+
     status, vulns = json.parse(response.body)
 
     if status == true then
@@ -90,7 +131,7 @@ end
 ---
 -- Calls <code>get_results</code> for type="software"
 -- 
--- It is called from <code>action</code> when nothing is found for the availible cpe's 
+-- It is called from <code>action</code> when nothing is found for the available cpe's 
 --
 -- @param software string, the software name
 -- @param version string, the software version
@@ -118,7 +159,7 @@ function get_vulns_by_cpe(cpe)
     -- TODO[gmedian]: add check for cpe:/a  as we might be interested in software rather than in OS (cpe:/o) and hardware (cpe:/h)
 	-- TODO[gmedian]: work not with the LAST part but simply with the THIRD one (according to cpe doc it must be version)
 
-    -- NOTE[gmedian]: take just the numeric part of the version
+    -- NOTE[gmedian]: take only the numeric part of the version
     _, _, vers = cpe:find(vers_regexp)
 
 
