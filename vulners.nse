@@ -75,7 +75,13 @@ function make_links(vulns)
 
         -- Sometimes it might happen, so check the score availability
         cvss_score = vuln._source.cvss and ("\t\t" .. vuln._source.cvss.score) or ""
-        output_str = string.format("%s\n\t%s", output_str, vuln._source.id .. cvss_score .. '\t\thttps://vulners.com/' .. vuln._source.type .. '/' .. vuln._source.id .. (is_exploit and '\t\t*EXPLOIT*' or ''))
+        if nmap.registry.args.mincvss then
+            if tonumber(nmap.registry.args.mincvss) <= tonumber(cvss_score) then
+                output_str = string.format("%s\n\t%s", output_str, vuln._source.id .. cvss_score .. '\t\thttps://vulners.com/' .. vuln._source.type .. '/' .. vuln._source.id .. (is_exploit and '\t\t*EXPLOIT*' or ''))
+            end
+        else
+            output_str = string.format("%s\n\t%s", output_str, vuln._source.id .. cvss_score .. '\t\thttps://vulners.com/' .. vuln._source.type .. '/' .. vuln._source.id .. (is_exploit and '\t\t*EXPLOIT*' or ''))
+        end
     end
     
     return output_str
