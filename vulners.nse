@@ -1,5 +1,5 @@
 description = [[
-For each availible cpe it prints the known vulns (links to the correspondent info).
+For each available cpe it prints the known vulns (links to the correspondent info).
 
 Its work is pretty simple:
 - work only when some software version is identified for an open port
@@ -90,7 +90,7 @@ end
 ---
 -- Calls <code>get_results</code> for type="software"
 -- 
--- It is called from <code>action</code> when nothing is found for the availible cpe's 
+-- It is called from <code>action</code> when nothing is found for the available cpe's 
 --
 -- @param software string, the software name
 -- @param version string, the software version
