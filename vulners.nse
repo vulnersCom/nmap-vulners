@@ -10,12 +10,8 @@ Its work is pretty simple:
 
 ---
 -- @usage 
--- nmap -sV --script vulners [--script-args mincvss=<arg_val>] <target>
+-- nmap -sV --script vulners <target>
 --
--- @args
--- 
--- mincvss=<float> -  only vulns with cvss_score above this will be printed. The exploits are printed anyway though.
--- 
 -- @output
 --
 -- 53/tcp   open     domain             ISC BIND DNS
@@ -41,12 +37,11 @@ local string = require "string"
 local table = require "table"
 
 local api_version="1.1"
-local mincvss=nmap.registry.args.mincvss and tonumber(nmap.registry.args.mincvss) or 0.0
 
 
 portrule = function(host, port)
-  local vers=port.version
-  return vers ~= nil and vers.version ~= nil
+        local vers=port.version
+        return vers ~= nil and vers.version ~= nil
 end
 
 
@@ -55,41 +50,35 @@ end
 -- 
 -- @param vulns a table with the parsed json response from the vulners server 
 --
-local function make_links(vulns)
-  local output_str=""
-  local is_exploit=false
-  local cvss_score=""
+function make_links(vulns)
+    local output_str=""
+    local is_exploit=false
+    local cvss_score=""
 
-  -- NOTE[gmedian]: data.search is a "list" already, so just use table.sort with a custom compare function
-  -- However, for the future it might be wiser to create a copy rather than do it in-place
+    -- NOTE[gmedian]: data.search is a "list" already, so just use table.sort with a custom compare function
+    -- However, for the future it might be wiser to create a copy rather than do it in-place
 
-  local vulns_result = {} 
-  for _, v in ipairs(vulns.data.search) do
-    table.insert(vulns_result, v)
-  end
+    local vulns_result = {} 
+    for _, v in ipairs(vulns.data.search) do
+        table.insert(vulns_result, v)
+    end
 
 	-- Sort the acquired vulns by the CVSS score
-  table.sort(vulns_result, function(a, b)
-  							return a._source.cvss.score > b._source.cvss.score
+    table.sort(vulns_result, function(a, b)
+    							return a._source.cvss.score > b._source.cvss.score
 							 end
 	)
 
-  for _, vuln in ipairs(vulns_result) do
-    -- Mark the exploits out
-    is_exploit = vuln._source.bulletinFamily:lower() == "exploit"
+    for _, vuln in ipairs(vulns_result) do
+        -- Mark the exploits out
+        is_exploit = vuln._source.bulletinFamily:lower() == "exploit"
 
-    -- Sometimes it might happen, so check the score availability
-    cvss_score = vuln._source.cvss and (type(vuln._source.cvss.score) == "string") and ("\t\t" .. vuln._source.cvss.score) or ""
-
-    print(type(vuln._source.cvss.score))
-
-    -- NOTE[gmedian]: exploits seem to have cvss == 0, so print them anyway
-    if is_exploit or (cvss_score ~= "" and mincvss <= tonumber(cvss_score)) then
-      output_str = string.format("%s\n\t%s", output_str, vuln._source.id .. cvss_score .. '\t\thttps://vulners.com/' .. vuln._source.type .. '/' .. vuln._source.id .. (is_exploit and '\t\t*EXPLOIT*' or ''))
+        -- Sometimes it might happen, so check the score availability
+        cvss_score = vuln._source.cvss and ("\t\t" .. vuln._source.cvss.score) or ""
+        output_str = string.format("%s\n\t%s", output_str, vuln._source.id .. cvss_score .. '\t\thttps://vulners.com/' .. vuln._source.type .. '/' .. vuln._source.id .. (is_exploit and '\t\t*EXPLOIT*' or ''))
     end
-  end
-  
-  return output_str
+    
+    return output_str
 end
 
 
@@ -100,39 +89,42 @@ end
 -- @param vers string, the version query argument
 -- @param type string, the type query argument
 --
-local function get_results(what, vers, type)
-  local v_host="vulners.com"
-  local v_port=443 
-  local response, path
-  local status, error
-  local vulns
-  local option={header={}}
+function get_results(what, vers, type)
+    local v_host="vulners.com"
+    local v_port=443 
+    local response, path
+    local status, error
+    local vulns
+    local option={header={}}
 
-  option['header']['User-Agent'] = string.format('Vulners NMAP Plugin %s', api_version)
+    option['header']['User-Agent'] = string.format('Vulners NMAP Plugin %s', api_version)
 
-  path = '/api/v3/burp/software/' .. '?software=' .. what .. '&version=' .. vers .. '&type=' .. type
+    path = '/api/v3/burp/software/' .. '?software=' .. what .. '&version=' .. vers .. '&type=' .. type
 
-  response = http.get(v_host, v_port, path, option)
+    response = http.get(v_host, v_port, path, option)
 
-  status = response.status
-  if status == nil then
-    -- Something went really wrong out there
-    -- According to the NSE way we will die silently rather than spam user with error messages
-    return ""
-  elseif status ~= 200 then
-    -- Again just die silently
-    return ""
-  end
-
-  status, vulns = json.parse(response.body)
-
-  if status == true then
-    if vulns.result == "OK" then
-      return make_links(vulns)
+    status = response.status
+    if status == nil then
+        -- Something went really wrong out there
+        -- According to the NSE way we will die silently rather than spam user with error messages
+        return ""
+    elseif status == 418 then
+        -- Too many requests
+        return "You are doing it too fast. Lower the rate or contact isox AT vulners DOT com."
+    elseif status ~= 200 then
+        -- Again just die silently
+        return ""
     end
-  end
 
-  return ""
+    status, vulns = json.parse(response.body)
+
+    if status == true then
+        if vulns.result == "OK" then
+            return make_links(vulns)
+        end
+    end
+
+    return ""
 end
 
 
@@ -144,8 +136,8 @@ end
 -- @param software string, the software name
 -- @param version string, the software version
 --
-local function get_vulns_by_software(software, version)
-  return get_results(software, version, "software")
+function get_vulns_by_software(software, version)
+    return get_results(software, version, "software")
 end
 
 
@@ -159,61 +151,62 @@ end
 --
 -- @param cpe string, the given cpe
 --
-local function get_vulns_by_cpe(cpe)
-  local vers
-  local vers_regexp=":([%d%.%-%_]+)([^:]*)$"
-  local output_str=""
-  
-  -- TODO[gmedian]: add check for cpe:/a  as we might be interested in software rather than in OS (cpe:/o) and hardware (cpe:/h)
-  -- TODO[gmedian]: work not with the LAST part but simply with the THIRD one (according to cpe doc it must be version)
+function get_vulns_by_cpe(cpe)
+    local vers
+    local vers_regexp=":([%d%.%-%_]+)([^:]*)$"
+    local output_str=""
+    
+    -- TODO[gmedian]: add check for cpe:/a  as we might be interested in software rather than in OS (cpe:/o) and hardware (cpe:/h)
+	-- TODO[gmedian]: work not with the LAST part but simply with the THIRD one (according to cpe doc it must be version)
 
-  -- NOTE[gmedian]: take only the numeric part of the version
-  _, _, vers = cpe:find(vers_regexp)
+    -- NOTE[gmedian]: take only the numeric part of the version
+    _, _, vers = cpe:find(vers_regexp)
 
-  if not vers then
-    return ""
-  end
 
-  output_str = get_results(cpe, vers, "cpe")
+    if not vers then
+        return ""
+    end
 
-  if output_str == "" then
-    local new_cpe
+    output_str = get_results(cpe, vers, "cpe")
 
-    new_cpe = cpe:gsub(vers_regexp, ":%1:%2")
-    output_str = get_results(new_cpe, vers, "cpe")
-  end
-  
-  return output_str
+    if output_str == "" then
+        local new_cpe
+
+        new_cpe = cpe:gsub(vers_regexp, ":%1:%2")
+        output_str = get_results(new_cpe, vers, "cpe")
+    end
+    
+    return output_str
 end
 
 
 action = function(host, port)
-  local tab={}
-  local changed=false
-  local response
-  local output_str=""
+        local tab={}
+        local changed=false
+        local response
+        local output_str=""
 
-  for i, cpe in ipairs(port.version.cpe) do 
-    output_str = get_vulns_by_cpe(cpe, port.version)
-    if output_str ~= "" then
-      tab[cpe] = output_str
-      changed = true
-    end
-  end
+        for i, cpe in ipairs(port.version.cpe) do 
+            output_str = get_vulns_by_cpe(cpe, port.version)
+            if output_str ~= "" then
+                tab[cpe] = output_str
+                changed = true
+            end
+        end
 
-  -- NOTE[gmedian]: issue request for type=software, but only when nothing is found so far
-  if not changed then
-    local vendor_version = port.version.product .. " " .. port.version.version
-    output_str = get_vulns_by_software(port.version.product, port.version.version)
-    if output_str ~= "" then
-      tab[vendor_version] = output_str
-      changed = true
-    end
-  end
-  
-  if (not changed) then
-    return
-  end
-  return tab
+        -- NOTE[gmedian]: issue request for type=software, but only when nothing is found so far
+        if not changed then
+            local vendor_version = port.version.product .. " " .. port.version.version
+            output_str = get_vulns_by_software(port.version.product, port.version.version)
+            if output_str ~= "" then
+                tab[vendor_version] = output_str
+                changed = true
+            end
+        end
+        
+        if (not changed) then
+            return
+        end
+        return tab
 end
 
