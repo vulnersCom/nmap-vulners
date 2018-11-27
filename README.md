@@ -21,7 +21,7 @@ The only thing you should always keep in mind is that the script depends on havi
      locate, where your nmap scripts are located in your system
          for *nix system it might be  ~/.nmap/scripts/ or $NMAPDIR
          for Mac it might be /usr/local/Cellar/nmap/<version>/share/nmap/scripts/
-         for Windows you have to find it yourself
+         for Windows it might be C:\Program Files (x86)\Nmap\scripts
      copy the provided script (vulners.nse) into that directory
 
 ## Usage
