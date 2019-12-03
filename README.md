@@ -5,7 +5,7 @@
 
 ## Description
 
-NSE script using some well-known service to provide info on vulnerabilities
+NSE script using some well-known service to provide info on vulnerabilities.
 
 ![Result example](example.png)
 
@@ -21,7 +21,7 @@ The only thing you should always keep in mind is that the script depends on havi
 **NB:** Now it can actually be run without -sV flag if http-vulners-regex script is run as well.
 
 ## Installation
-    locate, where your nmap scripts are located in your system
+    locate where your nmap scripts are located on your system
         for *nix system it might be  ~/.nmap/scripts/ or $NMAPDIR
         for Mac it might be /usr/local/Cellar/nmap/<version>/share/nmap/scripts/
         for Windows it might be C:\Program Files (x86)\Nmap\scripts
@@ -54,7 +54,10 @@ Or with the paths:
         table
 
 ## Installation
-    locate you nmap  directory (as above)
+    locate where nmap is located on your system
+        for *nix system it might be  ~/.nmap/ or $NMAPDIR
+        for Mac it might be /usr/local/Cellar/nmap/<version>/share/nmap/
+        for Windows it might be C:\Program Files (x86)\Nmap\
     copy the provided script (http-vulners-regex.nse) into <nmap_dir>/scripts/
     copy the provided json with the regexes to <nmap_dir>/nselib/data/
     copy the provided txt file with the default paths to <nmap_dir>/nselib/data/
