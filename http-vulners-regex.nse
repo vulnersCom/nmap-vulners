@@ -99,7 +99,8 @@ function get_paths(paths_arg)
   local default_paths_file = 'http-vulners-paths.txt'
 
   if type(paths_arg) == 'table' then
-    return paths_arg
+    -- Just do nothing whether it has entries or is an empty one
+    do end
   elseif type(paths_arg) == 'string' then
     stdnse.debug1("Trying to read paths from a specified file " .. paths_arg)
     paths_arg = get_paths_from_file(paths_arg)
