@@ -5,7 +5,7 @@
 
 ## Description
 
-NSE script using some well-known service to provide info on vulnerabilities.
+NSE script using some well-known service to provide info on vulnerabilities. Note that it is already included into the standard nmap NSE library.
 
 ![Result example](example.png)
 
