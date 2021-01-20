@@ -62,7 +62,7 @@ local table = require "table"
 local nmap = require "nmap"
 local stdnse = require "stdnse"
 
-local api_version="1.4"
+local api_version="1.5"
 local mincvss=stdnse.get_script_args("vulners.mincvss")
 mincvss = tonumber(mincvss) or 0.0
 
@@ -185,20 +185,24 @@ function get_vulns_by_cpe(cpe)
   -- TODO[gmedian]: work not with the LAST part but simply with the THIRD one (according to cpe doc it must be version)
 
   -- NOTE[gmedian]: take only the numeric part of the version
-  local _, _, vers = cpe:find(vers_regexp)
-
+  local _, _, vers, patch = cpe:find(vers_regexp)
 
   if not vers then
     return
   end
 
+  stdnse.debug1("Got cpe " .. cpe .. " with version ".. vers .. " and patch " .. (patch or "nil"))
+
   local output = get_results(cpe, vers, "cpe")
 
   if not output then
-    local new_cpe
-
-    new_cpe = cpe:gsub(vers_regexp, ":%1:%2")
-    output = get_results(new_cpe, vers, "cpe")
+    if patch and patch ~= "" then
+        local new_cpe
+        
+        new_cpe = cpe:gsub(vers_regexp, ":%1:%2")
+        stdnse.debug1("Forming new cpe for another attempt " .. new_cpe)
+        output = get_results(new_cpe, vers, "cpe")
+    end
   end
 
   return output
@@ -210,11 +214,28 @@ action = function(host, port)
   local changed=false
   local response
   local output
-
-
+  
   for i, cpe in ipairs(port.version.cpe) do
     stdnse.debug1("Analyzing cpe " .. cpe)
     output = get_vulns_by_cpe(cpe)
+    if cpe:find(":igor_sysoev:nginx") then
+        local output_nginx=get_vulns_by_cpe(cpe:gsub(":igor_sysoev:nginx", ":nginx:nginx"))
+        if not output then
+          output = output_nginx
+        elseif output_nginx then
+          -- Need to merge two arrays, sorted by cvss
+          -- Presumably the former output contains by far less entries, so iterate on it and will insert into the latter
+          -- pos will represent current position in output_nginx
+          local pos=1
+          for i, v in ipairs(output) do
+            while pos <= #output_nginx and output_nginx[pos].cvss >= v.cvss do
+                pos = pos + 1
+            end
+            table.insert(output_nginx, pos, v)
+          end
+          output = output_nginx
+        end
+    end
     if output then
       tab[cpe] = output
       changed = true
