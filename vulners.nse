@@ -212,29 +212,32 @@ end
 action = function(host, port)
   local tab=stdnse.output_table()
   local changed=false
-  local response
   local output
   
   for i, cpe in ipairs(port.version.cpe) do
+    -- There are two cpe's for nginx, have to check them both
+    cpe = cpe:gsub(":nginx:nginx", ":igor_sysoev:nginx")
     stdnse.debug1("Analyzing cpe " .. cpe)
     output = get_vulns_by_cpe(cpe)
     if cpe:find(":igor_sysoev:nginx") then
-        local output_nginx=get_vulns_by_cpe(cpe:gsub(":igor_sysoev:nginx", ":nginx:nginx"))
-        if not output then
-          output = output_nginx
-        elseif output_nginx then
-          -- Need to merge two arrays, sorted by cvss
-          -- Presumably the former output contains by far less entries, so iterate on it and will insert into the latter
-          -- pos will represent current position in output_nginx
-          local pos=1
-          for i, v in ipairs(output) do
-            while pos <= #output_nginx and output_nginx[pos].cvss >= v.cvss do
-                pos = pos + 1
-            end
-            table.insert(output_nginx, pos, v)
+      cpe = cpe:gsub(":igor_sysoev:nginx", ":nginx:nginx")
+      stdnse.debug1("Now going to analyze the second version " .. cpe)
+      local output_nginx=get_vulns_by_cpe(cpe)
+      if not output then
+        output = output_nginx
+      elseif output_nginx then
+        -- Need to merge two arrays, sorted by cvss
+        -- Presumably the former output contains by far less entries, so iterate on it and insert into the latter
+        -- pos will represent current position in output_nginx
+        local pos=1
+        for i, v in ipairs(output) do
+          while pos <= #output_nginx and output_nginx[pos].cvss >= v.cvss do
+              pos = pos + 1
           end
-          output = output_nginx
+          table.insert(output_nginx, pos, v)
         end
+        output = output_nginx
+      end
     end
     if output then
       tab[cpe] = output
