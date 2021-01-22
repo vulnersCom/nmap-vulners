@@ -62,7 +62,7 @@ local table = require "table"
 local nmap = require "nmap"
 local stdnse = require "stdnse"
 
-local api_version="1.5"
+local api_version="1.6"
 local mincvss=stdnse.get_script_args("vulners.mincvss")
 mincvss = tonumber(mincvss) or 0.0
 
@@ -126,31 +126,55 @@ end
 function get_results(what, vers, type)
   local api_endpoint = "https://vulners.com/api/v3/burp/software/"
   local vulns
+  local response
+  local status
+  local attempt_n=0
   local option={
     header={
       ['User-Agent'] = string.format('Vulners NMAP Plugin %s', api_version)
     },
     any_af = true,
   }
+ 
+  stdnse.debug1("Trying to get vulns of " .. what .. " for type " .. type)
 
-  local response = http.get_url(('%s?software=%s&version=%s&type=%s'):format(api_endpoint, what, vers, type), option)
+  -- Sometimes we cannot contact vulners, so have to try several more times
+  while attempt_n < 3 do
+    stdnse.debug1("Attempt ".. attempt_n .. " to contact vulners.")
+    response = http.get_url(('%s?software=%s&version=%s&type=%s'):format(api_endpoint, what, vers, type), option)
+    status = response.status
+    if status ~= nil then
+      break
+    end
+    attempt_n = attempt_n + 1
+    stdnse.sleep(1)
+  end
 
-  local status = response.status
   if status == nil then
     -- Something went really wrong out there
     -- According to the NSE way we will die silently rather than spam user with error messages
+    stdnse.debug1("Failed to cantact vulners in several attempts.")
     return
   elseif status ~= 200 then
     -- Again just die silently
+    stdnse.debug1("Response from vulners is not 200 but " .. status)
     return
   end
 
   status, vulns = json.parse(response.body)
 
   if status == true then
+    stdnse.debug1("Have successfully parsed json response.")
     if vulns.result == "OK" then
+      stdnse.debug1("Response from vulners is OK.")
       return make_links(vulns)
+    else
+      stdnse.debug1("Response from vulners is not OK with body:")
+      stdnse.debug1(response.body)
     end
+  else
+    stdnse.debug1("Unable to parse json.")
+    stdnse.debug1(response.body)
   end
 end
 
