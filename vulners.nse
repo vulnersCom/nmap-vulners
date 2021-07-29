@@ -62,7 +62,7 @@ local table = require "table"
 local nmap = require "nmap"
 local stdnse = require "stdnse"
 
-local api_version="1.6"
+local api_version="1.7"
 local mincvss=stdnse.get_script_args("vulners.mincvss")
 mincvss = tonumber(mincvss) or 0.0
 
@@ -131,7 +131,8 @@ function get_results(what, vers, type)
   local attempt_n=0
   local option={
     header={
-      ['User-Agent'] = string.format('Vulners NMAP Plugin %s', api_version)
+      ['User-Agent'] = string.format('Vulners NMAP Plugin %s', api_version),
+      ['Accept-Encoding'] = "gzip, deflate"
     },
     any_af = true,
   }
