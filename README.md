@@ -5,7 +5,7 @@
 
 ## Description
 
-NSE script using some well-known service to provide info on vulnerabilities. Note that it is already included into the standard nmap NSE library.
+NSE script uses info about known services to provide data on vulnerabilities. Note that it is already included into the standard nmap NSE library.
 
 ![Result example](example.png)
 
@@ -16,7 +16,7 @@ NSE script using some well-known service to provide info on vulnerabilities. Not
         string
     http-vulners-regex
 
-The only thing you should always keep in mind is that the script depends on having software versions at hand, so it only works with -sV flag.
+Keep in mind that the script depends on having information about software versions, so it only works with -sV flag.
 
 **NB:** Now it can actually be run without -sV flag if http-vulners-regex script is run as well.
 
@@ -38,7 +38,7 @@ It is KISS after all.
 
 ## Description
 
-NSE script to scan HTTP responses and identify CPEs for the mentioned software. It can therefore boost the efficiency of the main vulners script.
+NSE script scans HTTP responses and identifies CPEs for the mentioned software. It can therefore boost the efficiency of the main vulners script.
 
 ![Result example](simple_regex_example.png)
 Or with the paths:
