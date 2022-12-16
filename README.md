@@ -67,3 +67,22 @@ Or with the paths:
 ## Usage
     As a usual NSE script:
         nmap --script http-vulners-regex.nse [--script-args paths={"/"}] <target> 
+
+
+# vulners_enterprise
+
+## Description 
+This is basically the good old faithfull nmap-vulners from above with one exception: it requires an API_KEY to work. 
+
+You can either specify it on the CLI using the 'api_key' script argument, set it into an envirotnment variable VULNERS_API_KEY, or store it in a file readable by the user running nmap. In this case you must specify the absolute path to the file using the 'api_key_file' script argument.
+
+## Usage
+    As a usual NSE script:
+        nmap -sV --script vulners [--script-args mincvss=<arg_val>,api_key=<api_key>,api_key_file=<absolute_path>,api_host=http://my_host.com] <target>
+        
+### NSE Arguments
+    *vulners_enterprise.mincvss* Limit CVEs shown to those with this CVSS score or greater.
+    *vulners_enterprise.api_key* API token to be used in the requests
+    *vulners_enterprise.api_key_file* Absolute path to the file with a single line containing the API token
+    *vulners_enterprise.api_host* URL to vulners API without the leading slash. Defaults to https://vulners.com
+
