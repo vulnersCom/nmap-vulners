@@ -83,7 +83,10 @@ You can either specify it on the CLI using the 'api_key' script argument, set it
 ### NSE Arguments
 
 **vulners_enterprise.mincvss** Limit CVEs shown to those with this CVSS score or greater.
+
 **vulners_enterprise.api_key** API token to be used in the requests
+
 **vulners_enterprise.api_key_file** Absolute path to the file with a single line containing the API token
+
 **vulners_enterprise.api_host** URL to vulners API without the leading slash. Defaults to https://vulners.com
 
