@@ -78,7 +78,7 @@ You can either specify it on the CLI using the 'api_key' script argument, set it
 
 ## Usage
     As a usual NSE script:
-        nmap -sV --script vulners [--script-args mincvss=<arg_val>,api_key=<api_key>,api_key_file=<absolute_path>,api_host=http://my_host.com] <target>
+        nmap -sV --script vulners_enterprise [--script-args mincvss=<arg_val>,api_key=<api_key>,api_key_file=<absolute_path>,api_host=http://my_host.com] <target>
         
 ### NSE Arguments
 
