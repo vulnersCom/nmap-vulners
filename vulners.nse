@@ -132,7 +132,6 @@ function get_results(what, vers, type)
   local option={
     header={
       ['User-Agent'] = string.format('Vulners NMAP Plugin %s', api_version),
-      ['Accept-Encoding'] = "gzip, deflate"
     },
     any_af = true,
   }
