@@ -30,16 +30,20 @@ In this case you must specify the absolute path to the file using the 'api_key_f
 --
 -- @output
 --
--- 53/tcp   open     domain             ISC BIND DNS
+-- 22/tcp open  ssh     syn-ack OpenSSH 6.6.1p1 Ubuntu 2ubuntu2.13 (Ubuntu Linux; protocol 2.0)
 -- | vulners_enterprise:
--- |   ISC BIND DNS:
--- |     CVE-2012-1667    8.5    https://vulners.com/cve/CVE-2012-1667
--- |     CVE-2002-0651    7.5    https://vulners.com/cve/CVE-2002-0651
--- |     CVE-2002-0029    7.5    https://vulners.com/cve/CVE-2002-0029
--- |     CVE-2015-5986    7.1    https://vulners.com/cve/CVE-2015-5986
--- |     CVE-2010-3615    5.0    https://vulners.com/cve/CVE-2010-3615
--- |     CVE-2006-0987    5.0    https://vulners.com/cve/CVE-2006-0987
--- |_    CVE-2014-3214    5.0    https://vulners.com/cve/CVE-2014-3214
+-- |   cpe:/a:openbsd:openssh:6.6.1p1:
+-- |         PRION:CVE-2020-16088    9.8    https://vulners.com/prion/PRION:CVE-2020-16088
+-- |         PRION:CVE-2015-5600     8.5    https://vulners.com/prion/PRION:CVE-2015-5600
+-- |         CVE-2015-5600           8.5    https://vulners.com/cve/CVE-2015-5600
+-- |         PRION:CVE-2015-6564     6.9    https://vulners.com/prion/PRION:CVE-2015-6564
+-- |         CVE-2015-6564           6.9    https://vulners.com/cve/CVE-2015-6564
+-- |         CVE-2020-14145          5.9    https://vulners.com/cve/CVE-2020-14145
+-- |         CVE-2018-15919          5.3    https://vulners.com/cve/CVE-2018-15919
+-- |         PRION:CVE-2015-5352     4.3    https://vulners.com/prion/PRION:CVE-2015-5352
+-- |         CVE-2015-5352           4.3    https://vulners.com/cve/CVE-2015-5352
+-- |         PRION:CVE-2015-6563     1.9    https://vulners.com/prion/PRION:CVE-2015-6563
+-- |_        CVE-2015-6563           1.9    https://vulners.com/cve/CVE-2015-6563
 --
 -- @xmloutput
 -- <table key="cpe:/a:isc:bind:9.8.2rc1">
@@ -129,19 +133,27 @@ end
 --
 function make_links(vulns)
   local output = {}
+  local cvss = ""
 
   if not vulns or not vulns.data or not vulns.data.search then
     return
   end
 
   for _, vuln in ipairs(vulns.data.search) do
+
+    if vuln._source.cvss3.cvssV3 == nil then
+      cvss = vuln._source.cvss.score
+    else
+      cvss = vuln._source.cvss3.cvssV3.baseScore
+    end
+
     local v = {
       id = vuln._source.id,
       type = vuln._source.type,
       -- Mark the exploits out
       is_exploit = vuln._source.bulletinFamily:lower() == "exploit",
       -- Sometimes it might happen, so check the score availability
-      cvss = tonumber(vuln._source.cvss.score),
+      cvss = tonumber(cvss)
     }
 
     -- NOTE[gmedian]: exploits seem to have cvss == 0, so print them anyway
