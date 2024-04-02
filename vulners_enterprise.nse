@@ -95,7 +95,7 @@ end
 
 local cve_meta = {
   __tostring = function(me)
-      return ("\t%s\t%s\thttps://vulners.com/%s/%s%s"):format(me.id, me.cvss or "", me.type, me.id, me.is_exploit and '\t*EXPLOIT*' or '')
+      return ("\t%s\tcvssV3: %s\thttps://vulners.com/%s/%s%s"):format(me.id, me.cvss or "", me.type, me.id, me.is_exploit and '\t*EXPLOIT*' or '')
   end,
 }
 
