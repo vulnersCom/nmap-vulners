@@ -96,7 +96,7 @@ end
 
 local cve_meta = {
   __tostring = function(me)
-      return ("\t%s\tcvssV3: %s\thttps://vulners.com/%s/%s%s"):format(me.id, me.cvss or "", me.type, me.id, me.is_exploit and '\t*EXPLOIT*' or '')
+      return ("\t%s\t%s: %s\thttps://vulners.com/%s/%s%s"):format(me.id, me.cvss_type, me.cvss or "", me.type, me.id, me.is_exploit and '\t*EXPLOIT*' or '')
   end,
 }
 
@@ -142,11 +142,6 @@ function make_links(vulns)
 
   for _, vuln in ipairs(vulns.data.search) do
 
-    if vuln._source.cvss3.cvssV3 == nil then
-      cvss = vuln._source.cvss.score
-    else
-      cvss = vuln._source.cvss3.cvssV3.baseScore
-    end
 
     local v = {
       id = vuln._source.id,
@@ -154,8 +149,14 @@ function make_links(vulns)
       -- Mark the exploits out
       is_exploit = vuln._source.bulletinFamily:lower() == "exploit",
       -- Sometimes it might happen, so check the score availability
-      cvss = tonumber(cvss)
     }
+    if vuln._source.cvss3.cvssV3 == nil then
+      v['cvss'] = vuln._source.cvss.score
+      v['cvss_type'] = "cvssV2"
+    else
+      v['cvss'] = vuln._source.cvss3.cvssV3.baseScore
+      v['cvss_type'] = "cvssV3"
+    end
 
     -- NOTE[gmedian]: exploits seem to have cvss == 0, so print them anyway
     if v.is_exploit or (v.cvss and mincvss <= v.cvss) then
