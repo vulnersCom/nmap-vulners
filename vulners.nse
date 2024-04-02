@@ -56,6 +56,7 @@ categories = {"vuln", "safe", "external", "default"}
 
 
 local http = require "http"
+local url = require "url"
 local json = require "json"
 local string = require "string"
 local table = require "table"
@@ -129,6 +130,12 @@ function get_results(what, vers, type)
   local response
   local status
   local attempt_n=0
+  local query = {
+          software= what,
+          version= vers,
+          type=type
+  }
+  local api_url = ('%s?%s'):format(api_endpoint, url.build_query(query))
   local option={
     header={
       ['User-Agent'] = string.format('Vulners NMAP Plugin %s', api_version),
@@ -136,13 +143,14 @@ function get_results(what, vers, type)
     },
     any_af = true,
   }
- 
+  
+
   stdnse.debug1("Trying to get vulns of " .. what .. " for type " .. type)
 
   -- Sometimes we cannot contact vulners, so have to try several more times
   while attempt_n < 3 do
     stdnse.debug1("Attempt ".. attempt_n .. " to contact vulners.")
-    response = http.get_url(('%s?software=%s&version=%s&type=%s'):format(api_endpoint, what, vers, type), option)
+    response = http.get_url(api_url, option)
     status = response.status
     if status ~= nil then
       break
