@@ -30,20 +30,21 @@ In this case you must specify the absolute path to the file using the 'api_key_f
 --
 -- @output
 --
+-- PORT   STATE SERVICE REASON  VERSION
 -- 22/tcp open  ssh     syn-ack OpenSSH 6.6.1p1 Ubuntu 2ubuntu2.13 (Ubuntu Linux; protocol 2.0)
 -- | vulners_enterprise:
 -- |   cpe:/a:openbsd:openssh:6.6.1p1:
--- |         PRION:CVE-2020-16088    9.8    https://vulners.com/prion/PRION:CVE-2020-16088
--- |         PRION:CVE-2015-5600     8.5    https://vulners.com/prion/PRION:CVE-2015-5600
--- |         CVE-2015-5600           8.5    https://vulners.com/cve/CVE-2015-5600
--- |         PRION:CVE-2015-6564     6.9    https://vulners.com/prion/PRION:CVE-2015-6564
--- |         CVE-2015-6564           6.9    https://vulners.com/cve/CVE-2015-6564
--- |         CVE-2020-14145          5.9    https://vulners.com/cve/CVE-2020-14145
--- |         CVE-2018-15919          5.3    https://vulners.com/cve/CVE-2018-15919
--- |         PRION:CVE-2015-5352     4.3    https://vulners.com/prion/PRION:CVE-2015-5352
--- |         CVE-2015-5352           4.3    https://vulners.com/cve/CVE-2015-5352
--- |         PRION:CVE-2015-6563     1.9    https://vulners.com/prion/PRION:CVE-2015-6563
--- |_        CVE-2015-6563           1.9    https://vulners.com/cve/CVE-2015-6563
+-- |         PRION:CVE-2020-16088    cvssV3: 9.8    https://vulners.com/prion/PRION:CVE-2020-16088
+-- |         PRION:CVE-2015-5600    cvssV2: 8.5    https://vulners.com/prion/PRION:CVE-2015-5600
+-- |         CVE-2015-5600    cvssV2: 8.5    https://vulners.com/cve/CVE-2015-5600
+-- |         PRION:CVE-2015-6564    cvssV2: 6.9    https://vulners.com/prion/PRION:CVE-2015-6564
+-- |         CVE-2015-6564    cvssV2: 6.9    https://vulners.com/cve/CVE-2015-6564
+-- |         CVE-2020-14145    cvssV3: 5.9    https://vulners.com/cve/CVE-2020-14145
+-- |         CVE-2018-15919    cvssV3: 5.3    https://vulners.com/cve/CVE-2018-15919
+-- |         PRION:CVE-2015-5352    cvssV2: 4.3    https://vulners.com/prion/PRION:CVE-2015-5352
+-- |         CVE-2015-5352    cvssV2: 4.3    https://vulners.com/cve/CVE-2015-5352
+-- |         PRION:CVE-2015-6563    cvssV2: 1.9    https://vulners.com/prion/PRION:CVE-2015-6563
+-- |_        CVE-2015-6563    cvssV2: 1.9    https://vulners.com/cve/CVE-2015-6563
 --
 -- @xmloutput
 -- <table key="cpe:/a:isc:bind:9.8.2rc1">
