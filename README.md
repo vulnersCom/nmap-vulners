@@ -72,9 +72,13 @@ Or with the paths:
 # vulners_enterprise
 
 ## Description 
-This is basically the good old faithfull nmap-vulners from above with one exception: it requires an API_KEY to work. 
+This is basically the good old faithfull nmap-vulners from above with an important exception: it requires an API_KEY to work. 
+
+Moreover it specifically uses CVSS v3 score rather than v2 in its output.
 
 You can either specify it on the CLI using the 'api_key' script argument, set it into an envirotnment variable VULNERS_API_KEY, or store it in a file readable by the user running nmap. In this case you must specify the absolute path to the file using the 'api_key_file' script argument.
+
+![Result example](vulners_enterprise_output.png)
 
 ## Usage
     As a usual NSE script:

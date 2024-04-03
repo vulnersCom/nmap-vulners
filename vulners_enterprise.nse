@@ -77,7 +77,7 @@ local nmap = require "nmap"
 local stdnse = require "stdnse"
 local os = require "os"
 
-local api_version="1.8"
+local api_version="1.9"
 local mincvss=stdnse.get_script_args(SCRIPT_NAME .. ".mincvss")
 mincvss = tonumber(mincvss) or 0.0
 
