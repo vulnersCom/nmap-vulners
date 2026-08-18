@@ -113,9 +113,10 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          set -o pipefail
+          # The probe name does not exist on purpose, so nmap exits non-zero
+          # after printing what it opened; that must not end the step.
           datadir=$(nmap -d2 --script-help nmap-vulners-probe 2>&1 |
-                    sed -n 's|^Fetchfile found \(.*\)/nse_main\.lua$|\1|p' | head -n 1)
+                    sed -n 's|^Fetchfile found \(.*\)/nse_main\.lua$|\1|p' | head -n 1 || true)
           ./install.sh --uninstall
           for file in scripts/vulners.nse scripts/vulners_enterprise.nse \
                       scripts/http-vulners-regex.nse \

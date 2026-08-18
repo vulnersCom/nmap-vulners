@@ -46,9 +46,11 @@ command -v nmap >/dev/null 2>&1 || die "nmap is not installed, or not in PATH"
 # nse_main.lua is the one this nmap actually uses - whatever the build,
 # the package manager or NMAPDIR decided.
 system_datadir() {
+  # The probe name is meant not to exist: nmap prints what it opened and then
+  # exits non-zero, which must not take the installer with it.
   reported=$(nmap -d2 --script-help nmap-vulners-install-probe 2>&1 |
              sed -n 's|^Fetchfile found \(.*\)/nse_main\.lua$|\1|p' |
-             head -n 1)
+             head -n 1 || true)
 
   if [ -n "$reported" ] && [ -d "$reported" ]; then
     # It can arrive as /usr/bin/../share/nmap; resolve for readability.
