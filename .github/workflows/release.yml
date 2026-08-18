@@ -93,6 +93,19 @@ jobs:
       - name: Show what users will download
         run: tar -tzf "dist/${{ steps.name.outputs.prefix }}.tar.gz"
 
+      # The tag annotation says what the release is; the generated list of
+      # merged pull requests goes underneath it. Generated notes on their own
+      # describe nothing when the work arrived as direct commits.
+      - name: Compose the release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.name.outputs.tag }}"
+          git tag -l --format='%(contents)' "$TAG" | tail -n +2 > notes.md
+          gh api "repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="$TAG" --jq .body >> notes.md || true
+          cat notes.md
+
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -100,6 +113,5 @@ jobs:
           TAG="${{ steps.name.outputs.tag }}"
           gh release create "$TAG" dist/* \
             --title "nmap-vulners ${TAG#v}" \
-            --generate-notes \
-            --notes-start-tag "$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || echo '')" \
+            --notes-file notes.md \
             --verify-tag
