@@ -106,16 +106,42 @@ jobs:
           }
           nmap -sn -Pn --script vulners 127.0.0.1 | Out-Null
 
+      # Checking --script-help here would prove nothing: nmap ships a
+      # vulners.nse of its own and prints an entry for it either way. What
+      # uninstall promises is that its five files are gone.
       - name: Uninstall again (POSIX)
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          set -o pipefail
+          datadir=$(nmap -d2 --script-help nmap-vulners-probe 2>&1 |
+                    sed -n 's|^Fetchfile found \(.*\)/nse_main\.lua$|\1|p' | head -n 1)
           ./install.sh --uninstall
-          nmap --script-help vulners 2>&1 | grep -q "^vulners" && exit 1 || true
+          for file in scripts/vulners.nse scripts/vulners_enterprise.nse \
+                      scripts/http-vulners-regex.nse \
+                      nselib/data/http-vulners-regex.json \
+                      nselib/data/http-vulners-paths.txt; do
+            if [ -e "$datadir/$file" ]; then
+              echo "$file survived the uninstall"
+              exit 1
+            fi
+          done
+          echo "all five files removed from $datadir"
 
       - name: Uninstall again (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $env:PATH += ";C:\Program Files (x86)\Nmap"
+          $datadir = $null
+          foreach ($line in (nmap -d2 --script-help nmap-vulners-probe 2>&1)) {
+            if ("$line" -match '^Fetchfile found (.*)[\\/]nse_main\.lua$') { $datadir = $Matches[1]; break }
+          }
           .\install.ps1 -Uninstall
+          foreach ($file in @("scripts\vulners.nse", "scripts\vulners_enterprise.nse",
+                              "scripts\http-vulners-regex.nse",
+                              "nselib\data\http-vulners-regex.json",
+                              "nselib\data\http-vulners-paths.txt")) {
+            if (Test-Path (Join-Path $datadir $file)) { throw "$file survived the uninstall" }
+          }
+          Write-Host "all five files removed from $datadir"
