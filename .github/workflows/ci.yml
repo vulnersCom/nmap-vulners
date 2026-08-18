@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The secret scan looks at the tree; full history is not needed.
+          fetch-depth: 1
+
+      - name: Check for secrets, AI artifacts and clutter
+        run: python3 tools/check.py
+
+  tests:
+    name: NSE test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nmap
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nmap
+          nmap --version
+
+      # The suite runs inside nmap so the scripts are exercised against the
+      # real NSE libraries of the nmap version this job installed.
+      # nmap exits 0 when a script raises, so the status alone would report
+      # success for a suite that never ran a case. The output has to say it did.
+      # A key in the environment must not change the result: the suite fakes
+      # os.getenv, and this is what proves it keeps doing so.
+      - name: Unit tests
+        env:
+          VULNERS_API_KEY: not-a-real-key-the-suite-must-ignore-this
+        run: |
+          set -o pipefail
+          nmap -sn -Pn --script ./tests/run.nse \
+            --script-args testdir=tests,root=. 127.0.0.1 | tee unit.log
+          grep -q "SUITE OK" unit.log
+
+      - name: End-to-end tests
+        run: python3 tests/e2e/run_e2e.py
+
+  install:
+    name: Installer on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nmap (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y nmap
+
+      - name: Install nmap (macOS)
+        if: runner.os == 'macOS'
+        run: brew install nmap
+
+      - name: Install nmap (Windows)
+        if: runner.os == 'Windows'
+        run: choco install nmap -y --no-progress
+
+      # The point of the check is not that the files were copied, but that nmap
+      # resolves the name to the copy just installed: nmap ships a vulners.nse
+      # of its own, and the installer is expected to replace it.
+      - name: Install and verify (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -o pipefail
+          ./install.sh
+          resolved=$(nmap -d2 --script-help vulners |
+                     sed -n 's|^Fetchfile found \(.*/scripts/vulners\.nse\)$|\1|p' | head -n 1)
+          echo "nmap resolves vulners to: $resolved"
+          grep -q 'api_version = "' "$resolved"
+          diff -q vulners.nse "$resolved"
+          nmap -sn -Pn --script vulners 127.0.0.1 >/dev/null
+
+      - name: Install and verify (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:PATH += ";C:\Program Files (x86)\Nmap"
+          .\install.ps1
+          $resolved = $null
+          foreach ($line in (nmap -d2 --script-help vulners 2>&1)) {
+            if ("$line" -match '^Fetchfile found (.*vulners\.nse)$') { $resolved = $Matches[1]; break }
+          }
+          Write-Host "nmap resolves vulners to: $resolved"
+          if (-not $resolved) { throw "vulners.nse was not resolved" }
+          if ((Get-FileHash $resolved).Hash -ne (Get-FileHash vulners.nse).Hash) {
+            throw "nmap resolved a different copy than the one installed"
+          }
+          nmap -sn -Pn --script vulners 127.0.0.1 | Out-Null
+
+      - name: Uninstall again (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          ./install.sh --uninstall
+          nmap --script-help vulners 2>&1 | grep -q "^vulners" && exit 1 || true
+
+      - name: Uninstall again (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:PATH += ";C:\Program Files (x86)\Nmap"
+          .\install.ps1 -Uninstall
