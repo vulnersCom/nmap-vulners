@@ -27,6 +27,8 @@ jobs:
   verify:
     name: Gates
     runs-on: ubuntu-latest
+    # runs all seven gates
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -82,6 +84,8 @@ jobs:
     name: Publish
     needs: verify
     runs-on: ubuntu-latest
+    # builds two archives and uploads them
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:

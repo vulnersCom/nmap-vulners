@@ -50,6 +50,8 @@ jobs:
   rebuild:
     name: Rebuild and gate
     runs-on: ubuntu-latest
+    # clones five upstream corpora and rebuilds from them
+    timeout-minutes: 60
     outputs:
       verdict: ${{ steps.diff.outputs.verdict }}
     steps:
@@ -175,6 +177,8 @@ jobs:
     needs: rebuild
     if: needs.rebuild.outputs.verdict == 'auto' && !inputs.force_review
     runs-on: ubuntu-latest
+    # one commit and one push
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -209,6 +213,8 @@ jobs:
     needs: rebuild
     if: needs.rebuild.outputs.verdict == 'review' || inputs.force_review
     runs-on: ubuntu-latest
+    # opens one pull request
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4

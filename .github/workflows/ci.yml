@@ -20,6 +20,8 @@ jobs:
   hygiene:
     name: Repository hygiene
     runs-on: ubuntu-latest
+    # checks 54 files; a minute when apt behaves
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -70,6 +72,8 @@ jobs:
   tests:
     name: NSE test suite
     runs-on: ubuntu-latest
+    # the unit gate is under a second and the e2e about seven
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -100,6 +104,8 @@ jobs:
   install:
     name: Installer on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # measured: 10s on macOS, 1m03 on Windows, 5m34 on ubuntu
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:

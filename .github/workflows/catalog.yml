@@ -60,6 +60,8 @@ jobs:
   publish:
     name: Publish catalog/ to the catalog branch
     runs-on: ubuntu-latest
+    # this is the distribution mechanism; it must fail loudly, not hang
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
