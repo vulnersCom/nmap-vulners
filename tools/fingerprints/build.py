@@ -48,24 +48,9 @@ import paths as path_builder                      # noqa: E402
 import probes as probe_builder                    # noqa: E402
 from sources import legacy, nuclei, recog, wappalyzer  # noqa: E402
 
-# The channel a rule is matched against, and what the script builds as its
-# subject. Anything not listed here is not something a response can answer.
-CHANNELS = {
-    "server": "the Server header's value",
-    "powered-by": "the X-Powered-By header's value",
-    "header": "one named header's value",
-    "headers-raw": "the whole header block",
-    "cookie": "one Set-Cookie value",
-    "wwwauth": "the WWW-Authenticate header's value",
-    "title": "the text of <title>",
-    "meta": "the content= of one named <meta>",
-    "body": "the whole decoded body",
-    "script": "one <script src=> value",
-    "banner": "nmap's own service banner, so it costs no request",
-    "favicon": "the MD5 of /favicon.ico",
-}
-
-
+# The channel a rule is matched against is decided in normalize.py, which owns
+# both halves of that vocabulary: CHANNEL_ALIASES maps the source spellings onto
+# runtime keys and FIXED_CHANNELS lists the ones that need no mapping.
 
 # Must match tools/catalog.py and the CATALOG_SCHEMA in vulners.nse.
 CATALOG_SCHEMA = 1
@@ -307,6 +292,29 @@ MAX_BODY_SIZE = 128 * 1024
 MAX_PATTERN_SECONDS = 0.30
 
 
+# A letter as fold_case writes it: "[aA]". Recognised so the literal runs of a
+# case-folded pattern can be recovered - see unfold().
+FOLDED_LETTER = re.compile(r"\[([a-zA-Z])([a-zA-Z])\]")
+
+
+def unfold(pattern):
+    """A case-folded pattern with its literal runs put back.
+
+    fold_case replaces every letter with a two-element class, so literal_runs()
+    finds NOTHING in a folded pattern and adversarial() fell back to the anchor
+    alone - the weaker seed its own comment says measured the jQuery rules as
+    free. Measured: 145 of the shipped rules have no literal run left, so the
+    quadratic gate was blind to every one of them, and case folding is exactly
+    what the expensive body rules carry.
+
+    Only a pair that is the same letter in both cases is a fold; anything else
+    is a real two-character class and is left alone.
+    """
+    return FOLDED_LETTER.sub(
+        lambda m: m.group(1).lower() if m.group(1).lower() == m.group(2).lower()
+        else m.group(0), pattern)
+
+
 def adversarial(pattern, anchor):
     """The most expensive subject a target can build for this pattern.
 
@@ -320,7 +328,7 @@ def adversarial(pattern, anchor):
     # ".js?version=" gives them no "jquery" to start from, so the scan never
     # begins. Repeating "jquery.js?version=" starts it 7300 times and finishes
     # none of them, which is the 5.3 seconds this gate exists to catch.
-    seed = "".join(literal_runs(pattern)) or anchor \
+    seed = "".join(literal_runs(unfold(pattern))) or anchor \
         or "".join(ch for ch in pattern if ch.isalnum()) or "a"
     return (seed * (MAX_BODY_SIZE // len(seed) + 1))[:MAX_BODY_SIZE]
 
@@ -354,6 +362,36 @@ def refuse_quadratic(rules, report):
         if survivors:
             kept.append(dict(rule, variants=survivors))
     return kept
+
+
+# Where nmap keeps its probe database, in the order worth trying. The default
+# used to be the Homebrew path alone, so on any other machine - ubuntu-latest,
+# which is where the weekly rebuild runs - the file was absent,
+# drop_what_nmap_knows returned its input unchanged, and the build reported
+# "nmap knows 0 identities" and carried on. A filter that silently does nothing
+# is exactly what the other guards in this file exist to prevent.
+NMAP_PROBE_PATHS = (
+    "/usr/share/nmap/nmap-service-probes",
+    "/usr/local/share/nmap/nmap-service-probes",
+    "/opt/homebrew/share/nmap/nmap-service-probes",
+)
+
+
+def find_nmap_probes(explicit):
+    """The probe database to read, or a hard stop saying why there is none."""
+    if explicit:
+        if not os.path.exists(explicit):
+            raise SystemExit("no nmap probe database at %s. Point --nmap-probes "
+                             "at one, or pass --no-nmap-probes to build without "
+                             "the deduplication it provides." % explicit)
+        return explicit
+    for path in NMAP_PROBE_PATHS:
+        if os.path.exists(path):
+            return path
+    raise SystemExit("found no nmap probe database in any of:\n  %s\nInstall "
+                     "nmap, point --nmap-probes at the file, or pass "
+                     "--no-nmap-probes to build without the deduplication it "
+                     "provides." % "\n  ".join(NMAP_PROBE_PATHS))
 
 
 def nmap_identities(path):
@@ -505,9 +543,14 @@ def reduce_patterns(rules, report):
         # pattern is the less specific one, so it generalises further.
         while remaining:
             candidates.sort(key=lambda item: (-len(item[0] & remaining), item[1]))
-            best = candidates[0]
-            if not (best[0] & remaining):
+            # A subject can survive verify() while every variant that proved it
+            # was dropped afterwards, and then nothing here can cover it. The
+            # loop drained the list and indexed an empty one, so a build that
+            # should have shipped one rule fewer died instead - measured on
+            # ubuntu, where the nmap dedup is absent and more rules reach this.
+            if not candidates or not (candidates[0][0] & remaining):
                 break
+            best = candidates[0]
             chosen.append(best)
             remaining -= best[0]
             candidates.remove(best)
@@ -649,23 +692,28 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sources", required=True,
                         help="directory holding the upstream checkouts")
-    parser.add_argument("--out", default="catalog/fingerprints.json")
-    parser.add_argument("--paths-out", default="catalog/paths.json",
-                        help="where the swept path list is written")
-    parser.add_argument("--probes-out", default="catalog/probes.json",
-                        help="where the targeted version probes are written")
     parser.add_argument("--force", action="store_true",
                         help="publish even when the result loses most of the "
                              "catalogue, which normally means a missing source")
     parser.add_argument("--report-unjoined", action="store_true",
                         help="list the probe templates no catalogue can name")
+    # The catalogue is written UNDER --root. It used to come from three
+    # separate --out flags defaulting to "catalog/..." relative to the working
+    # directory, which nothing ever passed and which made --root a half-truth:
+    # a build pointed at a scratch root still overwrote the repository's own
+    # catalogue. Deriving the paths from --root is what the flag already
+    # claimed to mean, and it removes three arguments nobody used.
     parser.add_argument("--root", default=".", help="repository root")
     parser.add_argument("--dry-run", action="store_true",
                         help="report what would ship, write nothing")
-    parser.add_argument("--nmap-probes",
-                        default="/opt/homebrew/share/nmap/nmap-service-probes",
+    parser.add_argument("--nmap-probes", default=None,
                         help="nmap's own probe database, whose identities the "
-                             "banner channel must not duplicate")
+                             "banner channel must not duplicate; found "
+                             "automatically when not given")
+    parser.add_argument("--no-nmap-probes", action="store_true",
+                        help="build without nmap's deduplication, accepting "
+                             "that the banner channel will repeat what nmap "
+                             "already reports")
     args = parser.parse_args()
 
     report = collections.defaultdict(collections.Counter)
@@ -691,8 +739,13 @@ def main():
         if label != "untranslatable" and report[label]:
             print("              %-20s %s" % (label, dict(report[label])))
 
-    known = nmap_identities(args.nmap_probes)
-    print("nmap knows   %4d identities from its own service probes" % len(known))
+    probe_db = None if args.no_nmap_probes else find_nmap_probes(args.nmap_probes)
+    known = nmap_identities(probe_db)
+    if probe_db and not known:
+        raise SystemExit("read %s and found no CPE in it; that file is not an "
+                         "nmap probe database." % probe_db)
+    print("nmap knows   %4d identities from its own service probes%s"
+          % (len(known), "" if probe_db else " (skipped: --no-nmap-probes)"))
     fresh = drop_what_nmap_knows(proven, known, report)
     print("deduped     %5d rules once nmap's own banner coverage is removed "
           "(%d dropped)" % (len(fresh), len(proven) - len(fresh)))
@@ -717,7 +770,7 @@ def main():
           % len({e["alias"] for e in entries.values()}))
 
     # --- the swept paths ---------------------------------------------------
-    alias_for, table_size = join_table(args.sources, entries, args.nmap_probes)
+    alias_for, table_size = join_table(args.sources, entries, probe_db)
 
     # Only an identity this catalogue can actually report. The sweep matches a
     # response against the rules we ship, so a path for software we have no rule
@@ -808,17 +861,25 @@ def main():
             "source": entry.get("source", ""),
         })
 
-    refuse_to_shrink(args.out, len(entries), upstreams, args.force)
-    refuse_to_shrink(args.paths_out, len(swept_list), trees, args.force, "paths")
+    rules_out = os.path.join(args.root, "catalog", "fingerprints.json")
+    paths_out = os.path.join(args.root, "catalog", "paths.json")
+    probes_out = os.path.join(args.root, "catalog", "probes.json")
 
-    write_catalog(args.paths_out, {"schema": CATALOG_SCHEMA, "paths": swept_list})
-    print("wrote       %s" % args.paths_out)
+    refuse_to_shrink(rules_out, len(entries), upstreams, args.force)
+    refuse_to_shrink(paths_out, len(swept_list), trees, args.force, "paths")
+    # The probes had no guard at all, so a missing nuclei-templates checkout -
+    # or a missing pyyaml - wrote {"probes": []} without a word, and the whole
+    # probe feature quietly vanished from the next publish.
+    refuse_to_shrink(probes_out, len(probes), trees, args.force, "probes")
 
-    write_catalog(args.probes_out, {"schema": CATALOG_SCHEMA, "probes": probes})
-    print("wrote       %s" % args.probes_out)
+    write_catalog(paths_out, {"schema": CATALOG_SCHEMA, "paths": swept_list})
+    print("wrote       %s" % paths_out)
 
-    write_catalog(args.out, {"schema": CATALOG_SCHEMA, "rules": entries})
-    print("wrote       %s" % args.out)
+    write_catalog(probes_out, {"schema": CATALOG_SCHEMA, "probes": probes})
+    print("wrote       %s" % probes_out)
+
+    write_catalog(rules_out, {"schema": CATALOG_SCHEMA, "rules": entries})
+    print("wrote       %s" % rules_out)
     print("\nnow run: python3 tools/catalog.py --index   (bumps the serial)")
     return 0
 

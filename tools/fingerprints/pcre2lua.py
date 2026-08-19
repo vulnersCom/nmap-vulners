@@ -38,6 +38,11 @@ MAX_VARIANTS = 24
 # ships: 95 recog rules depend on this and each one is checked.
 UNROLL_LIMIT = 16
 
+# How many characters a range with an escaped endpoint may be spelled out into.
+# Such a range cannot survive as a range in Lua, so it is written out member by
+# member; a wide one would be a class longer than the rule it belongs to.
+MAX_SPELT_RANGE = 64
+
 # Lua's own metacharacters, escaped with % rather than backslash.
 LUA_MAGIC = "^$*+?.([%-"
 
@@ -267,6 +272,20 @@ class Parser:
                 elif upper == "[" and self.peek() == ":":
                     raise Untranslatable("range ending in a POSIX class")
                 low = items.pop()[1]
+                # Lua's matchbracketclass consumes a "%x" escape BEFORE it
+                # tests for a range, so an escaped endpoint stops being an
+                # endpoint: measured, "[\x25-\x2f]" became "[%%-/]", which Lua
+                # reads as the three characters {%, -, /} rather than the
+                # eleven the range names. Spell such a range out instead.
+                if escape_in_class(low) != low or escape_in_class(upper) != upper:
+                    if ord(upper) < ord(low):
+                        raise Untranslatable("reversed range")
+                    if ord(upper) - ord(low) > MAX_SPELT_RANGE:
+                        raise Untranslatable("range too wide to spell out")
+                    items.append(('set', "".join(
+                        escape_in_class(chr(c))
+                        for c in range(ord(low), ord(upper) + 1))))
+                    continue
                 items.append(('set', escape_in_class(low) + "-" + escape_in_class(upper)))
                 continue
             items.append(('ch', ch))
@@ -302,6 +321,14 @@ class Parser:
         keeps [\\d-z] from being read as a range.
         """
         ch = self.take()
+        # Inside a class the underscore can simply be added to the set. \W
+        # cannot: Lua has no way to subtract a set from a bracketed class, and
+        # emitting %W here would quietly admit the underscore.
+        if ch == "w":
+            return ('set', "%w_")
+        if ch == "W":
+            raise Untranslatable("\\W inside a character class")
+
         simple = CLASS_ESCAPES.get(ch)
         if simple is not None:
             if simple.startswith("%") and len(simple) == 2 and simple[1].isalpha():
@@ -348,10 +375,26 @@ class Parser:
         if ch in "GKRXpPQEN":
             raise Untranslatable("\\%s" % ch)
 
+        # PCRE's \w includes the underscore; Lua's %w does not. Mapping one
+        # straight onto the other TRUNCATED a captured version at the first
+        # underscore - measured, "Tomcat/([\w.]+)" against "Tomcat/9.0.1_beta"
+        # gave PCRE "9.0.1_beta" and Lua "9.0.1". A truncated version is worse
+        # than a miss: it mints a confident, wrong CPE and asks the API about a
+        # release that never existed. \W is the same error negated, and matched
+        # what PCRE rejects.
+        if ch == "w":
+            return ('class', "%w_", False)
+        if ch == "W":
+            return ('class', "%w_", True)
+
         klass = CLASS_ESCAPES.get(ch)
         if klass is not None:
             if klass.startswith("%") and len(klass) == 2 and klass[1].isalpha():
                 return ('class', klass, False)
+            if ch in MULTI_CHAR_ESCAPES:
+                # A set, not a literal: emit it as a bracketed class so the
+                # rest of the translator can quantify and negate it normally.
+                return ('set', "".join(escape_in_class(c) for c in klass))
             return ('lit', klass)
         if ch == "x":
             return ('lit', self.hex_escape())
@@ -364,9 +407,18 @@ class Parser:
 CLASS_ESCAPES = {
     "d": "%d", "D": "%D", "w": "%w", "W": "%W", "s": "%s", "S": "%S",
     "h": " \t", "v": "\r\n",
-    "n": "\n", "r": "\r", "t": "\t", "f": "\f", "a": "\a", "e": "\27",
+    # "\27" is OCTAL 27 in Python, which is 0x17 (ETB). PCRE's \e is ESC, 0x1B.
+    "n": "\n", "r": "\r", "t": "\t", "f": "\f", "a": "\a", "e": "\x1b",
     "0": "\0",
 }
+
+# The entries above whose value is more than one character. They describe a SET
+# ("\h" is space or tab), so outside a character class they cannot be emitted
+# as a literal - and parse_escape used to wrap them as one, which made ord()
+# raise TypeError on a string of length 2. build.translated and probes._lua
+# catch only Untranslatable, so a single upstream rule containing \h or \v
+# aborted the entire weekly rebuild.
+MULTI_CHAR_ESCAPES = {ch for ch, value in CLASS_ESCAPES.items() if len(value) > 1}
 
 
 def escape_in_class(ch):
@@ -448,8 +500,14 @@ def merge_alternation(node):
 def repeat_single(piece, lo, hi, lazy):
     """A Lua spelling for `piece` repeated between lo and hi times."""
     if hi is not None and hi > UNROLL_LIMIT:
+        # Only the UPPER bound is safe to relax. Dropping the lower one too
+        # turned {20} into "one or more", which accepts what the original
+        # rejects: measured, "^ID: ([\d.]+) [A-Z]{20}$" matched "ID: 1.2 X" and
+        # minted a version from a subject PCRE refuses outright. The example
+        # oracle cannot see this - it only asserts the recorded example still
+        # matches, never that the widened pattern still rejects.
         hi = None
-        lo = min(lo, 1)
+        lo = min(lo, UNROLL_LIMIT)
     if hi is None:
         if lo == 0:
             return piece + ("-" if lazy else "*")
@@ -562,9 +620,10 @@ def assemble(raw, anchored_by_default):
     # Anchors. Lua reads ^ as an anchor only in first position and $ only in
     # last, and a pattern that anchors anywhere else means something PCRE does
     # and Lua does not.
-    while text.startswith("\x01"):
-        text = "\x01" + text[1:].replace("\x01", "", 1) if "\x01" in text[1:] else text
-        break
+    # A second "^" used to be deleted here before the check below could see it,
+    # which turned an unmatchable PCRE into a matching Lua pattern: measured,
+    # "^a^b(\d+)" became "^ab(%d%d*)" and matched "ab12", which PCRE cannot.
+    # The refusal two lines down is the correct answer and was unreachable.
     if text.count("\x01") > 1 or text.count("\x02") > 1:
         raise Untranslatable("repeated anchor")
     if "\x01" in text and not text.startswith("\x01"):
@@ -605,8 +664,19 @@ def assemble(raw, anchored_by_default):
 
 
 # The Lua class shorthands that describe word characters, and those that do not.
-WORD_CLASSES = set("dwaluxDW")
-NON_WORD_CLASSES = set("spcg")
+#
+# The negated forms belong on the OTHER side: %D is "not a digit" and %W is
+# "not a word character", so neither can start a word. Listing them as word
+# classes turned "\b\W" into "%f[%w]%W" - a start-of-word frontier immediately
+# before a guaranteed non-word character, which can never match. Measured:
+# "Tomcat\b\W+v(\d+)" became "Tomcat%f[%w]%W%W*v(%d%d*)" and matched nothing at
+# all, where PCRE matched "Tomcat - v9".
+#
+# %g is dropped from the non-word set for the same reason in reverse: it is
+# every printable except space, so it INCLUDES letters and digits and cannot
+# be assumed non-word. It falls through to the "unresolvable" default instead.
+WORD_CLASSES = set("dwalux")
+NON_WORD_CLASSES = set("spcDW")
 
 
 def starts_with_word(text):
@@ -633,8 +703,16 @@ def starts_with_word(text):
         end = skip_class(text, 0)
         body = text[1:end - 1]
         if body.startswith("^"):
-            # A negated class usually excludes punctuation, so what it accepts
-            # is more likely a word character than not.
+            # A class that negates the word characters themselves - "[^%w_]",
+            # which is what \\W now becomes - can only match a NON-word
+            # character, so a \\b in front of it is an end-of-word frontier.
+            # Reading it as "word" put %f[%w] immediately before a guaranteed
+            # non-word character: a frontier that can never hold. Any other
+            # negated class usually excludes only punctuation, so what it
+            # accepts is more likely a word character than not.
+            excluded = body[1:]
+            if "%w" in excluded or "%a" in excluded or "%d" in excluded:
+                return False
             return True
         return any(ch.isalnum() or ch == "_" for ch in body) or "%w" in body \
             or "%d" in body or "%a" in body
@@ -749,8 +827,13 @@ def translate(pattern, want_group=None, ignore_case=False, anchored=False,
     out = []
     seen = set()
     for variant in variants:
-        if want_group is not None and "\x04" not in variant:
-            # This branch of the alternation cannot produce the version.
+        if want_group is not None and variant.count("\x04") != 1:
+            # Either this branch of the alternation cannot produce the version,
+            # or it produces it twice. A repeated capture group emits both -
+            # "(?:v(\d+)){1,2}" expands to "v(%d%d*)" AND "v(%d%d*)v(%d%d*)" -
+            # and the second is refused by the reader's exact-one-capture rule
+            # at scan time. It shipped anyway: bytes on every download, counted
+            # by the publish gate as a live detection, and unable to fire.
             continue
         text = assemble(variant, anchored)
         # The anchor is taken here, before folding: case folding replaces every

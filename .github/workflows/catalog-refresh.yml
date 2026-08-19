@@ -140,8 +140,23 @@ jobs:
             sed 's/^/  - /' /tmp/upstream-revisions.txt
           } >> "$GITHUB_STEP_SUMMARY"
           # 1 is broken and must fail the job; 2 is "a human should look", which
-          # is a normal outcome and must not.
-          if [ "$status" = "1" ]; then exit 1; fi
+          # is a normal outcome and must not. Anything else is the gate itself
+          # failing - a traceback, a missing file, a bad argument - and used to
+          # pass here, leaving `verdict` unset. No downstream `if:` matches an
+          # empty verdict, so the whole weekly pipeline became a green no-op:
+          # no commit, no publish, no pull request, and nothing saying so.
+          case "$status" in
+            0|2) ;;
+            1) exit 1 ;;
+            *) echo "::error::catalog_diff exited $status; the gate did not run"
+               exit 1 ;;
+          esac
+          # The jobs below dispatch on an exact string, so an unwritten verdict
+          # would match none of them and stop the pipeline in silence.
+          grep -q '^verdict=' "$GITHUB_OUTPUT" || {
+            echo "::error::the gate wrote no verdict; nothing downstream would run"
+            exit 1
+          }
 
       - name: Save the rebuilt catalogue
         uses: actions/upload-artifact@v4
@@ -182,6 +197,12 @@ jobs:
     needs: [rebuild, commit]
     if: needs.rebuild.outputs.verdict == 'auto' && !inputs.force_review
     uses: ./.github/workflows/catalog.yml
+    with:
+      # The BRANCH, not the trigger SHA. A called workflow's github context is
+      # the caller's event, so a bare checkout would land before the commit job
+      # pushed the rebuild - and publish the previous catalogue at its previous
+      # serial, one rebuild behind for ever.
+      ref: ${{ github.ref }}
 
   propose:
     name: Open a pull request

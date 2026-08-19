@@ -13,12 +13,39 @@ on:
     branches: [master, "2.0"]
     paths: ["catalog/**"]
   workflow_dispatch:
+    inputs:
+      skip_loss_gate:
+        description: "Publish even though it loses ground on what is live"
+        type: boolean
+        required: false
+        default: false
   # Called by catalog-refresh.yml once a rebuild has passed its gates. A
   # reusable call runs in the same run, so it needs no token beyond this one -
   # a push made with GITHUB_TOKEN does not trigger another workflow, and
   # discovering that after a rebuild silently failed to publish would be a bad
   # way to learn it.
   workflow_call:
+    inputs:
+      ref:
+        # A called workflow's `github` context belongs to the CALLER's event, so
+        # a bare checkout here lands on the branch head as it was when the
+        # schedule fired - which is BEFORE the rebuild job committed anything.
+        # The publish would then push the previous catalogue and its previous
+        # serial: either refused by the serial check below, or published one
+        # rebuild behind, for ever. The caller passes its branch ref so the
+        # checkout picks up the commit the rebuild just made.
+        description: "Ref to publish from; the caller's branch, not its trigger SHA"
+        type: string
+        required: false
+        default: ""
+      skip_loss_gate:
+        # catalog-refresh.yml only reaches the publish call on an "auto"
+        # verdict, which means catalog_diff has already approved this exact
+        # comparison; the caller may say so rather than pay for it twice.
+        description: "The caller has already run the loss gate"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -35,22 +62,89 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Empty means "the ref this event is about", which is right for a push
+          # and a manual run. Only the reusable call needs to say otherwise.
+          ref: ${{ inputs.ref }}
+
+      - name: Install nmap
+        run: sudo apt-get update && sudo apt-get install -y nmap
 
       - name: The catalogue is readable by the script
         run: python3 tools/catalog.py --check
 
+      # --check validates the SHAPE; it does not decide whether a pattern is one
+      # the script will keep, because that decision lives in usable_pattern and a
+      # second copy of it could only drift. The suite asserts it through the
+      # reader itself, and a rule the reader drops is a detection lost silently -
+      # so this runs before anything is pushed, on the manual path as well as the
+      # automatic one.
+      #
+      # nmap exits 0 when a script RAISES, so the exit status alone would report
+      # success for a suite that never ran a case. The output has to say so.
+      - name: The script accepts every rule being published
+        run: |
+          set -o pipefail
+          nmap -sn -Pn --script ./tests/run.nse \
+            --script-args testdir=tests,root=. 127.0.0.1 | tee unit.log
+          grep -q "SUITE OK" unit.log
+
+      # "The branch does not exist yet" and "the fetch failed" are different
+      # answers and used to produce the same one. Every error - a network
+      # blip, an auth problem, an index.json that will not parse - collapsed to
+      # `live=0` through `|| echo 0`, and every serial beats 0, so the guard
+      # against republishing or rolling back the live dictionaries failed OPEN
+      # on exactly the occasions it existed for.
+      #
+      # ls-remote answers the existence question on its own: 2 means no such
+      # branch, 0 means it is there, anything else is a failure worth stopping
+      # for. Once the branch is known to exist, the read must succeed.
       - name: Fetch what is currently published
         id: live
         run: |
-          if git fetch origin catalog:refs/remotes/origin/catalog 2>/dev/null; then
-            live=$(git show origin/catalog:index.json 2>/dev/null \
-                   | python3 -c 'import json,sys; print(json.load(sys.stdin)["serial"])' \
-                   || echo 0)
+          set -o pipefail
+          if git ls-remote --exit-code --heads origin catalog >/dev/null; then
+            git fetch origin catalog:refs/remotes/origin/catalog
+            live=$(git show origin/catalog:index.json \
+                   | python3 -c 'import json,sys; print(json.load(sys.stdin)["serial"])')
+            echo "sha=$(git rev-parse origin/catalog)" >> "$GITHUB_OUTPUT"
+            mkdir -p /tmp/published
+            git archive origin/catalog | tar -x -C /tmp/published
+            echo "published=yes" >> "$GITHUB_OUTPUT"
           else
+            status=$?
+            if [ "$status" -ne 2 ]; then
+              echo "::error::cannot tell whether the catalog branch exists" \
+                   "(git ls-remote exit $status); refusing to publish blind."
+              exit 1
+            fi
             live=0
+            echo "published=no" >> "$GITHUB_OUTPUT"
+            echo "no catalog branch yet - this is the first publish"
           fi
           echo "serial=$live" >> "$GITHUB_OUTPUT"
           echo "currently published: serial $live"
+
+      # catalog_diff is what stands between a hand-edited catalog/ and every
+      # installed scanner. It used to run only in catalog-refresh.yml, so the
+      # automated path was gated and the human one - a push, or a manual run -
+      # was not: a commit that dropped most of the fingerprints published
+      # cleanly. Exit 1 is "broken", exit 2 is "a human should look", and on
+      # this path the human is right here.
+      - name: The rebuild does not lose what is already published
+        if: steps.live.outputs.published == 'yes' && !inputs.skip_loss_gate
+        run: |
+          set +e
+          python3 tools/catalog_diff.py --before /tmp/published --after catalog
+          status=$?
+          set -e
+          case "$status" in
+            0) ;;
+            1|2) echo "::error::this publish loses too much against what is live."
+                 echo "Re-run with skip_loss_gate if the loss is intended."
+                 exit 1 ;;
+            *) echo "::error::catalog_diff exited $status"; exit 1 ;;
+          esac
 
       - name: The serial moved forward
         run: |
@@ -87,6 +181,16 @@ jobs:
 
           git add -- *.json
           git commit -m "catalog: serial $new"
-          git push --force origin catalog-publish:catalog
+
+          # --force-with-lease, not --force: the concurrency group serialises
+          # the paths that go through Actions, but a manual run from a stale
+          # ref - or any push made outside Actions - would otherwise be
+          # overwritten with no error and no ref left to recover from.
+          if [ "${{ steps.live.outputs.published }}" = "yes" ]; then
+            git push --force-with-lease=catalog:${{ steps.live.outputs.sha }} \
+              origin catalog-publish:catalog
+          else
+            git push origin catalog-publish:catalog
+          fi
 
           echo "published serial $new to the catalog branch"

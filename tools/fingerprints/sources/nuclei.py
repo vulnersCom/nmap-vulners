@@ -22,6 +22,11 @@ which is recorded in dev_docs/backlog.md as the blocker it is.
 import glob
 import os
 import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import paths as path_builder                                      # noqa: E402
 
 try:
     import yaml
@@ -96,8 +101,18 @@ def load(root_dir, alias_for, already_swept=()):
 
             paths = []
             for raw in request.get("path", []):
-                candidate = str(raw).replace("{{BaseURL}}", "") or "/"
-                if candidate in GENERIC or INTERPOLATED.search(candidate):
+                # Through the same filter the swept paths go through, not a
+                # hand-rolled subset of it. This used to check only for the
+                # generic paths, an interpolation and a backslash - so an
+                # unfilled ALL-CAPS placeholder, whitespace, a path over the
+                # length cap or an unreadable extension all passed. Measured on
+                # the current templates: 34 of 685 nuclei paths are refused by
+                # normalise() and were accepted here, "/.settings/rules.json?
+                # auth=FIREBASE_SECRET" among them. Nothing downstream catches
+                # them either - usable_path in the script only refuses
+                # whitespace and a missing leading slash.
+                candidate = path_builder.normalise(raw)
+                if candidate is None or candidate in GENERIC:
                     continue
                 if "\\" in candidate:
                     # Nuclei writes "/\\" to make a server normalise a path. It
@@ -105,8 +120,6 @@ def load(root_dir, alias_for, already_swept=()):
                     # a backslash on the wire from a "safe" script is not a
                     # detection, it is a probe for a parser bug.
                     continue
-                if not candidate.startswith("/"):
-                    candidate = "/" + candidate
                 if candidate in already_swept:
                     # The sweep fetches it anyway, so a probe spending a second
                     # request on it learns nothing the passive rules did not

@@ -1001,4 +1001,48 @@ suite[#suite + 1] = {
   end,
 }
 
+suite[#suite + 1] = {
+  name = "a score of zero is read as unscored, not as a score of zero",
+  fn = function()
+    -- The free endpoint gives every exploit bulletin a score of 0.0, which
+    -- means "nobody scored this" and not "this is harmless". Reading it as a
+    -- number would put a CRITICAL/HIGH/LOW word and a 0.0 in the table for a
+    -- finding nothing has actually rated. Two cases in this repository say so
+    -- in their comments; neither built a row with cvss = 0 to prove it, so
+    -- deleting the guard left all 254 green.
+    local env, http = load_free({})
+    answer(http, api_body({
+      vuln({id = "EDB-ID:1", type = "exploitdb", family = "exploit", cvss = 0}),
+    }))
+
+    local plain = t.collect_output(
+      env.action(t.host(), t.port({version = "9.8.2", cpe = {CPE}})))
+    local row = plain[CPE][1]
+
+    t.is_nil(row.cvss, "a score of zero must not reach the report as a score")
+    t.equals(row.severity, "Unknown",
+      "and the row must say the severity is unknown rather than naming a band")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a score outside the CVSS range is refused rather than laid out",
+  fn = function()
+    -- CVSS runs 0-10. A larger number is the service saying something this
+    -- script does not understand, and laying it out shifts every column of the
+    -- row clear of the table - the guard exists for that, and nothing measured
+    -- it: dropping "or score > 10" left all 254 cases green.
+    local env, http = load_free({})
+    answer(http, api_body({
+      vuln({id = "CVE-2010-3615", cvss = 12345.678}),
+    }))
+
+    local plain = t.collect_output(
+      env.action(t.host(), t.port({version = "9.8.2", cpe = {CPE}})))
+    local row = plain[CPE][1]
+
+    t.is_nil(row.cvss, "a score outside 0-10 is not a score")
+    t.equals(row.severity, "Unknown")
+  end,
+}
 return suite

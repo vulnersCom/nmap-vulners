@@ -88,8 +88,10 @@ local function catalog_of(rules)
 end
 
 --- A loaded script whose catalogue holds those rules and nothing else.
-local function load(rules)
-  return t.load_vulners({root = root, catalog = catalog_of(rules)})
+local function load(rules, opts)
+  opts = opts or {}
+  return t.load_vulners({root = root, catalog = catalog_of(rules),
+                         paths = opts.paths})
 end
 
 --- Every CPE those rules find in one response.
@@ -307,7 +309,11 @@ suite[#suite + 1] = {
     -- Being in scope must not turn into 125 HTTP requests at something that is
     -- not a web server. The banner costs no request at all: the text is already
     -- in hand.
-    local env, http = load(COUCHDB), nil
+    -- The sweep is given a real path to request, so "not swept" is something
+    -- this case can actually witness. It used to bind `http` to nil and load
+    -- with the sweep switched off, which made the second half of its own name
+    -- unobservable: the gate could be deleted outright and this stayed green.
+    local env, http = load(COUCHDB, {paths = {"/never-swept"}})
     local host = t.host()
     local port = t.port({number = 4200, service = "unknown", name = nil,
                          service_fp = SERVICE_FP})
@@ -316,6 +322,8 @@ suite[#suite + 1] = {
 
     t.contains(port.version.cpe, "cpe:/a:apache:couchdb:2.3.1",
       "the identity must be published onto the port")
+    t.length(http.matching("/never-swept"), 0,
+      "a banner costs no request: the text was already in hand")
   end,
 }
 
@@ -347,4 +355,201 @@ suite[#suite + 1] = {
   end,
 }
 
+
+-- ------------------------------------------------ what a rule may look at
+
+suite[#suite + 1] = {
+  name = "a rule reads a window around its anchor, not the whole body",
+  fn = function()
+    -- The only thing that bounds a Lua pattern is what it is allowed to SEE.
+    -- Every budget in the script bounds work BETWEEN calls to string.find and
+    -- none can pre-empt one, because pattern matching neither yields nor
+    -- returns until it is done. Measured on the shipped "Bootstrap, body" rule
+    -- against a body of "<link href=bootstrap" repeated with no ">": 2 KB costs
+    -- 0.9 s, 4 KB 13.7 s, and the 128 KB the body cap admits is hours - with the
+    -- whole nmap scheduler stopped, in the default keyless configuration.
+    --
+    -- So this case pins the bound from both ends: the rule still fires next to
+    -- its anchor, and it does NOT reach a version parked far beyond the window.
+    local env = load({})
+    local T = env._TEST
+
+    local rules = {
+      -- A lazy span, which is the shape the real corpus is full of: the
+      -- shipped Bootstrap rule is "<link[^>]* href=[^>]-bootstrap[^>]-(%d%d*)".
+      -- Such a pattern is exactly what backtracks catastrophically, and exactly
+      -- what the window has to stop from seeing the whole body.
+      ["Widget, body"] = {alias = "cpe:/a:acme:widget", channel = "body",
+                          anchor = "widget", regex = "widget[^!]-/([%d.]+)"},
+    }
+    t.give_catalog(env, {
+      fingerprints = {schema = 1, rules = rules},
+      paths = {schema = 1, paths = {"/"}},
+      probes = {schema = 1, probes = {}},
+    })
+
+    local near = t.response({status = 200, body = "<p>widget/1.2.3</p>"})
+    local found, seen = {}, {}
+    T.match_subjects(T.subjects_of(near, os.clock() + 3), found, seen,
+      os.clock() + 3)
+    t.contains(found, "cpe:/a:acme:widget:1.2.3",
+      "a rule must still fire on text beside its anchor")
+
+    -- The anchor is at the start; the version sits far past the window.
+    -- One anchor, and the text the pattern would need is 8 KB past it.
+    local far = t.response({status = 200,
+      body = "widget" .. string.rep(".", 8000) .. "/9.9.9"})
+    local found_far, seen_far = {}, {}
+    T.match_subjects(T.subjects_of(far, os.clock() + 3), found_far, seen_far,
+      os.clock() + 3)
+    t.length(found_far, 0,
+      "and must not reach a match parked beyond the window; without that bound " ..
+      "one hostile body freezes every script in the scan")
+  end,
+}
+
+
+suite[#suite + 1] = {
+  name = "a start-anchored rule matches only at the start",
+  fn = function()
+    -- string.find(s, pat, init) re-anchors "^" AT init, so the every-occurrence
+    -- loop let an anchored rule fire at every offset: measured,
+    -- "^nginx/([%d.]+)" against "nginx/1.2.3nginx/9.9.9" matched twice. 373 of
+    -- the shipped rules start with "^", and each spurious match mints a CPE that
+    -- is reported, published onto the port and spent as an outbound lookup.
+    local env = load({})
+    local T = env._TEST
+    t.give_catalog(env, {
+      fingerprints = {schema = 1, rules = {
+        ["Anchored, hdr:server"] = {alias = "cpe:/a:f5:nginx",
+          channel = "hdr:server", anchor = "nginx/", regex = "^nginx/([%d.]+)"},
+      }},
+      paths = {schema = 1, paths = {"/"}},
+      probes = {schema = 1, probes = {}},
+    })
+
+    local response = t.response({status = 200,
+      header = {["Server"] = "nginx/1.2.3nginx/9.9.9"}})
+    local found, seen = {}, {}
+    T.match_subjects(T.subjects_of(response, os.clock() + 3), found, seen,
+      os.clock() + 3)
+
+    t.same(found, {"cpe:/a:f5:nginx:1.2.3"},
+      "there is one start, so there is one match")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a response with no body offers no body subject",
+  fn = function()
+    -- stdnse.string_or_blank(x, nil) returns the LITERAL "<blank>": the second
+    -- argument is the substitute, and nil selects the default one rather than
+    -- disabling substitution. So every 204, 304 and body-less 302 ran the whole
+    -- body rule group and every probe detector against a string this script
+    -- invented, and the nil guard beside it was dead.
+    local env = load({})
+    local subjects = env._TEST.subjects_of(
+      t.response({status = 204, header = {["Server"] = "nginx/1.13.4"}}),
+      os.clock() + 3)
+
+    -- Asserted before the loop, because a loop that iterates zero times
+    -- asserts nothing: measured, making subjects_of return an empty list left
+    -- this case green while every other channel case went red.
+    t.is_true(#subjects > 0,
+      "the header subjects must still be offered when there is no body")
+
+    local keys = {}
+    for _, subject in ipairs(subjects) do
+      keys[#keys + 1] = subject.key
+      t.is_false(subject.text:find("<blank>", 1, true),
+        "no subject may be a string this script made up")
+      t.is_false(subject.key == "body",
+        "a response with no body has no body to match against")
+    end
+    t.contains(keys, "hdr:server",
+      "and the header that IS present must be among them")
+  end,
+}
+
+
+suite[#suite + 1] = {
+  name = "a probe detector stops when the sweep's clock has run out",
+  fn = function()
+    -- The detectors run DOWNLOADED patterns against a body the target chose,
+    -- and they alone were never given the budget match_group honours: measured
+    -- on a shipped detector, one 128 KB body cost 11 s of non-yielding work,
+    -- which is the whole nmap scheduler stopped.
+    local env = load({})
+    local T = env._TEST
+    t.give_catalog(env, {
+      fingerprints = {schema = 1, rules = {
+        ["Zed, body"] = {alias = "cpe:/a:x:z", channel = "body",
+                         anchor = "zed", regex = "zed/([%d.]+)"},
+      }},
+      paths = {schema = 1, paths = {"/"}},
+      probes = {schema = 1, probes = {
+        {name = "zed", alias = "cpe:/a:x:z",
+         detect = {{channel = "body", regex = "zed"}},
+         extract = {{regex = "zed/([%d.]+)"}}, paths = {"/v"}},
+      }},
+    })
+
+    local subjects = T.subjects_of(t.response({status = 200, body = "zed here"}),
+      os.clock() + 3)
+
+    local live = {}
+    T.detect_probes(subjects, live, os.clock() + 3)
+    t.is_true(live[1], "the detector fires while there is budget left")
+
+    local expired = {}
+    T.detect_probes(subjects, expired, os.clock() - 1)
+    t.is_nil(expired[1],
+      "and runs no downloaded pattern once the budget is gone")
+  end,
+}
+
+
+suite[#suite + 1] = {
+  name = "the banner pass honours the port's budget rather than its own",
+  fn = function()
+    -- SWEEP_TIME_BUDGET says "how long the pattern set may run on ONE PORT", and
+    -- three passes each used to start their own clock - so a port that did the
+    -- banner, the sweep and the probes could spend three times the stated bound
+    -- in non-yielding matching. They share one budget now, which only works if
+    -- each pass actually reads the one it is handed.
+    local env = load(COUCHDB)
+    local port = t.port({service_fp = SERVICE_FP})
+
+    t.is_true(next(env._TEST.fingerprint_banner(port)) ~= nil,
+      "the banner names something when there is budget for it")
+    t.is_nil(next(env._TEST.fingerprint_banner(port, os.clock() - 1)),
+      "and matches nothing once the port's budget is gone")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "header subjects are offered in a stable order",
+  fn = function()
+    -- Lua seeds its string hash per process, so iterating a header table with
+    -- pairs() offers the channels in a different order on every nmap run. That
+    -- decides which identities survive MAX_IDENTITIES_PER_PORT, so two scans
+    -- of one unchanged host could report different groups. subjects_of sorts
+    -- for exactly that reason, and nothing asserted it: deleting the sort left
+    -- all 254 cases green.
+    local env = load({})
+    local subjects = env._TEST.subjects_of(t.response({status = 200, header = {
+      ["Z-Last"] = "z", ["A-First"] = "a", ["M-Middle"] = "m",
+    }}), os.clock() + 3)
+
+    local headers = {}
+    for _, subject in ipairs(subjects) do
+      if subject.key:find("^hdr:") then
+        headers[#headers + 1] = subject.key
+      end
+    end
+
+    t.same(headers, {"hdr:a-first", "hdr:m-middle", "hdr:z-last"},
+      "the header channels must be offered in sorted order, every run")
+  end,
+}
 return suite

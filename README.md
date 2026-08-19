@@ -27,7 +27,7 @@ actually being attacked with come first.
 
 On an HTTP port it also fingerprints the web stack itself, which names software
 `-sV` cannot see - an application framework, a CMS, the PHP version behind a
-reverse proxy. 722 rules read the parts of a response that carry a version: the
+reverse proxy. 721 rules read the parts of a response that carry a version: the
 `Server` header, `X-Powered-By`, cookies, the page title, `<meta>` tags,
 `<script src>` filenames and the body. Those identities are looked up too, and
 published onto the port so the rest of the scan can use them.
@@ -184,9 +184,10 @@ nmap -sV --script "$PWD/vulners.nse" <target>
 <summary><b>By hand</b></summary>
 
 One file: copy `vulners.nse` into `<nmap data dir>/scripts/` and run
-`sudo nmap --script-updatedb`. Its pattern and path data are embedded, so there
-is nothing else to place - and nothing to forget, which used to produce a script
-that ran, found nothing, and said nothing about why.
+`sudo nmap --script-updatedb`. There is nothing else to place - the script
+downloads its dictionaries at scan time and writes nothing to disk - and so
+nothing to forget, which used to produce a script that ran, found nothing, and
+said nothing about why.
 
 If you are upgrading from 1.x, delete `vulners_enterprise.nse` and
 `http-vulners-regex.nse` from that directory as well. A leftover
@@ -210,7 +211,7 @@ The directory holding `nse_main.lua` is the one this nmap uses.
 | Argument | Default | Meaning |
 |---|---|---|
 | `vulners.mincvss` | `0` | Hide findings scored below this. Unscored bulletins and anything with a known exploit are shown whatever the threshold |
-| `vulners.paths` | the embedded 125 | Paths for the web sweep: a Lua list, one string naming a file with one path per line, or `none` to switch the sweep off |
+| `vulners.paths` | the published 939 paths | Paths for the web sweep: a Lua list, one string naming a file with one path per line, or `none` to switch the sweep off |
 | `vulners.width` | `80` | Terminal width the table is laid out for |
 | `vulners.max_items` | `32` | Ceiling on billed items for the whole scan |
 | `vulners.api_key` | - | API token. Leaky: nmap copies its own command line into `-oX` |
@@ -249,7 +250,7 @@ before the first host is touched:
 ```
 https://raw.githubusercontent.com/vulnersCom/nmap-vulners/catalog/
     index.json          what exists, at which serial
-    fingerprints.json   722 product and version rules
+    fingerprints.json   721 product and version rules
     paths.json          939 paths the sweep requests
     probes.json         targeted version probes
 ```
@@ -276,8 +277,8 @@ you to read an empty result as a clean network.
 
 ## The sweep, and how loud it is
 
-On an HTTP port the script requests every path the catalogue publishes - 939 of
-them - and matches all 722 rules against every answer. The paths come from
+On an HTTP port the script requests every path the catalogue publishes - 939
+paths - and matches all 721 rules against every answer. The paths come from
 WhatWeb, nuclei and FingerprintHub: places a product is recognised, rather than
 guesses. Even a path belonging to software you are not running is worth the
 request, because the answer still carries `Server`, `X-Powered-By`, a cookie and
@@ -313,7 +314,7 @@ nmap -sV
    +-- vulners.nse                                            |
          reads nmap's banner for services -sV could not name   |
          on an HTTP port: requests the path list in one        |
-         pipeline, matches 722 rules against the header, the   |
+         pipeline, matches 721 rules against the header, the   |
          title, the meta tags, the scripts and the body        |
          probes for a version when a product hid it            |
          publishes everything it recognised ------------------+
@@ -388,7 +389,8 @@ A scan of a network asks the API far less than it looks:
 * a lookup already in flight is waited for rather than repeated
 * discovery goes to a **CDN-cached** endpoint, without a key even when one is
   configured, so it stays on the shared cache instead of hitting the origin
-* the 125-path sweep runs over about **5 TCP connections** rather than 126, asks
+* the 939-path sweep runs over a handful of **pipelined connections** rather
+  than one per path, asks
   for compressed pages, and stops matching once it has spent its byte budget
 * a rate limit or an outage stops that leg of the scan instead of retrying per
   host, and a rejected key drops to the free path rather than silencing the scan
@@ -406,11 +408,11 @@ python3 tests/e2e/run_e2e.py
 python3 tools/check.py
 ```
 
-114 unit cases run inside nmap against the real NSE libraries; 50 end-to-end
+Over 250 unit cases run inside nmap against the real NSE libraries; 60 end-to-end
 cases drive the real nmap binary against a local web server and a stand-in
 Vulners API that enforces what the real one enforces; the hygiene gate keeps
 secrets, scan output and editor clutter out of the tree, and checks that the
-embedded data still matches its source. `python3 tests/e2e/run_e2e.py --live`
+published catalogue still matches what the script will accept. `python3 tests/e2e/run_e2e.py --live`
 adds checks against the real service. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## FAQ
@@ -418,10 +420,11 @@ adds checks against the real service. See [CONTRIBUTING.md](CONTRIBUTING.md).
 **Does it exploit anything?** No. It reads banners and pages and asks a
 database - it sends no payload and tries no credential. It is categorised
 `discovery, intrusive, vuln, external` rather than `safe`, for one reason: the
-path sweep requests up to 936 URLs of a web port, and nmap's definition of
-`safe` excludes scripts that use large amounts of bandwidth. nmap's own
-`http-enum` requests 2 204 and carries the same label. How many go out is bounded
-by your `-T`: 150 at the default `-T3`, 9 at `-T1`, everything at `-T5`.
+path sweep requests 939 paths of a web port, and nmap's definition of `safe`
+excludes scripts that use large amounts of bandwidth. nmap's own `http-enum`
+requests 2 204 and carries the same label. Your `-T` sets how fast those go out
+and never how many, and `--script-args vulners.paths=none` turns the sweep off
+altogether.
 
 **Does it work without an API key?** Yes, fully. Without one it uses the free
 endpoint, which returns the same vulnerabilities for a CPE as the paid one. A

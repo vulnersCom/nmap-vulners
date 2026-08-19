@@ -1386,10 +1386,13 @@ suite[#suite + 1] = {
       smart = {["Frobnicator 1.0"] = {"CVE-2021-1"}},
     })
 
-    -- Two unnamed ports: the second is over the ceiling.
-    for _ = 1, 2 do
+    -- Two unnamed ports running DIFFERENT software, so the second really is
+    -- over the ceiling. Scanning the same product twice tests the cache
+    -- instead: the second port costs nothing, so nothing stops it, and the
+    -- assertion below then passes for a reason it does not name.
+    for _, product in ipairs({"Frobnicator", "Widgetron"}) do
       env.action(t.host(), t.port({number = 9999, service = "unknown",
-                                   product = "Frobnicator", version = "1.0",
+                                   product = product, version = "1.0",
                                    cpe = {}}))
     end
     t.is_true(env._TEST.state().billing_off, "the ceiling stops the spending")
@@ -1404,4 +1407,479 @@ suite[#suite + 1] = {
   end,
 }
 
+
+-- ------------------------------------------------------------- the wallet
+--
+-- The balance is only ever learnable from a previous billed call's header, so
+-- every guard that reads it is unreachable until the SECOND billed call of a
+-- scan. Until these cases existed no test made two, and no test sent the wallet
+-- headers at all - so the entire ladder ran only in production.
+
+--- A smart handler that answers with the wallet headers the service sends.
+local function billing(opts)
+  opts = opts or {}
+  local answers = opts.answers or {}
+  return function(req)
+    local ok, body = json.parse(req.body)
+    local result = {}
+    for _, input in ipairs(ok and as_list(body.software) or {}) do
+      local ids = answers[input]
+      if ids then
+        local vulns = {}
+        for _, id in ipairs(ids) do
+          vulns[#vulns + 1] = {id = id, type = "cve"}
+        end
+        result[#result + 1] = {input = input, confidence = 50,
+                               vulnerabilities = vulns}
+      end
+    end
+    local header = {}
+    if opts.amount ~= nil then
+      header["x-vulners-wallet-amount"] = tostring(opts.amount)
+    end
+    if opts.cost ~= nil then
+      header["x-vulners-wallet-cost"] = tostring(opts.cost)
+    end
+    return t.response({status = 200, header = header,
+                       body = json.generate({result = result})})
+  end
+end
+
+--- A port carrying a product and version but no CPE, which is what reaches the
+-- billed endpoint. Named and numbered off the web ports so nothing is swept.
+local function unnamed_port(product, version, number)
+  return t.port({product = product, version = version, cpe = {},
+                 name = "unknown", service = "unknown", number = number})
+end
+
+local SMART_DOCS = {
+  ["CVE-2023-38408"] = {id = "CVE-2023-38408", type = "cve",
+    bulletinFamily = "NVD", cvss = {score = 9.8, version = "3.1"}},
+  ["CVE-2011-2523"] = {id = "CVE-2011-2523", type = "cve",
+    bulletinFamily = "NVD", cvss = {score = 9.8, version = "3.1"}},
+}
+
+suite[#suite + 1] = {
+  name = "a second billed call still works once the balance is known",
+  fn = function()
+    local env, http = keyed()
+    serve(http, {docs = SMART_DOCS, smart = billing({amount = 100, cost = 1,
+      answers = {["OpenSSH 7.4"] = {"CVE-2023-38408"},
+                 ["vsftpd 3.0.3"] = {"CVE-2011-2523"}}})})
+
+    local host = t.host()
+    env.action(host, unnamed_port("OpenSSH", "7.4", 22))
+    t.equals(env._TEST.state().balance, 100,
+      "the first billed answer must teach the scan its balance")
+
+    local plain = t.collect_output(t.no_error(function()
+      return env.action(host, unnamed_port("vsftpd", "3.0.3", 21))
+    end, "a second billed call must not raise once the balance is known"))
+
+    t.is_true(plain and plain["vsftpd 3.0.3"],
+      "the second port's findings must still be reported")
+    t.length(http.matching(SMART), 2, "both ports must reach the billed call")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a wallet short of credits stops the billed calls and says so",
+  fn = function()
+    local env, http = keyed()
+    serve(http, {docs = SMART_DOCS, smart = billing({amount = 0, cost = 1,
+      answers = {["OpenSSH 7.4"] = {"CVE-2023-38408"}}})})
+
+    local host = t.host()
+    env.action(host, unnamed_port("OpenSSH", "7.4", 22))
+    env.action(host, unnamed_port("vsftpd", "3.0.3", 21))
+
+    t.length(http.matching(SMART), 1,
+      "an empty wallet must stop the billed calls, not keep buying refusals")
+    t.is_true(env._TEST.state().billing_off,
+      "the scan must remember that identification stopped")
+
+    env.SCRIPT_TYPE = "postrule"
+    local _, text = env.action()
+    t.matches(text, "short of credits",
+      "and the report must say why it stopped")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "the first billed call is capped to learn the balance, then resumes",
+  fn = function()
+    -- COLD_START_ITEMS keeps the first billed call small purely to learn the
+    -- balance. What it must NOT do is drop the identities that did not fit:
+    -- the port had six unresolved CPEs and reported on five, blaming a ceiling
+    -- the operator never set.
+    local env, http = keyed()
+    local sent = {}
+    serve(http, {
+      -- burp answers every CPE with a matched_cpe that is NOT the one asked
+      -- about, which is how the service says "I could not resolve this" - the
+      -- one thing that sends a CPE to the billed endpoint.
+      handler = function(req)
+        if type(req.host) ~= "table" and req.path:find(BURP, 1, true) then
+          return t.response({status = 200, body = json.generate({
+            result = "warning",
+            data = {search_explain = {search_cpe = query_args(req.path).software,
+                                      matched_cpe = "cpe:/a:other:other:1.0"}},
+          })})
+        end
+      end,
+      smart = function(req)
+        local ok, body = json.parse(req.body)
+        t.is_true(ok, "the smart body must be valid json")
+        sent[#sent + 1] = #body.software
+        return t.response({status = 200,
+          header = {["x-vulners-wallet-amount"] = "100",
+                    ["x-vulners-wallet-cost"] = tostring(#body.software)},
+          body = json.generate({result = {}})})
+      end,
+    })
+
+    local cpes = {}
+    for i = 1, 6 do
+      cpes[i] = string.format("cpe:/a:vendor%d:product%d:1.0", i, i)
+    end
+    env.action(t.host(), t.port({cpe = cpes, name = "unknown",
+                                 service = "unknown", number = 4444}))
+
+    t.same(sent, {5, 1},
+      "the cold-start call is capped at five, and the sixth still goes out")
+  end,
+}
+
+
+-- ------------------------------------------- what the credit decision reads
+--
+-- Every case below was written because a mutation of the script survived the
+-- suite: the logic that decides whether a CPE costs a credit was described in
+-- comments as hard-won, and measured by nothing.
+
+local NGINX = "cpe:/a:f5:nginx:1.13.4"
+local SPELLINGS = {"cpe:/a:f5:nginx:1.13.4", "cpe:/a:nginx:nginx:1.13.4",
+                   "cpe:/a:igor_sysoev:nginx:1.13.4"}
+
+--- Answer each nginx spelling however the case says, and count what smart got.
+--
+-- @param explains  spelling -> the search_explain to answer with, or the string
+--                  "error" for a 200 whose envelope is not a clean answer
+local function burp_explaining(http, explains, bought)
+  http.handler = function(req)
+    if type(req.host) == "table" then
+      return t.response({status = 404})
+    end
+    if req.path:find(BURP, 1, true) then
+      local asked = query_args(req.path).software
+      local explain = explains[asked]
+      if explain == "error" then
+        -- A 200 whose envelope is not a clean answer: burp_lookup reports this
+        -- as "not answered" without killing the free leg for the whole scan.
+        return t.response({status = 200,
+          body = json.generate({result = "error", data = "nope"})})
+      end
+      return t.response({status = 200, body = json.generate({
+        result = "warning",
+        data = explain and {search_explain = explain} or {},
+      })})
+    end
+    if req.path:find(SMART, 1, true) then
+      local ok, body = json.parse(req.body)
+      for _, input in ipairs(ok and as_list(body.software) or {}) do
+        bought[#bought + 1] = input
+      end
+      return t.response({status = 200, body = json.generate({result = {}})})
+    end
+    return t.response({status = 200,
+      body = json.generate({result = "OK", data = {documents = {}}})})
+  end
+end
+
+local function nginx_port()
+  return t.port({number = 8081, service = "unknown", name = "unknown",
+                 cpe = {NGINX}})
+end
+
+suite[#suite + 1] = {
+  name = "one nginx spelling failing does not cost the identity its verdict",
+  fn = function()
+    -- A CPE is asked under three vendor spellings, and "did this identity
+    -- resolve" is a question about the product, not about one spelling. A
+    -- transient failure on the last one used to poison the answer, which
+    -- skipped the credit decision entirely and reported an unidentifiable
+    -- service as clean - silently, because the unnamed counter needs no CPE.
+    local env, http = keyed()
+    local bought = {}
+    local unresolved = {search_cpe = "asked", matched_cpe = "something else"}
+    burp_explaining(http, {
+      [SPELLINGS[1]] = unresolved,
+      [SPELLINGS[2]] = unresolved,
+      [SPELLINGS[3]] = "error",
+    }, bought)
+
+    env.action(t.host(), nginx_port())
+
+    t.contains(bought, NGINX,
+      "two spellings said they could not resolve it; the third failing must " ..
+      "not turn that into silence")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "an answer with no search_explain never costs a credit",
+  fn = function()
+    -- Spend only on POSITIVE evidence that the identity failed to resolve. An
+    -- answer that says nothing either way is not evidence, and the safe reading
+    -- of "nothing either way" is not to bill for it.
+    local env, http = keyed()
+    local bought = {}
+    burp_explaining(http, {}, bought)
+
+    env.action(t.host(), nginx_port())
+
+    t.length(bought, 0,
+      "an empty answer with no explanation is not proof the CPE was unknown")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "one spelling saying nothing does not overrule another saying no",
+  fn = function()
+    -- The mirror of the case above. Silence from one spelling is not evidence
+    -- of resolution either: reading "no explanation" as "it resolved" makes a
+    -- genuinely unidentifiable service report clean, which is the failure the
+    -- billed call exists to prevent.
+    local env, http = keyed()
+    local bought = {}
+    burp_explaining(http, {
+      [SPELLINGS[2]] = {search_cpe = "asked", matched_cpe = "something else"},
+    }, bought)
+
+    env.action(t.host(), nginx_port())
+
+    t.contains(bought, NGINX,
+      "one spelling answered that it could not resolve this, and that stands")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a spelling that resolved is not overruled by a later one that did not",
+  fn = function()
+    -- The three nginx spellings are asked precisely BECAUSE the service answers
+    -- them differently, so "one of them resolved" and "a later one did not" is
+    -- the ordinary case rather than a contrived one. A verdict that simply took
+    -- the last answer would buy a credit for a product already named.
+    local env, http = keyed()
+    local bought = {}
+    burp_explaining(http, {
+      [SPELLINGS[1]] = {search_cpe = SPELLINGS[1], matched_cpe = SPELLINGS[1]},
+      [SPELLINGS[3]] = {search_cpe = "asked", matched_cpe = "something else"},
+    }, bought)
+
+    env.action(t.host(), nginx_port())
+
+    t.length(bought, 0,
+      "the identity resolved under one of its names, so it is named")
+  end,
+}
+
+-- --------------------------------------------- what enrichment remembers
+
+suite[#suite + 1] = {
+  name = "an id the service holds nothing for is not asked about twice",
+  fn = function()
+    -- "The answer did not carry this id" is an answer. Leaving it unmarked made
+    -- every later port re-ask for the whole scan: a /24 spent 254 POSTs
+    -- re-learning one negative.
+    local env, http = keyed()
+    serve(http, {
+      software = {[CPE] = {bulletin({id = "CVE-2020-1", cvss = 5.0}),
+                           bulletin({id = "CVE-2020-2", cvss = 5.0})}},
+      -- Only one of the two ids has a document; the other is a negative the
+      -- scan must remember.
+      docs = {["CVE-2020-1"] = {id = "CVE-2020-1", type = "cve",
+                                title = "known"}},
+    })
+
+    local host = t.host()
+    env.action(host, port_with_cpe())
+    env.action(host, t.port({product = "OpenSSH", version = "7.4",
+                             cpe = {CPE}, number = 2222}))
+
+    t.length(http.matching(SEARCH_ID), 1,
+      "the second port must ask about nothing: one id was enriched and the " ..
+      "other was answered with silence, which is also an answer")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "an enrichment request that failed is asked again, not cached",
+  fn = function()
+    -- The other half of the same rule. "The request failed" and "this id has no
+    -- document" are different facts, and remembering the first as the second
+    -- costs every later port its enrichment for the rest of the scan.
+    local env, http = keyed()
+    local calls = 0
+    serve(http, {
+      software = {[CPE] = {bulletin({id = "CVE-2020-1", cvss = 5.0})}},
+      docs = {["CVE-2020-1"] = {id = "CVE-2020-1", type = "cve",
+                                title = "enriched at last"}},
+      handler = function(req)
+        if req.path:find(SEARCH_ID, 1, true) then
+          calls = calls + 1
+          if calls == 1 then
+            -- A 200 carrying an envelope that is not a clean answer.
+            return t.response({status = 200,
+              body = json.generate({result = "error", data = "nope"})})
+          end
+        end
+      end,
+    })
+
+    local host = t.host()
+    env.action(host, port_with_cpe())
+    local plain = t.collect_output(env.action(host, t.port({
+      product = "OpenSSH", version = "7.4", cpe = {CPE}, number = 2222})))
+
+    t.equals(calls, 2, "the failed chunk must be asked about again")
+    t.equals(plain[CPE][1].title, "enriched at last",
+      "and the second port must get the enrichment the first one lost")
+  end,
+}
+
+
+-- ------------------------------ what the deep review found unmeasured
+
+suite[#suite + 1] = {
+  name = "a business error inside a 200 is not cached as an empty enrichment",
+  fn = function()
+    -- Vulners reports business errors inside an HTTP 200, and `data` is a
+    -- TABLE, so the envelope is a perfectly good "v3". Reading only the kind
+    -- made the scan write docs[id] = false for the whole chunk: one transient
+    -- error permanently marked up to 100 bulletins "asked, nothing there", so
+    -- every later host silently lost titles, EPSS, KEV and cvelist.
+    local env, http = keyed()
+    local calls = 0
+    serve(http, {
+      software = {[CPE] = {bulletin({id = "CVE-2020-1", cvss = 5.0})}},
+      docs = {["CVE-2020-1"] = {id = "CVE-2020-1", type = "cve",
+                                title = "enriched at last"}},
+      handler = function(req)
+        if req.path:find(SEARCH_ID, 1, true) then
+          calls = calls + 1
+          if calls == 1 then
+            return t.response({status = 200, body = json.generate({
+              result = "error",
+              data = {error = "quota exceeded", errorCode = 401},
+            })})
+          end
+        end
+      end,
+    })
+
+    local host = t.host()
+    env.action(host, port_with_cpe())
+    t.is_nil(env._TEST.state().docs["CVE-2020-1"],
+      "an error must leave no verdict behind, not a negative one")
+
+    local plain = t.collect_output(env.action(host, t.port({
+      product = "OpenSSH", version = "7.4", cpe = {CPE}, number = 2222})))
+    t.equals(calls, 2, "the chunk must be asked about again")
+    t.equals(plain[CPE][1].title, "enriched at last",
+      "and the second port must get the enrichment the first one lost")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "an unreadable cost header is treated exactly like no header",
+  fn = function()
+    -- The charge was gated on the header being VALID and the refund on it being
+    -- PRESENT, so "x-vulners-wallet-cost: abc" charged nothing and refunded
+    -- everything - shared.spent never advanced and vulners.max_items became a
+    -- ceiling the service itself could disarm.
+    local env, http = keyed()
+    serve(http, {smart = billing({amount = 100, cost = "abc",
+      answers = {["OpenSSH 7.4"] = {"CVE-2023-38408"}}}),
+      docs = SMART_DOCS})
+
+    env.action(t.host(), unnamed_port("OpenSSH", "7.4", 22))
+
+    t.equals(env._TEST.state().spent, 1,
+      "the reservation must stand when the service said nothing readable")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "402 from the billed endpoint stops spending, not the token",
+  fn = function()
+    -- 401 and 403 are verdicts on the TOKEN; 402 is a verdict on the WALLET and
+    -- only the billed endpoint can give one. Taking the keyed leg down for it
+    -- switched off search/id - which needs the token and costs nothing - for
+    -- every later host: the exact regression stop_billing exists to prevent,
+    -- arriving through the other door.
+    local env, http = keyed()
+    serve(http, {
+      software = {[CPE] = {bulletin({id = "CVE-2012-1667", cvss = 8.5})}},
+      docs = {["CVE-2012-1667"] = {id = "CVE-2012-1667", type = "cve",
+                                   title = "still enriched"}},
+      smart = function() return t.response({status = 402, body = "{}"}) end,
+    })
+
+    local host = t.host()
+    env.action(host, unnamed_port("OpenSSH", "7.4", 22))
+
+    local shared = env._TEST.state()
+    t.is_true(shared.billing_off, "the wallet is empty, so spending stops")
+    t.equals(shared.mode, "keyed",
+      "but the token is untouched: 402 says nothing about it")
+
+    local plain = t.collect_output(env.action(host, port_with_cpe()))
+    t.equals(plain[CPE][1].title, "still enriched",
+      "and the free-of-charge keyed call still runs for every later port")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a string smart could not name either is remembered as answered",
+  fn = function()
+    -- The positive half of this cache has a case; the negative half had none.
+    -- "smart looked and found nothing" is an ANSWER, and it costs a credit to
+    -- get - so not remembering it means every later host running the same
+    -- unnameable product buys the same silence again. Measured: deleting the
+    -- negative write left all 254 cases green.
+    local env, http = keyed()
+    serve(http, {smart = {}})
+
+    local port = t.port({number = 9999, service = "unknown",
+                         product = "Frobnicator", version = "1.0", cpe = {}})
+    for _ = 1, 4 do
+      env.action(t.host(), port)
+    end
+
+    t.length(http.matching(SMART), 1,
+      "an answer of 'nothing' is still an answer, and is bought once")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a wallet header carrying a float does not kill the end-of-scan notice",
+  fn = function()
+    -- The service controls these headers. string.format("%d", x) RAISES in Lua
+    -- 5.3+ when x has no integer representation, and post_action formats both
+    -- the remaining balance and the spend - so a single "99.5" would have
+    -- taken out the whole post-scan notice, on every host in the scan, from a
+    -- value the target's own service supplied. The existing header case covers
+    -- only a NON-NUMERIC value, which tonumber already rejects.
+    local env, http = keyed()
+    serve(http, {smart = billing({amount = "99.5", cost = "1.5",
+      answers = {["OpenSSH 7.4"] = {"CVE-2023-38408"}}}),
+      docs = SMART_DOCS})
+
+    env.action(t.host(), unnamed_port("OpenSSH", "7.4", 22))
+
+    env.SCRIPT_TYPE = "postrule"
+    t.no_error(env.action, "the notice must survive a fractional wallet header")
+  end,
+}
 return suite

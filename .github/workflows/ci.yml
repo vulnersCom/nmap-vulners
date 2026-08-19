@@ -2,11 +2,19 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    # catalog.yml publishes to the world from BOTH of these, and publishing is
+    # the whole distribution mechanism. A branch that can publish must be a
+    # branch that is gated, or the gate is decoration.
+    branches: [master, "2.0"]
   pull_request:
 
 permissions:
   contents: read
+
+concurrency:
+  # A superseded push has nothing left to prove; the newer one gates the tree.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   hygiene:
@@ -14,18 +22,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # The secret scan looks at the tree; full history is not needed.
-          fetch-depth: 1
+
+      # luac is what makes the global-reach check run rather than skip, and that
+      # check is the barrier against a local read above its own declaration -
+      # which Lua compiles happily into a global read, NSE turns into an error,
+      # and nmap answers by discarding every finding the port had.
+      # The version call is not decoration: check.py SKIPS the global check when
+      # it finds no luac, and a barrier that skips in CI is not a barrier. This
+      # step fails instead.
+      - name: Install the Lua compiler
+        run: |
+          sudo apt-get update && sudo apt-get install -y lua5.4
+          luac5.4 -v
 
       - name: Check for secrets, AI artifacts and clutter
         run: python3 tools/check.py
 
       # The dictionaries are downloaded at scan time, so a catalogue that is
       # published broken breaks every scan everywhere until it is fixed - there
-      # is no release to hold it back. This runs the same checks the script
-      # runs before it uses a rule, so a rule that would be silently dropped in
-      # the field fails here instead.
+      # is no release to hold it back.
+      #
+      # This validates the SHAPE. It deliberately does NOT decide whether a
+      # pattern is one the script will keep: that decision lives in
+      # usable_pattern, and a second copy of it could only drift. The unit
+      # suite drives the real reader instead, which is why it runs here too.
       - name: The catalogue is publishable
         run: python3 tools/catalog.py --check
 
@@ -38,7 +58,9 @@ jobs:
       # decides a rebuild is safe to publish.
       - name: The importer makes the decisions it is supposed to
         run: |
-          sudo apt-get update && sudo apt-get install -y lua5.4
+          # lua5.4 is already installed above, in this same job on this same
+          # runner; only the unsuffixed name the translator's oracle invokes
+          # is missing.
           sudo ln -sf "$(command -v lua5.4)" /usr/local/bin/lua
           python3 tools/fingerprints/selftest.py
 

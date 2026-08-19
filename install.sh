@@ -23,7 +23,8 @@ MODE="system"
 ACTION="install"
 ASK_KEY="yes"
 
-# 2.0 is one file with its data embedded. The 1.x trio is still listed, because
+# 2.0 is one file that downloads its dictionaries at scan time. The 1.x trio
+# is still listed, because
 # installing over it has to REMOVE it: a leftover http-vulners-regex.nse carries
 # the "default" category and keeps sweeping targets under a plain -sC, which is
 # exactly what this release stopped doing.

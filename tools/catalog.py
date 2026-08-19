@@ -13,10 +13,16 @@ lets the corpus grow without shipping a new script.
     catalog/paths.json          the paths the HTTP sweep requests
     catalog/probes.json         targeted version probes
 
-These four files are the only copy. `tools/fingerprints/build.py` writes the
-rules and the probes directly into them; `paths.json` is maintained by hand.
-This tool does not convert anything - it maintains the manifest and checks that
-what is published can actually be read.
+These four files are the only copy, and `tools/fingerprints/build.py` writes
+all three dictionaries into them. This tool does not convert anything - it
+maintains the manifest and checks the SHAPE of what is published.
+
+What it deliberately does not check is the patterns. Deciding whether a Lua
+pattern is one the script will keep is `usable_pattern` in vulners.nse, and a
+second implementation of it here could only drift away from that one. The test
+suite asserts the property instead, through the script's own readers - see "the
+published catalogue survives this script's own readers intact" in
+tests/test_catalog.lua - so anything that publishes must run the suite too.
 
 **Versioning.** `schema` says which format the files are in; vulners.nse refuses
 a schema higher than the one it knows and says so, which is what makes a future
@@ -51,13 +57,22 @@ DICTIONARIES = {
     "probes": ("probes.json", "probes"),
 }
 
-# The runtime channel keys. A rule filed under anything else is data that ships,
-# costs bytes on every download, and can never fire - so it is a failure here
-# rather than a passenger.
-CHANNEL_KEY = re.compile(r"^(?:raw|body|title|script|banner|cookie"
-                         r"|hdr:[\w.-]+|meta:[\w.:-]+)$")
+# The runtime channel keys. Lowercase only: nselib lowercases every response
+# header name and the matcher builds its keys from what nselib hands it, so a
+# rule filed under "hdr:Server" is data that ships, costs bytes on every
+# download, and can never fire - a failure here rather than a passenger.
+#
+# Imported from the module that WRITES the key rather than restated, because a
+# second spelling can only drift: the two disagreed until this import replaced
+# them, and `hdr:Server` was accepted by the producer while being refused here.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fingerprints.normalize import CHANNEL_KEY  # noqa: E402
 
 ALIAS = re.compile(r"^cpe:/[aoh]:[^:]+:[^:]+$")
+
+# MAX_CATALOG_STRING in vulners.nse:240. A string past it is refused by the
+# reader, so shipping one is bytes on every download that can never be used.
+MAX_STRING = 2048
 
 
 def load(path):
@@ -110,12 +125,15 @@ def write_index():
 
 
 def check():
-    """Validate the catalogue the way vulners.nse will read it.
+    """Validate the shape of the catalogue: the manifest, and every field the
+    script indexes by.
 
-    Deliberately the same questions the script asks, because a check that is
-    weaker than the reader lets through exactly the files that will be dropped
-    in the field - silently, since a rule that fails validation at scan time is
-    indistinguishable from a product nobody is running.
+    Not the patterns. A check weaker than the reader lets through exactly the
+    rules that will be dropped in the field - silently, since a rule that fails
+    validation at scan time is indistinguishable from a product nobody is
+    running - so the property is asserted where the reader itself lives, in
+    tests/test_catalog.lua. Anything that publishes runs the suite as well as
+    this.
     """
     problems = []
 
@@ -129,6 +147,21 @@ def check():
     if not isinstance(index.get("serial"), int) or index["serial"] < 1:
         problems.append("serial must be a positive integer, got %r"
                         % (index.get("serial"),))
+
+    # The dictionary the SCRIPT would build from each file, or None when the
+    # file is unusable. Collected here and reused below: the three sections
+    # that follow used to re-open the same files unconditionally, so a missing
+    # or mistyped dictionary produced a Python traceback instead of the problem
+    # list this function spends sixty lines building - in a workflow that runs
+    # unattended once a week.
+    bodies = {}
+
+    # The type each dictionary must have. Lua has one table type, so a JSON
+    # object where the script expects an array is NOT caught at the reader's
+    # type check: `ipairs` over string keys simply yields nothing. For paths
+    # that is the whole catalogue - read_paths returns nil, assemble returns
+    # nil, and the script ends up with no fingerprints either.
+    SHAPES = {"fingerprints": dict, "paths": list, "probes": list}
 
     catalogs = index.get("catalogs") or {}
     for kind, (filename, key) in DICTIONARIES.items():
@@ -150,12 +183,38 @@ def check():
         if body is None:
             problems.append("%s has no %r" % (filename, key))
             continue
+        if not isinstance(body, SHAPES[kind]):
+            problems.append("%s: %r is a %s, the script reads it as a %s"
+                            % (filename, key, type(body).__name__,
+                               SHAPES[kind].__name__))
+            continue
+        bodies[kind] = body
         if len(body) != listed.get("entries"):
             problems.append("%s holds %d entries, the index says %r"
                             % (filename, len(body), listed.get("entries")))
 
-    rules = load(CATALOG / "fingerprints.json").get("rules") or {}
+    rules = bodies.get("fingerprints") or {}
     for name, rule in sorted(rules.items()):
+        if not isinstance(rule, dict):
+            problems.append("rule %r is a %s, not an object"
+                            % (name, type(rule).__name__))
+            continue
+        # The reader runs `regex` through string.find. A non-string raises
+        # there, and nmap answers a raising script by discarding every finding
+        # the port had - so this is the whole port, not one rule.
+        for field in ("regex", "channel", "alias"):
+            if not isinstance(rule.get(field), str):
+                problems.append("rule %r has %s %r, which is not a string"
+                                % (name, field, rule.get(field)))
+        if not all(isinstance(rule.get(f), str)
+                   for f in ("regex", "channel", "alias")):
+            continue
+        for field in ("regex", "alias", "anchor", "example"):
+            value = rule.get(field)
+            if isinstance(value, str) and len(value) > MAX_STRING:
+                problems.append("rule %r has %s of %d bytes; the reader "
+                                "refuses anything over %d"
+                                % (name, field, len(value), MAX_STRING))
         if not CHANNEL_KEY.match(rule.get("channel", "")):
             problems.append("rule %r is filed under %r, which nothing reads"
                             % (name, rule.get("channel")))
@@ -166,21 +225,35 @@ def check():
         if anchor and anchor != anchor.lower():
             problems.append("rule %r has a non-lowercase anchor" % name)
 
-    paths = load(CATALOG / "paths.json").get("paths") or []
+    paths = bodies.get("paths") or []
     for path in paths:
         if not isinstance(path, str) or not path.startswith("/") \
-                or re.search(r"\s", path):
+                or re.search(r"\s", path) or len(path) > MAX_STRING:
             problems.append("path %r is not a request line this script would send"
                             % (path,))
 
-    for probe in load(CATALOG / "probes.json").get("probes") or []:
+    for probe in bodies.get("probes") or []:
+        if not isinstance(probe, dict):
+            problems.append("probe %r is a %s, not an object"
+                            % (probe, type(probe).__name__))
+            continue
         label = probe.get("name", "?")
         if not ALIAS.match(probe.get("alias", "")):
             problems.append("probe %r has alias %r" % (label, probe.get("alias")))
         for rule in probe.get("detect") or []:
-            if not CHANNEL_KEY.match(rule.get("channel", "")):
+            if not isinstance(rule, dict) or not isinstance(rule.get("regex"), str):
+                problems.append("probe %r has a detector whose regex is not a "
+                                "string; string.find raises on it, and a raising "
+                                "script costs the port every finding it had"
+                                % label)
+                continue
+            if not CHANNEL_KEY.match(rule.get("channel") or ""):
                 problems.append("probe %r detects on %r, which nothing reads"
                                 % (label, rule.get("channel")))
+        for rule in probe.get("extract") or []:
+            if not isinstance(rule, dict) or not isinstance(rule.get("regex"), str):
+                problems.append("probe %r has an extractor whose regex is not a "
+                                "string" % label)
         for path in probe.get("paths") or []:
             if not isinstance(path, str) or not path.startswith("/"):
                 problems.append("probe %r would request %r" % (label, path))

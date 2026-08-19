@@ -235,6 +235,14 @@ def main():
                         help="check that the contract still catches breakage")
     args = parser.parse_args()
 
+    # Nothing to do is not success. With neither a report nor --selftest this
+    # printed nothing and exited 0, so a CI line whose arguments came from a
+    # shell variable that expanded to nothing - or a glob that matched a moved
+    # fixture - reported a gate that never ran. The unit runner had the same
+    # hole and now calls it a failure; so does this.
+    if not args.selftest and not args.reports:
+        parser.error("give at least one report to check, or --selftest")
+
     status = 0
     if args.selftest:
         import tempfile

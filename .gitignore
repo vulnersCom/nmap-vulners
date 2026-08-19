@@ -1,8 +1,8 @@
 # Public repository of an NSE plugin. Nothing below may ever enter the history.
 
 # --- Secrets and local credentials -------------------------------------------
-# vulners_enterprise.nse can read the token from a file
-# (--script-args api_key_file=...). Keep such files outside the repository.
+# vulners.nse can read the token from a file (--script-args
+# vulners.api_key_file=...). Keep such files outside the repository.
 *api_key*
 *apikey*
 *api-key*

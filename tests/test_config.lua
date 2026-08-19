@@ -89,6 +89,41 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
+  name = "the deprecation notice is printed once for the scan, not once per port",
+  fn = function()
+    -- The chunk is re-executed for every open port and config() re-reads every
+    -- argument each time, so advice about a renamed argument was repeated once
+    -- per port. The registry is what survives between those executions, which
+    -- is why two loads sharing one registry is the shape of this case.
+    t.reset_registry()
+    local logger = t.stdnse_double()
+
+    local function load_a_port()
+      local env = t.load_script(root .. "/vulners.nse", {
+        args = {["vulners_enterprise.api_key"] = KEY,
+                ["vulners.paths"] = "none"},
+        modules = {
+          http = t.http_double(),
+          nmap = t.nmap_double(),
+          os = t.os_double({}),
+          io = t.io_double(),
+          stdnse = logger,
+        },
+      })
+      env._TEST.config()
+    end
+
+    load_a_port()
+    load_a_port()
+    load_a_port()
+
+    local said = 0
+    for _ in logger.log():gmatch("is deprecated") do said = said + 1 end
+    t.equals(said, 1, "three ports, one notice")
+  end,
+}
+
+suite[#suite + 1] = {
   name = "a named key file beats the environment",
   fn = function()
     local path = "/etc/nmap/named.key"

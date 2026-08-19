@@ -55,12 +55,19 @@ local function load_patterns()
     t.equals(type(channel), "string", "a channel key must be a string")
     t.equals(type(flat), "table", channel .. ": a channel must hold a flat list")
     t.equals(#flat % 4, 0,
-      channel .. ": the flat table holds name, alias, anchor, regex quadruples")
+      channel .. ": the flat table holds anchored, alias, anchor, regex quadruples")
     for i = 1, #flat, 4 do
-      patterns[flat[i]] = {
+      local regex = flat[i + 3]
+      -- Slot 1 is the start-anchored flag the matcher reads to stop after the
+      -- first match. It used to hold the rule's NAME, which nothing read - so
+      -- the key here is now the rule's own identity, which is what the
+      -- catalogue deduplicates on anyway.
+      t.equals(flat[i], regex:sub(1, 1) == "^",
+        channel .. ": the anchored flag must agree with the pattern")
+      patterns[channel .. "|" .. tostring(flat[i + 1]) .. "|" .. tostring(regex)] = {
         alias = flat[i + 1],
         anchor = flat[i + 2],
-        regex = flat[i + 3],
+        regex = regex,
         channel = channel,
       }
       count = count + 1
@@ -247,8 +254,15 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "every shipped pattern extracts the version from its recorded subject",
   fn = function()
-    local patterns = load_patterns()
+    -- Read straight from the published document, which is what carries both
+    -- the pattern and the example. It used to join the RUNTIME tuple to the
+    -- document by rule name, which quietly made the tuple's layout part of this
+    -- case: when the name left the tuple, the join found nothing and the case
+    -- reported "0 checked" rather than a translation error.
     local source = load_source()
+    local names = {}
+    for name in pairs(source) do names[#names + 1] = name end
+    table.sort(names)
 
     -- This is the case that speaks for the whole import. Each rule that came
     -- from a catalogue carries a subject that catalogue observed in the field
@@ -256,14 +270,14 @@ suite[#suite + 1] = {
     -- translating a PCRE into a Lua pattern, and a translation that looks right
     -- and is wrong is exactly what this repository has been caught by before.
     local checked = 0
-    for _, name in ipairs(sorted_names(patterns)) do
+    for _, name in ipairs(names) do
       local entry = source[name]
       local example = entry and entry.example
       if example and example.subject and example.version then
-        local _, _, captured = example.subject:find(patterns[name].regex)
+        local _, _, captured = example.subject:find(entry.regex)
         t.equals(captured, example.version, string.format(
           "%s: pattern %q must extract %q from %q",
-          name, patterns[name].regex, example.version, example.subject))
+          name, entry.regex, example.version, example.subject))
         checked = checked + 1
       end
     end
@@ -285,9 +299,17 @@ suite[#suite + 1] = {
     -- An anchor that is not genuinely required silently switches the rule off,
     -- which is the worst failure this file can ship - a detection that is
     -- present, structurally valid, and never fires.
+    -- Counted, because every assertion below sits behind the anchor test.
+    -- With the anchors gone the loop body simply never runs, and this case
+    -- reported success for a catalogue whose prefilter had been deleted -
+    -- measured: replacing the anchor extraction in read_fingerprints with an
+    -- empty string left all 254 cases green.
+    local anchored = 0
+
     for _, name in ipairs(sorted_names(patterns)) do
       local anchor = patterns[name].anchor
       if anchor ~= "" then
+        anchored = anchored + 1
         t.equals(anchor, anchor:lower(),
           name .. ": the anchor must be lowercase, the subject is lowercased")
 
@@ -301,6 +323,11 @@ suite[#suite + 1] = {
         end
       end
     end
+
+    t.is_true(anchored > 400, string.format(
+      "expected most rules to carry an anchor, got %d; a rule without one "
+      .. "reads only the first UNANCHORED_WINDOW bytes of its subject",
+      anchored))
   end,
 }
 
@@ -359,6 +386,20 @@ suite[#suite + 1] = {
     t.is_nil(version_of("q"), "a bare word is not a version")
     t.is_nil(version_of("."), "a bare separator is not a version")
     t.is_nil(version_of("   "), "whitespace is not a version")
+
+    -- A capture that swallowed the prose around the number is not a version
+    -- either, and this is the half that used to get through: every one of
+    -- these was published onto a port, printed in the report and sent to the
+    -- API as a CPE that can only ever come back empty. Whitespace and slash
+    -- are what separates them from a real version, measured across the 526
+    -- rules that carry a recorded example.
+    t.is_nil(version_of("7 (build 7)"), "a build note is not a version")
+    t.is_nil(version_of("Release 7"), "a word and a number is not a version")
+    t.is_nil(version_of("9 (Shrike)"), "a codename beside a number is not one")
+    t.is_nil(version_of("OTP/7"), "a prefix the rule failed to exclude is not one")
+    t.is_nil(version_of("8.1 SP3"),
+      "and neither is a service pack written with a space: a CPE URI cannot "
+      .. "carry one, so the lookup could never match")
 
     -- What must still get through: real versions are not all dotted decimals.
     t.equals(version_of("4.1.1a@1.791"), "4.1.1a@1.791", "a BIG-IP version")

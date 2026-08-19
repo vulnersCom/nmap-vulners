@@ -7,7 +7,8 @@
     script database. An existing copy is replaced: nmap ships a vulners.nse of
     its own, and leaving it in place means nmap keeps running that one.
 
-    2.0 is a single file with its data embedded. The three files of 1.x are
+    2.0 is a single file that downloads its dictionaries at scan time. The
+    three files of 1.x are
     removed if they are found, because a leftover http-vulners-regex.nse still
     carries the "default" category and keeps sweeping targets under a plain
     -sC.

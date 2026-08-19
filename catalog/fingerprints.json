@@ -8,7 +8,7 @@
     "subject": "Python/3.8 aiohttp/3.7.4.post0",
     "version": "3.7.4.post0"
    },
-   "regex": "^Python/%d%.[%d.][%d.]* aiohttp/(%d[%w.][%w.]*)$",
+   "regex": "^Python/%d%.[%d.][%d.]* aiohttp/(%d[%w_.][%w_.]*)$",
    "source": "recog:http_servers.xml#220"
   },
   "AOLserver, header": {
@@ -591,7 +591,7 @@
     "subject": "PowerDNS Authoritative Server 4.0.0-alpha2",
     "version": "4.0.0-alpha2"
    },
-   "regex": "^PowerDNS Authoritative Server (%d%.[%d.][%d.]*%-%w%w*)$",
+   "regex": "^PowerDNS Authoritative Server (%d%.[%d.][%d.]*%-[%w_][%w_]*)$",
    "source": "recog:dns_versionbind.xml#32"
   },
   "Authoritative Server, banner_1": {
@@ -602,7 +602,7 @@
     "subject": "PowerDNS Authoritative Server 3.3-rc2 (jenkins@autotest.powerdns.com built 20130627120406 root@foo-bar.foo.baz)",
     "version": "3.3-rc2"
    },
-   "regex": "^PowerDNS Authoritative Server (%d%.[%d.][%d.]*%-rc%d) %(%w%w*@[%w.][%w.]* built [%d%s][%d%s]*%w*@[%w.%-]*%)$",
+   "regex": "^PowerDNS Authoritative Server (%d%.[%d.][%d.]*%-rc%d) %([%w_][%w_]*@[%w_.][%w_.]* built [%d%s][%d%s]*[%w_]*@[%w_.%-]*%)$",
    "source": "recog:dns_versionbind.xml#30"
   },
   "Authoritative Server, banner_2": {
@@ -613,7 +613,7 @@
     "subject": "PowerDNS Authoritative Server 3.4.19 (jenkins@autotest.powerdns.com built 20160102220341 root@)",
     "version": "3.4.19"
    },
-   "regex": "^PowerDNS Authoritative Server (%d%.[%d.][%d.]*) %(%w%w*@[%w.][%w.]* built [%d%s][%d%s]*%w*@[%w.%-]*%)$",
+   "regex": "^PowerDNS Authoritative Server (%d%.[%d.][%d.]*) %([%w_][%w_]*@[%w_.][%w_.]* built [%d%s][%d%s]*[%w_]*@[%w_.%-]*%)$",
    "source": "recog:dns_versionbind.xml#30"
   },
   "Authoritative Server, banner_3": {
@@ -635,7 +635,7 @@
     "subject": "PowerDNS Authoritative Server 4.0.4 (built Jul 26 2017 15:04:27 by root@FreeBSD:11:amd64-default-job-03)",
     "version": "4.0.4"
    },
-   "regex": "^PowerDNS Authoritative Server (%d%.[%w.][%w.]*[^ ]*) %(built [%w%s:][%w%s:]* by %w%w*@[%w.:%-]*%)$",
+   "regex": "^PowerDNS Authoritative Server (%d%.[%w_.][%w_.]*[^ ]*) %(built [%w_%s:][%w_%s:]* by [%w_][%w_]*@[%w_.:%-]*%)$",
    "source": "recog:dns_versionbind.xml#31"
   },
   "BIG-IP LTM, banner": {
@@ -723,17 +723,6 @@
   },
   "Bootstrap, body": {
    "alias": "cpe:/a:getbootstrap:bootstrap",
-   "anchor": "bootstrap",
-   "channel": "body",
-   "example": {
-    "subject": "<linkq href=qbootstrapq7777777q.min.css",
-    "version": "7777777"
-   },
-   "regex": "<[lL][iI][nN][kK][^>]* [hH][rR][eE][fF]=[^>]-[bB][oO][oO][tT][sS][tT][rR][aA][pP][^>]-(%d%d*)[^>%-]-%.[cC][sS][sS]",
-   "source": "wappalyzer:Bootstrap/html"
-  },
-  "Bootstrap, body_1": {
-   "alias": "cpe:/a:getbootstrap:bootstrap",
    "anchor": "* bootstrap v",
    "channel": "body",
    "example": {
@@ -817,7 +806,7 @@
     "subject": "bootstrapq7777777q.min.js",
     "version": "7777777"
    },
-   "regex": "[bB][oO][oO][tT][sS][tT][rR][aA][pP][^>]-([0-9a-fA-F][0-9a-fA-F]*)[^>]-%.[jJ][sS]",
+   "regex": "[bB][oO][oO][tT][sS][tT][rR][aA][pP][^>]-([0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]*)[^>]-%.[jJ][sS]",
    "source": "wappalyzer:Bootstrap/scriptSrc"
   },
   "Bootstrap, script_7": {
@@ -828,7 +817,7 @@
     "subject": "bootstrapq7777777q.min.js",
     "version": "7777777"
    },
-   "regex": "[bB][oO][oO][tT][sS][tT][rR][aA][pP][^>]-([0-9a-fA-F][0-9a-fA-F]*)[^>]-%.[mM][iI][nN]%.[jJ][sS]",
+   "regex": "[bB][oO][oO][tT][sS][tT][rR][aA][pP][^>]-([0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]*)[^>]-%.[mM][iI][nN]%.[jJ][sS]",
    "source": "wappalyzer:Bootstrap/scriptSrc"
   },
   "Bugzilla, body": {
@@ -1067,7 +1056,7 @@
     "subject": "Netscape-Commerce/7.q",
     "version": "7.q"
    },
-   "regex": "^Netscape%-Commerce/(%d%d*%.[%w%s.][%w%s.]*)$",
+   "regex": "^Netscape%-Commerce/(%d%d*%.[%w_%s.][%w_%s.]*)$",
    "source": "recog:http_servers.xml#154"
   },
   "Communigate Pro, banner": {
@@ -1078,7 +1067,7 @@
     "subject": "CommuniGatePro/6.2.14",
     "version": "6.2.14"
    },
-   "regex": "^CommuniGatePro/(%d%.[%w.][%w.]*)$",
+   "regex": "^CommuniGatePro/(%d%.[%w_.][%w_.]*)$",
    "source": "recog:sip_banners.xml#49"
   },
   "Communigate Pro, banner_1": {
@@ -1089,7 +1078,7 @@
     "subject": "foo.bar ESMTP CommuniGate Pro 5.3.1",
     "version": "5.3.1"
    },
-   "regex": "^[^ ][^ ]* ESMTP CommuniGate Pro (%d%.[%w.][%w.]*)$",
+   "regex": "^[^ ][^ ]* ESMTP CommuniGate Pro (%d%.[%w_.][%w_.]*)$",
    "source": "recog:smtp_banners.xml#131"
   },
   "Communigate Pro, banner_2": {
@@ -1100,7 +1089,7 @@
     "subject": "foo.bar ESMTP CommuniGate Pro 4.3.12. It is you again :-(",
     "version": "4.3.12"
    },
-   "regex": "^[^ ][^ ]* ESMTP CommuniGate Pro (%d%.[%w.][%w.]*)[^\r\n] It is you again :%-%($",
+   "regex": "^[^ ][^ ]* ESMTP CommuniGate Pro (%d%.[%w_.][%w_.]*)[^\r\n] It is you again :%-%($",
    "source": "recog:smtp_banners.xml#131"
   },
   "Communigate Pro, server": {
@@ -1111,7 +1100,7 @@
     "subject": "CommuniGatePro/5.2.20",
     "version": "5.2.20"
    },
-   "regex": "^CommuniGatePro/(%d%.[%w.][%w.]*)$",
+   "regex": "^CommuniGatePro/(%d%.[%w_.][%w_.]*)$",
    "source": "recog:http_servers.xml#391"
   },
   "CompaqHTTPServer, raw": {
@@ -1406,6 +1395,17 @@
    "regex": "[dD][oO][xX][yY][gG][eE][nN] ([%d.][%d.]*)",
    "source": "wappalyzer:Doxygen/meta/generator"
   },
+  "DreamWeaver, body": {
+   "alias": "cpe:/a:adobe:dreamweaver",
+   "anchor": "dreamweaver",
+   "channel": "body",
+   "example": {
+    "subject": "<!--Dreamweaverqtarget",
+    "version": "q"
+   },
+   "regex": "<!%-%-[^>]*[dD][rR][eE][aA][mM][wW][eE][aA][vV][eE][rR]([^>][^>]*)[tT][aA][rR][gG][eE][tT]",
+   "source": "wappalyzer:DreamWeaver/html"
+  },
   "Dropbear SSH, banner": {
    "alias": "cpe:/a:dropbear_ssh_project:dropbear_ssh",
    "anchor": "dropbear_",
@@ -1553,7 +1553,7 @@
     "subject": "Netscape-FastTrack/7.q",
     "version": "7.q"
    },
-   "regex": "^Netscape%-FastTrack/(%d%d*%.[%w%s.][%w%s.]*)$",
+   "regex": "^Netscape%-FastTrack/(%d%d*%.[%w_%s.][%w_%s.]*)$",
    "source": "recog:http_servers.xml#153"
   },
   "Firebase, script": {
@@ -1613,7 +1613,7 @@
     "subject": "FortiVoice/7.31b00",
     "version": "7.31b00"
    },
-   "regex": "^FortiVoice/([%w.%-][%w.%-]*)$",
+   "regex": "^FortiVoice/([%w_.%-][%w_.%-]*)$",
    "source": "recog:sip_user_agents.xml#45"
   },
   "FreeBSD, header": {
@@ -1663,7 +1663,7 @@
     "subject": "RG-7q/7 SN/VIq SHA/7 sofia-sip/7",
     "version": "7"
    },
-   "regex": "^RG%-%d[%w%-][%w%-]*/([%d.][%d.]*) SN/VI%w%w* SHA/[0-9a-f][0-9a-f]* sofia%-sip/[%d.][%d.]*$",
+   "regex": "^RG%-%d[%w_%-][%w_%-]*/([%d.][%d.]*) SN/VI[%w_][%w_]* SHA/[0-9a-f][0-9a-f]* sofia%-sip/[%d.][%d.]*$",
    "source": "recog:sip_user_agents.xml#54"
   },
   "FreeSWITCH, banner_3": {
@@ -1674,7 +1674,7 @@
     "subject": "RG-1404GF/1.11.0 SN/VI12E45678 sofia-sip/1.12.10",
     "version": "1.11.0"
    },
-   "regex": "^RG%-%d[%w%-][%w%-]*/([%d.][%d.]*) SN/VI%w%w* sofia%-sip/[%d.][%d.]*$",
+   "regex": "^RG%-%d[%w_%-][%w_%-]*/([%d.][%d.]*) SN/VI[%w_][%w_]* sofia%-sip/[%d.][%d.]*$",
    "source": "recog:sip_user_agents.xml#54"
   },
   "FreeSWITCH, banner_4": {
@@ -2093,7 +2093,7 @@
     "subject": "IBM_HTTP_SERVER/1.3.19.2  Apache/1.3.20 (Win32)",
     "version": "1.3.20"
    },
-   "regex": "^IBM_HTTP_SERVER/[%w.%-][%w.%-]*%s%s*Apache/([12][%d.][%d.]*)%s*[^\r\n]*$",
+   "regex": "^IBM_HTTP_SERVER/[%w_.%-][%w_.%-]*%s%s*Apache/([12][%d.][%d.]*)%s*[^\r\n]*$",
    "source": "recog:http_servers.xml#108"
   },
   "HTTPD, server_2": {
@@ -2104,7 +2104,7 @@
     "subject": "IBM_HTTP_Server/1.3.12 Apache/1.3.12 (Unix)",
     "version": "1.3.12"
    },
-   "regex": "^IBM_HTTP_Server/[%w.%-][%w.%-]*%s%s*Apache/([12][%d.][%d.]*)%s*[^\r\n]*$",
+   "regex": "^IBM_HTTP_Server/[%w_.%-][%w_.%-]*%s%s*Apache/([12][%d.][%d.]*)%s*[^\r\n]*$",
    "source": "recog:http_servers.xml#108"
   },
   "HTTPD, server_3": {
@@ -2226,7 +2226,7 @@
     "subject": " Microsoft ESMTP MAIL Service, Version: 5.0.2195.5329 ready Thu, 30 Nov 2017 11:40:25 +0200",
     "version": "5.0.2195.5329"
    },
-   "regex": "^ ?Microsoft ESMTP MAIL Service, Version:  *(%d%d*%.%d%d*%.%d%d*%.%d%d*)  *ready  *%w%w%w, %d[^\r\n][^\r\n]*$",
+   "regex": "^ ?Microsoft ESMTP MAIL Service, Version:  *(%d%d*%.%d%d*%.%d%d*%.%d%d*)  *ready  *[%w_][%w_][%w_], %d[^\r\n][^\r\n]*$",
    "source": "recog:smtp_banners.xml#22"
   },
   "IIS, banner_1": {
@@ -2237,7 +2237,7 @@
     "subject": "Microsoft ESMTP MAIL Service, Version: 6.0.2600.5512 ready at  Thu, 30 Nov 2017 18:22:40 +0900",
     "version": "6.0.2600.5512"
    },
-   "regex": "^ ?Microsoft ESMTP MAIL Service, Version:  *(%d%d*%.%d%d*%.%d%d*%.%d%d*)  *ready  *at  *%w%w%w, %d[^\r\n][^\r\n]*$",
+   "regex": "^ ?Microsoft ESMTP MAIL Service, Version:  *(%d%d*%.%d%d*%.%d%d*%.%d%d*)  *ready  *at  *[%w_][%w_][%w_], %d[^\r\n][^\r\n]*$",
    "source": "recog:smtp_banners.xml#22"
   },
   "IIS, banner_2": {
@@ -2281,7 +2281,7 @@
     "subject": "foo.bar Microsoft ESMTP MAIL Service, Version: 6.0.3790.4675 ready at Wed, 21 Jul 2010 19:04:24 -0700",
     "version": "6.0.3790.4675"
    },
-   "regex": "^[^ ][^ ]* ?Microsoft ESMTP MAIL Service, Version:  *(%d%d*%.%d%d*%.%d%d*%.%d%d*)  *ready  *at  *%w%w%w, %d[^\r\n][^\r\n]*$",
+   "regex": "^[^ ][^ ]* ?Microsoft ESMTP MAIL Service, Version:  *(%d%d*%.%d%d*%.%d%d*%.%d%d*)  *ready  *at  *[%w_][%w_][%w_], %d[^\r\n][^\r\n]*$",
    "source": "recog:smtp_banners.xml#22"
   },
   "IIS, banner_6": {
@@ -2744,7 +2744,7 @@
     "subject": "foo.bar SMTP Server (JAMES SMTP Server 2.3.2) ready Tue, 19 May 2015 00:36:13 +0200 (CEST)",
     "version": "2.3.2"
    },
-   "regex": "^%S%S* E?SMTP Server %(JAMES E?SMTP Server ([%d.][%d.]*)%) ready %w%w%w, %d%d* %w%w%w %d%d%d%d [%d:][%d:]* [%-+]%d%d%d%d %([^\r\n][^\r\n]*%)$",
+   "regex": "^%S%S* E?SMTP Server %(JAMES E?SMTP Server ([%d.][%d.]*)%) ready [%w_][%w_][%w_], %d%d* [%w_][%w_][%w_] %d%d%d%d [%d:][%d:]* [%-+]%d%d%d%d %([^\r\n][^\r\n]*%)$",
    "source": "recog:smtp_banners.xml#38"
   },
   "Jamf Pro, title": {
@@ -2834,7 +2834,7 @@
     "subject": "Netscape-Enterprise/3.5.1",
     "version": "3.5.1"
    },
-   "regex": "^Netscape%-Enterprise/(%d%d*%.[%w%s.][%w%s.]*)$",
+   "regex": "^Netscape%-Enterprise/(%d%d*%.[%w_%s.][%w_%s.]*)$",
    "source": "recog:http_servers.xml#117"
   },
   "Java, body": {
@@ -2935,7 +2935,7 @@
     "subject": "Jetty/4.0.1 (SunOS 5.8 sparc)",
     "version": "4.0.1"
    },
-   "regex": "^Jetty/([1-6]%.[%w.][%w.]*)",
+   "regex": "^Jetty/([1-6]%.[%w_.][%w_.]*)",
    "source": "recog:http_servers.xml#124"
   },
   "Joomla, header": {
@@ -3491,7 +3491,7 @@
     "subject": "UPnP/Tomato 1.28.9014 MIPSR2-RAF-v1.3g K26 UPnP/1.1 MiniUPnPd/1.8",
     "version": "1.8"
    },
-   "regex": "^UPnP/Tomato [%w%s.%-][%w%s.%-]* UPnP/[%d.][%d.]* MiniUPnPd/([%d.][%d.]*)$",
+   "regex": "^UPnP/Tomato [%w_%s.%-][%w_%s.%-]* UPnP/[%d.][%d.]* MiniUPnPd/([%d.][%d.]*)$",
    "source": "recog:http_servers.xml#302"
   },
   "MiniUPnPd, server_3": {
@@ -4343,17 +4343,6 @@
    "channel": "raw",
    "regex": "X%-OWA%-Version: ([%d.]+)"
   },
-  "Outlook Web App, body": {
-   "alias": "cpe:/a:microsoft:outlook_web_access",
-   "anchor": "/themes/resources",
-   "channel": "body",
-   "example": {
-    "subject": "<linkq/owa/auth/7/themes/resources",
-    "version": "7"
-   },
-   "regex": "<[lL][iI][nN][kK][^>][^>]*/[oO][wW][aA]/[aA][uU][tT][hH]/([%d.][%d.]*)/[tT][hH][eE][mM][eE][sS]/[rR][eE][sS][oO][uU][rR][cC][eE][sS]",
-   "source": "wappalyzer:Outlook Web App/html"
-  },
   "Outlook Web App, header": {
    "alias": "cpe:/a:microsoft:outlook_web_access",
    "channel": "hdr:x-owa-version",
@@ -4991,8 +4980,19 @@
     "subject": "Cisco/SPA112-1.4.1SR1(002)d-hisec",
     "version": "1.4.1SR1"
    },
-   "regex": "^Cisco/SPA112%-([%d.SR][%d.SR]*)%(%w%w*%)[%w%-]*$",
+   "regex": "^Cisco/SPA112%-([%d.SR][%d.SR]*)%([%w_][%w_]*%)[%w_%-]*$",
    "source": "recog:sip_banners.xml#5"
+  },
+  "SPA122 Firmware, banner": {
+   "alias": "cpe:/o:cisco:spa122_firmware",
+   "anchor": "cisco/spa122-",
+   "channel": "banner",
+   "example": {
+    "subject": "Cisco/SPA122-1.3.5(004p)",
+    "version": "1.3.5"
+   },
+   "regex": "^Cisco/SPA122%-([%d.][%d.]*)%([%w_][%w_]*%)[%w_%-]*$",
+   "source": "recog:sip_banners.xml#4"
   },
   "SPIP, header": {
    "alias": "cpe:/a:spip:spip",
@@ -5313,7 +5313,7 @@
     "subject": "Squid/2.3.STABLE1",
     "version": "2.3.STABLE1"
    },
-   "regex": "^[sS][qQ][uU][iI][dD]/(%d%d*%.[%w.%-+][%w.%-+]*)$",
+   "regex": "^[sS][qQ][uU][iI][dD]/(%d%d*%.[%w_.%-+][%w_.%-+]*)$",
    "source": "recog:http_servers.xml#127"
   },
   "SquirrelMail, body": {
@@ -5335,7 +5335,7 @@
     "subject": "WowzaStreamingEngine/4.7.7",
     "version": "4.7.7"
    },
-   "regex": "^WowzaStreamingEngine/(%d%.[%w.][%w.]*)$",
+   "regex": "^WowzaStreamingEngine/(%d%.[%w_.][%w_.]*)$",
    "source": "recog:http_servers.xml#383"
   },
   "Streaming Engine, title": {
@@ -5346,7 +5346,7 @@
     "subject": "Wowza Streaming Engine 4 Perpetual Pro Edition 4.8.8.01 build20201216140014",
     "version": "4.8.8.01"
    },
-   "regex": "^Wowza Streaming Engine 4 Perpetual Pro Edition (%d%.[%w.][%w.]*) build%d%d*$",
+   "regex": "^Wowza Streaming Engine 4 Perpetual Pro Edition (%d%.[%w_.][%w_.]*) build%d%d*$",
    "source": "recog:html_title.xml#61"
   },
   "Streaming Engine, title_1": {
@@ -5357,7 +5357,7 @@
     "subject": "Wowza Streaming Engine 4 Subscription Edition 4.7.7.01 build20190222144406",
     "version": "4.7.7.01"
    },
-   "regex": "^Wowza Streaming Engine 4 Subscription Edition (%d%.[%w.][%w.]*) build%d%d*$",
+   "regex": "^Wowza Streaming Engine 4 Subscription Edition (%d%.[%w_.][%w_.]*) build%d%d*$",
    "source": "recog:html_title.xml#61"
   },
   "SunOS, header": {
@@ -5435,7 +5435,7 @@
     "subject": "$ProjectRevision: 4.0.2.38 $",
     "version": "4.0.2.38"
    },
-   "regex": "^%$ProjectRevision:[%s%w:]* ([%d.][%d.]*) %$$",
+   "regex": "^%$ProjectRevision:[%s%w_:]* ([%d.][%d.]*) %$$",
    "source": "recog:http_servers.xml#255"
   },
   "TUX Web Server, server": {
@@ -5697,7 +5697,7 @@
     "subject": "Grandstream UCM6202V1.4A 1.0.15.16",
     "version": "1.0.15.16"
    },
-   "regex": "^Grandstream UCM6202V%d%.%d%w ([%d.][%d.]*)$",
+   "regex": "^Grandstream UCM6202V%d%.%d[%w_] ([%d.][%d.]*)$",
    "source": "recog:sip_banners.xml#19"
   },
   "UCM6204 Firmware, banner": {
@@ -5708,7 +5708,7 @@
     "subject": "Grandstream UCM6204V1.4A 1.0.15.16",
     "version": "1.0.15.16"
    },
-   "regex": "^Grandstream UCM6204V%d%.%d%w ([%d.][%d.]*)$",
+   "regex": "^Grandstream UCM6204V%d%.%d[%w_] ([%d.][%d.]*)$",
    "source": "recog:sip_banners.xml#18"
   },
   "UCM6208 Firmware, banner": {
@@ -5719,7 +5719,7 @@
     "subject": "Grandstream UCM6208V1.4A 1.0.16.20",
     "version": "1.0.16.20"
    },
-   "regex": "^Grandstream UCM6208V%d%.%d%w ([%d.][%d.]*)$",
+   "regex": "^Grandstream UCM6208V%d%.%d[%w_] ([%d.][%d.]*)$",
    "source": "recog:sip_banners.xml#17"
   },
   "Undertow, raw": {
@@ -6795,17 +6795,6 @@
    "regex": " | [pP][hH][pP][mM][yY][aA][dD][mM][iI][nN] ([%d.][%d.]*)</[tT][iI][tT][lL][eE]>",
    "source": "wappalyzer:phpMyAdmin/html"
   },
-  "phpMyAdmin, body_2": {
-   "alias": "cpe:/a:phpmyadmin:phpmyadmin",
-   "anchor": "pma_version:\"",
-   "channel": "body",
-   "example": {
-    "subject": "![CDATA[qPMA_VERSION:\"7",
-    "version": "7"
-   },
-   "regex": "!%[[cC][dD][aA][tT][aA]%[[^<]*[pP][mM][aA]_[vV][eE][rR][sS][iI][oO][nN]:\"([%d.][%d.]*)",
-   "source": "wappalyzer:phpMyAdmin/html"
-  },
   "phpMyAdmin, title": {
    "alias": "cpe:/a:phpmyadmin:phpmyadmin",
    "anchor": "| phpmyadmin",
@@ -6814,7 +6803,7 @@
     "subject": "localhost:8080 / mysql-server | phpMyAdmin 5.3.0-dev+20220208.47252f9cf8",
     "version": "5.3.0-dev+20220208.47252f9cf8"
    },
-   "regex": "%S%S*:%d%d?%d?%d?%d? / %S%S* | phpMyAdmin ([%d.][%d.]*%-[a-zA-Z0-9][a-zA-Z0-9]*%+%d%d%d%d%d%d%d%d%.[a-f0-9][a-f0-9]*)",
+   "regex": "%S%S*:%d%d?%d?%d?%d? / %S%S* | phpMyAdmin ([%d.][%d.]*%-[a-zA-Z0-9][a-zA-Z0-9]*%+%d%d%d%d%d%d%d%d%.[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]*)",
    "source": "recog:html_title.xml#408"
   },
   "phpMyAdmin, title_1": {
@@ -6836,7 +6825,7 @@
     "subject": "localhost:8080 / mysql-server | phpMyAdmin 5.3.0-dev+20220208.47252f9cf8",
     "version": "5.3.0-dev+20220208.47252f9cf8"
    },
-   "regex": "phpMyAdmin ([%d.][%d.]*%-[a-zA-Z0-9][a-zA-Z0-9]*%+%d%d%d%d%d%d%d%d%.[a-f0-9][a-f0-9]*)",
+   "regex": "phpMyAdmin ([%d.][%d.]*%-[a-zA-Z0-9][a-zA-Z0-9]*%+%d%d%d%d%d%d%d%d%.[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]*)",
    "source": "recog:html_title.xml#408"
   },
   "phpMyAdmin, title_3": {
@@ -6886,7 +6875,7 @@
     "subject": "thttpd/2.04 10aug98",
     "version": "2.04"
    },
-   "regex": "^thttpd/(%d%.[%w.][%w.]*)%s*[^\r\n]*$",
+   "regex": "^thttpd/(%d%.[%w_.][%w_.]*)%s*[^\r\n]*$",
    "source": "recog:http_servers.xml#130"
   },
   "uc-httpd, server": {

@@ -13,7 +13,7 @@
 --
 --   * the sweep is OFF unless the case turns it on. The merged action sweeps
 --     every port shortport.http accepts and t.port() is 80/http, so a case that
---     forgot would silently request the embedded 125 paths.
+--     forgot would silently request every path the catalogue publishes.
 --   * free mode - no case here passes a token. The only other traffic is then
 --     the burp GET fired for each published CPE, and that is what the request
 --     counts below exclude. The discriminator is the endpoint, never the host:
@@ -28,7 +28,7 @@ local table = require "table"
 local NGINX = "cpe:/a:f5:nginx:1.13.4"
 local BUGZILLA = "cpe:/a:mozilla:bugzilla:5.0.4"
 
---- A single-path sweep keeps the cases fast: the embedded list has 125 entries.
+--- A single-path sweep keeps the cases fast: the published list has 939 entries.
 local ONE_PATH = {"/"}
 
 local API_ENDPOINT = "/api/v3/burp/"
@@ -121,13 +121,18 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "the sweep does not run on a port that is not http",
+  name = "a service nmap named as something else is not swept",
   fn = function()
     -- The portrule is deliberately wider than the sweep: a versioned SSH or
-    -- MySQL port is worth a CPE lookup and must not be worth 125 HTTP requests.
-    -- Read without this gate, the union rule fires the sweep at every versioned
-    -- port - measured at roughly 494 requests per port once the retry rounds are
-    -- counted, from a script that calls itself safe.
+    -- MySQL port is worth a CPE lookup and must not be worth 939 HTTP requests -
+    -- measured at roughly 494 requests per port on the old 125-path list once
+    -- the retry rounds are counted.
+    --
+    -- Port 8000, not 22, and that is the whole case. shortport.http is "port
+    -- number OR service name", and 8000 is one of the eleven numbers, so the
+    -- port clause is TRUE here and the service gate is the only thing that can
+    -- stop the sweep. Written against port 22 - as it was - shortport.http is
+    -- false on its own and the case passes with the gate deleted.
     local env, http = load({paths = {"/never-swept"}})
     always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
 
@@ -139,17 +144,58 @@ suite[#suite + 1] = {
     end
 
     local host = t.host()
-    local port = t.port({number = 22, service = "ssh", product = "OpenSSH",
-      version = "7.4"})
+    -- service_dtype="probed" is what makes this nmap NAMING the service rather
+    -- than guessing it from its ports file. Without it the gate must let the
+    -- sweep run, because 7080 and 8088 are guessed as non-HTTP names while
+    -- being ordinary HTTP ports.
+    local port = t.port({number = 8000, service = "ssh", name = "ssh",
+      service_dtype = "probed", product = "OpenSSH", version = "7.4"})
     t.is_true(env.portrule(host, port),
       "the port must be in scope, or this case witnesses nothing")
+    t.is_true(require("shortport").http(host, port),
+      "and shortport.http must accept it, or the gate is not what stopped it")
 
     env.action(host, port)
 
-    t.equals(queued, 0, "no path may be queued for a port that is not http")
+    t.equals(queued, 0, "no path may be queued for a service nmap has named")
     t.length(http.matching("/never-swept"), 0, "and none may be requested")
     t.is_nil(host.registry.vulners_cpe,
       "nothing was fingerprinted, so nothing may be published")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "an HTTP service on that same port is swept",
+  fn = function()
+    -- The control. The gate must turn away a service nmap named as something
+    -- else, not every service on a port nmap happened to name - a gate that
+    -- refused both would be indistinguishable in the case above and would have
+    -- switched the sweep off for the ports it exists for.
+    local env, http = load({paths = ONE_PATH})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+
+    local host = t.host()
+    env.action(host, t.port({number = 8000, service = "http", name = "http"}))
+
+    t.length(sweep_requests(http), 1, "a named HTTP service is swept")
+    t.contains(host.registry.vulners_cpe[8000], NGINX,
+      "and what it says is published")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a port with no service name at all is swept",
+  fn = function()
+    -- The other edge of the same gate: nmap names nothing when -sV was not run,
+    -- and "nmap did not say" is not "nmap said it is not HTTP". Reading the two
+    -- alike would switch the sweep off for every scan without -sV.
+    local env, http = load({paths = ONE_PATH})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+
+    local host = t.host()
+    env.action(host, t.port({number = 80, service = false, version = false}))
+
+    t.length(sweep_requests(http), 1, "an unnamed service on port 80 is swept")
   end,
 }
 
@@ -602,7 +648,34 @@ suite[#suite + 1] = {
     -- The header block is matched in one pass, so an unbounded pattern used to
     -- swallow every following header - a session cookie among them - into the
     -- CPE, the report and the API request.
-    local env, http = load({paths = ONE_PATH})
+    --
+    -- The rule is INJECTED rather than taken from the published corpus. The
+    -- shipped rule that fires on this response captures through "[%d.]+",
+    -- which can never hold a CR or an LF - so the guard could be deleted and
+    -- this case stayed green, measuring a bound that its own fixture made
+    -- unreachable. A capture that CAN cross the line is what witnesses it.
+    local env, http = t.load_vulners({
+      root = root,
+      paths = ONE_PATH,
+      catalog = {
+        fingerprints = {schema = 1, rules = {
+          -- The greedy one: "." matches a newline in Lua, so its capture runs
+          -- off the end of the Server line and into the Set-Cookie that
+          -- follows. This is the rule the guard exists for.
+          ["Greedy, raw"] = {alias = "cpe:/a:oracle:iplanet_web_server",
+                             channel = "raw", anchor = "sun-java-system",
+                             regex = "Sun%-Java%-System%-Web%-Server/(.+)"},
+          -- The bounded one, so "the version is still found" is witnessed by a
+          -- rule that can legitimately find it. Without this the case could
+          -- pass simply because nothing matched at all.
+          ["Bounded, raw"] = {alias = "cpe:/a:oracle:iplanet_web_server",
+                              channel = "raw", anchor = "sun-java-system",
+                              regex = "Sun%-Java%-System%-Web%-Server/([%d.]+)"},
+        }},
+        paths = {schema = 1, paths = ONE_PATH},
+        probes = {schema = 1, probes = {}},
+      },
+    })
     serve(http, function()
       return t.response({
         status = 200,
@@ -741,6 +814,34 @@ suite[#suite + 1] = {
     env.action(t.host(), t.port())
     t.equals(target_requests, 1,
       "a site that redirects everything to one page must cost one request")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a redirect to another port on this host is not followed",
+  fn = function()
+    -- The host check alone lets "https://<same host>:8443/admin" through, and
+    -- the target is then fetched from the port being swept - so /admin is read
+    -- off port 80 and its identity attributed to a page that never served it.
+    -- nmap's own redirect policy refuses a cross-port redirect for exactly this
+    -- reason (nselib/http.lua redirect_ok_rules, rule 3).
+    local env, http = load({paths = ONE_PATH})
+    serve(http, function(request)
+      if request.path == "/admin" then
+        return t.response({status = 200, rawheader = {"Server: nginx/1.13.4"},
+          body = ""})
+      end
+      return t.response({status = 302, body = "",
+        header = {location = "https://127.0.0.1:8443/admin"}})
+    end)
+
+    local host = t.host()
+    env.action(host, t.port())
+
+    t.length(http.matching("/admin"), 0,
+      "a page on another port is not ours to read off this one")
+    t.is_nil(host.registry.vulners_cpe,
+      "and nothing it says may be published against this port")
   end,
 }
 
@@ -1069,6 +1170,15 @@ suite[#suite + 1] = {
 
     env.action(t.host(), t.port())
 
+    -- Anchored first. The loop below used to walk sweep_requests(), which
+    -- always holds the one "/" GET whose scheme is nil - so it passed whenever
+    -- the probes stopped firing at all: measured, capping MAX_PROBES_PER_PORT
+    -- at 1, and making run_probes return nothing, both left it green. There is
+    -- no property here to observe until a SECOND probe has been sent.
+    local sent = probe_requests(http, ONE_PATH)
+    t.is_true(#sent >= 2,
+      "two products were detected, so two probes must have gone out")
+
     for _, request in ipairs(sweep_requests(http)) do
       t.is_true(request.scheme == nil or request.scheme == "http", string.format(
         "%s was requested over %s; a redirect in one probe must not change the "
@@ -1120,4 +1230,204 @@ suite[#suite + 1] = {
 }
 
 
+-- ------------------------------ what the deep review found unmeasured
+
+suite[#suite + 1] = {
+  name = "nmap is not told a service was probed when it was not",
+  fn = function()
+    -- Measured on nmap 7.991 against a real listener with no -sV: the two-arg
+    -- set_port_version turns <service method="table" conf="3"> into
+    -- <service method="probed" conf="10">, so the report claims a hard version
+    -- match for a service no probe ever touched.
+    local double = t.nmap_double()
+    local env, http = t.load_vulners({root = root, paths = ONE_PATH,
+                                      nmap = double})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+
+    env.action(t.host(), t.port({service = "http", name = "http"}))
+
+    local call = double.set_port_version_calls[1]
+    t.is_true(call, "the CPE must still be published onto the port")
+    t.equals(call.detail, "incomplete",
+      "a port -sV never settled must not be reported as probed")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a service nmap only guessed from its ports file is still swept",
+  fn = function()
+    -- 7080 is guessed "empowerid" and 8088 "radan-http" - names that are not in
+    -- LIKELY_HTTP_SERVICES - so reading the guess as a naming silently skipped
+    -- the sweep on two of the eleven ports shortport.http exists to admit.
+    local env, http = load({paths = ONE_PATH})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+
+    local host = t.host()
+    env.action(host, t.port({number = 7080, service = "empowerid",
+                             name = "empowerid"}))
+
+    t.length(sweep_requests(http), 1,
+      "nmap guessed this name from a table; it did not name the service")
+    t.contains(host.registry.vulners_cpe[7080], NGINX)
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "an operator's path is held to the rule a published path is held to",
+  fn = function()
+    -- nselib builds the request line as method .. " " .. path verbatim, so an
+    -- interior space or CR from the operator's own file put a second request
+    -- line's worth of text into the first. usable_path already refused exactly
+    -- that for the catalogue.
+    local pathfile = testdir .. "/fixtures/paths_bad.txt"
+    local env, http = load({
+      paths = pathfile,
+      files = {[pathfile] = "/good\n/a b\n/car\rriage\n"},
+    })
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+
+    env.action(t.host(), t.port())
+
+    t.length(sweep_requests(http), 1, "only the usable path may go on the wire")
+    t.equals(sweep_requests(http)[1].path, "/good")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a probe reads a window around its anchor, not the whole body",
+  fn = function()
+    -- The detector and the extractor both ran their downloaded pattern over the
+    -- WHOLE body, with the anchor as nothing but a prefilter - and a prefilter
+    -- does not help when the anchor IS the payload. Measured on the SHIPPED
+    -- Tomcat extractor against a body of "apache tomcat" repeated: 16 KB cost
+    -- 0.22 s, 32 KB 0.90 s, 64 KB 3.60 s. Quadratic, so the 128 KB the body cap
+    -- admits is about fourteen seconds of non-yielding matching with every
+    -- script in the scan stopped - and the target chooses the body.
+    --
+    -- match_group was given this bound; the probe path was not. This pins it
+    -- from both ends, as the fingerprint window case does: the extractor still
+    -- reads a version beside its anchor, and does not reach one parked past it.
+    local function scan(probe_body)
+      local env, http = t.load_vulners({
+        root = root,
+        paths = "embedded",
+        catalog = {
+          fingerprints = {schema = 1, rules = {
+            ["Filler, body"] = {alias = "cpe:/a:acme:filler", channel = "body",
+                                anchor = "filler", regex = "filler/([%d.]+)"},
+          }},
+          paths = {schema = 1, paths = {"/"}},
+          probes = {schema = 1, probes = {{
+            name = "Widget", alias = "cpe:/a:acme:widget",
+            -- A lazy span, the shape the real corpus is full of, and exactly
+            -- what backtracks catastrophically over a long subject.
+            detect = {{channel = "body", anchor = "widget-app",
+                       regex = "widget%-app"}},
+            extract = {{anchor = "widget/", regex = "widget/[^!]-([%d.]+)"}},
+            paths = {"/probe"},
+          }}},
+        },
+      })
+      serve(http, function(request)
+        if request.path == "/probe" then
+          return t.response({status = 200, body = probe_body})
+        end
+        return t.response({status = 200, body = "<p>widget-app here</p>"})
+      end)
+      return t.collect_output(env.action(t.host(), t.port()))
+    end
+
+    local near = scan("<p>widget/1.2.3</p>")
+    t.is_true(near and near["cpe:/a:acme:widget:1.2.3"] ~= nil,
+      "the extractor must still read a version beside its anchor")
+
+    -- One anchor at the start, and the version the pattern would need parked
+    -- 8 KB past it - far outside the window, well inside the body cap. The
+    -- filler carries no digit and no dot, so the only way to reach "9.9.9" is
+    -- to let the lazy span cross all 8 KB of it.
+    local far = scan("widget/" .. string.rep("x", 8000) .. "9.9.9")
+    t.is_true(far == nil or far["cpe:/a:acme:widget:9.9.9"] == nil,
+      "and must not reach a match parked beyond the window; without that bound "
+      .. "one hostile body freezes every script in the scan")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a probe detector reads a window around its anchor too",
+  fn = function()
+    -- The extractor case above pins the second half of the probe path. This is
+    -- the first half, and it costs more when it is wrong: detect_probes runs
+    -- every detector of every untriggered probe against every subject, so an
+    -- unbounded detector pays its cost once per probe rather than once per
+    -- answered request. Reverting the extractor alone leaves this green, which
+    -- is how it was found.
+    local function sent_for(body)
+      local env, http = t.load_vulners({
+        root = root,
+        paths = "embedded",
+        catalog = {
+          fingerprints = {schema = 1, rules = {
+            ["Filler, body"] = {alias = "cpe:/a:acme:filler", channel = "body",
+                                anchor = "filler", regex = "filler/([%d.]+)"},
+          }},
+          paths = {schema = 1, paths = {"/"}},
+          probes = {schema = 1, probes = {{
+            name = "Widget", alias = "cpe:/a:acme:widget",
+            detect = {{channel = "body", anchor = "widget-app",
+                       regex = "widget%-app[^!]-marker"}},
+            extract = {{anchor = "widget/", regex = "widget/([%d.]+)"}},
+            paths = {"/probe"},
+          }}},
+        },
+      })
+      serve(http, function(request)
+        if request.path == "/probe" then
+          return t.response({status = 200, body = "<p>widget/1.2.3</p>"})
+        end
+        return t.response({status = 200, body = body})
+      end)
+      env.action(t.host(), t.port())
+      return probe_requests(http, ONE_PATH)
+    end
+
+    t.length(sent_for("<p>widget-app marker</p>"), 1,
+      "a detector must still fire on evidence beside its anchor")
+
+    -- The evidence the detector needs is 8 KB past its anchor: reachable only
+    -- by letting the lazy span cross the whole body.
+    t.length(sent_for("widget-app" .. string.rep("x", 8000) .. "marker"), 0,
+      "and must not reach evidence parked beyond the window; an unbounded "
+      .. "detector runs once per probe, not once per answered request")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "every answered path is matched, not only the first",
+  fn = function()
+    -- SWEEP_BYTE_BUDGET bounds how much of a port's responses reach the
+    -- matcher. Nothing pinned that the budget is big enough to reach the
+    -- SECOND answer: measured, cutting it to a single byte still left all 254
+    -- cases green, because every multi-path case either served the same header
+    -- everywhere or attributed its finding to the first path. Two paths, two
+    -- different identities, and both have to arrive.
+    local env, http = load({paths = {"/one", "/two"}})
+    serve(http, function(request)
+      if request.path == "/two" then
+        return t.response({status = 200,
+          header = {["X-Powered-By"] = "PHP/5.6.38"}, body = ""})
+      end
+      return t.response({status = 200,
+        header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    end)
+
+    local host = t.host()
+    env.action(host, t.port())
+
+    local published = host.registry.vulners_cpe[80]
+    t.contains(published, NGINX, "the first answered path must be matched")
+    t.contains(published, "cpe:/a:php:php:5.6.38",
+      "and so must the second; a budget that stops after one is a sweep that "
+      .. "asks for pages it never reads")
+  end,
+}
 return suite

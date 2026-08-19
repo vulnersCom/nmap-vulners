@@ -135,6 +135,19 @@ action = function()
   local summary = string.format("%d passed, %d failed%s",
     passed, failed, skipped > 0 and string.format(", %d skipped", skipped) or "")
   results[#results + 1] = summary
+
+  -- A suite that ran NOTHING is not a suite that passed. Measured: a typo in
+  -- only= printed "0 passed, 0 failed" followed by SUITE OK and exit 0, and an
+  -- early return in one suite file silently dropped 58 cases while the CI step
+  -- that greps for SUITE OK stayed happy. The gate has to be able to fail for
+  -- "there was nothing to measure", or every other case here rests on nothing.
+  if passed + failed == 0 then
+    results[#results + 1] = "NO CASES RAN - nothing was measured"
+    results[#results + 1] = "SUITE FAILED"
+    print(table.concat(results, "\n"))
+    os.exit(1)
+  end
+
   results[#results + 1] = failed == 0 and "SUITE OK" or "SUITE FAILED"
 
   print(table.concat(results, "\n"))

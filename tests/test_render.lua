@@ -263,4 +263,26 @@ suite[#suite + 1] = {
   end,
 }
 
+suite[#suite + 1] = {
+  name = "a score exactly on a band boundary takes the higher band",
+  fn = function()
+    -- Every fixture in this file uses 9.8, 8.5, 7.5 or 5.3, so none of them
+    -- sits ON a boundary - and severity_of's ">=" could be turned into ">"
+    -- with all 254 cases still green. That comparison decides the word in the
+    -- table AND the "severity" element third parties index, so getting it
+    -- wrong relabels every finding that lands exactly on a threshold.
+    local T = load()
+
+    t.equals(T.severity_of(9.0), "CRITICAL", "9.0 is the bottom of CRITICAL")
+    t.equals(T.severity_of(7.0), "HIGH", "7.0 is the bottom of HIGH")
+    t.equals(T.severity_of(4.0), "MEDIUM", "4.0 is the bottom of MEDIUM")
+    t.equals(T.severity_of(0.1), "LOW", "and anything scored above zero is LOW")
+
+    -- The value just below each boundary must fall to the band underneath, or
+    -- the assertions above would also hold for a comparison that is too loose.
+    t.equals(T.severity_of(8.9), "HIGH", "8.9 is not CRITICAL")
+    t.equals(T.severity_of(6.9), "MEDIUM", "6.9 is not HIGH")
+    t.equals(T.severity_of(3.9), "LOW", "3.9 is not MEDIUM")
+  end,
+}
 return suite

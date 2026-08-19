@@ -57,8 +57,8 @@ scan time, from a GitHub branch, so the corpus can grow without a release:
 
 ```
 catalog/index.json          the manifest: schema and serial
-catalog/fingerprints.json   722 product and version rules
-catalog/paths.json          125 paths the sweep requests
+catalog/fingerprints.json   721 product and version rules
+catalog/paths.json          939 paths the sweep requests
 catalog/probes.json         6 targeted version probes
 ```
 
@@ -70,9 +70,10 @@ python3 tools/catalog.py --index     # bump the serial, or nobody downloads it
 python3 tools/catalog.py --check     # the checks the script itself applies
 ```
 
-`catalog/fingerprints.json` and `catalog/probes.json` are normally **generated**
-by `tools/fingerprints/build.py` from checkouts of Recog, Wappalyzer and
-nuclei-templates, and rebuilt weekly by `.github/workflows/catalog-refresh.yml`.
+`catalog/fingerprints.json`, `catalog/paths.json` and `catalog/probes.json` are
+normally **generated** by `tools/fingerprints/build.py` from checkouts of Recog,
+Wappalyzer, WhatWeb, FingerprintHub and nuclei-templates, and rebuilt weekly by
+`.github/workflows/catalog-refresh.yml`.
 A hand edit survives the next rebuild only if the entry carries no `source`
 field. You never need to rebuild them to work on the script.
 
@@ -137,15 +138,15 @@ git tag -a v1.5 -m "nmap-vulners 1.5"
 git push origin v1.5
 ```
 
-The workflow runs the three gates first, then builds `.tar.gz` and `.zip`
-archives with `git archive` - so they hold exactly what a user downloads:
-`vulners.nse`, the two data files it was generated from, both installers, the
-README and the LICENSE - writes `SHA256SUMS`, and publishes a release with
-generated notes.
+The workflow runs the gates first, then builds `.tar.gz` and `.zip` archives
+with `git archive` - so they hold exactly what a user downloads: `vulners.nse`,
+`catalog/*.json`, both installers, the README and the LICENSE - writes
+`SHA256SUMS`, and publishes a release with generated notes.
 
-The data files ship even though nothing installs them any more: they are the
-editable source, and at least one downstream project (CVEScannerV2) reads them
-directly.
+The catalogue ships in the archive even though nothing installs it and the
+script never reads it from disk. It is a snapshot, useful for serving locally
+with `vulners.catalog_url` on a network that cannot reach GitHub; the live
+copies are on the `catalog` branch and are what an ordinary scan downloads.
 
 Nothing needs to be built by hand, and a release whose gates fail is never
 published. `workflow_dispatch` re-runs it for an existing tag.

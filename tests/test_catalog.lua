@@ -403,6 +403,45 @@ suite[#suite + 1] = {
   end,
 }
 
+--- The published catalogue, read the way a real scan reads it.
+--
+-- Everything above proves the readers REFUSE what they must. This proves they
+-- ACCEPT what actually ships, which is the other half and the one nothing was
+-- watching: a rule the readers drop costs a detection silently, and a scan that
+-- recognises less looks exactly like a network running less.
+suite[#suite + 1] = {
+  name = "the published catalogue survives this script's own readers intact",
+  fn = function()
+    -- `tools/catalog.py --check` says it asks "the same questions the script
+    -- asks". It does not - it never looks at a regex - so a hand-edited rule
+    -- with no capture, two captures, a position capture or a back-reference
+    -- passes every gate in CI and is dropped here instead, in the field.
+    --
+    -- Asserted THROUGH the readers rather than by reimplementing them: a second
+    -- copy of usable_pattern in Python would be a second thing to keep in step,
+    -- and this repository has already been bitten by two spellings of one rule
+    -- drifting apart.
+    local documents = t.published_catalog(root)
+    local env = t.load_vulners({root = root, catalog = false})
+
+    local _, kept = env._TEST.read_fingerprints(documents.fingerprints)
+    local paths = env._TEST.read_paths(documents.paths)
+    local probes = env._TEST.read_probes(documents.probes)
+
+    local published = 0
+    for _ in pairs(documents.fingerprints.rules) do
+      published = published + 1
+    end
+
+    t.equals(kept, published,
+      "every published rule must be one this script will actually use")
+    t.length(paths, #documents.paths.paths,
+      "every published path must be one it will actually request")
+    t.length(probes, #documents.probes.probes,
+      "every published probe must be one it can trigger, send and read")
+  end,
+}
+
 -- ------------------------------------------------------ refusing single rules
 
 suite[#suite + 1] = {
@@ -425,6 +464,33 @@ suite[#suite + 1] = {
 
     t.equals(loaded({http = http}).rule_count, 1,
       "the good rule survives and the broken one does not")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a rule carrying a back-reference is dropped",
+  fn = function()
+    -- The validator's whole contract is that no rule it keeps can raise inside
+    -- string.find. A back-reference slips through a walk that only counts
+    -- captures: "(%d)%2" names a group that does not exist and "(%d)%0" names
+    -- the whole match, and BOTH raise "invalid capture index" at match time -
+    -- which costs the port its entire result. Measured against real Lua 5.4.
+    --
+    -- The generator refuses PCRE back-references, so nothing in the published
+    -- catalogue has one; that is exactly why this belongs here rather than in
+    -- the generator's own tests. The reader must not depend on the writer.
+    local http = t.http_double()
+    serve_catalog(http, {fingerprints = fingerprints({
+      ["Backref, server"] = {alias = "cpe:/a:x:y", channel = "hdr:server",
+                             regex = "nginx/([%d.]+)%2"},
+      ["Whole match, server"] = {alias = "cpe:/a:x:z", channel = "hdr:server",
+                                 regex = "nginx/([%d.]+)%0"},
+      ["Good, server"] = {alias = "cpe:/a:f5:nginx", channel = "hdr:server",
+                          regex = "nginx/([%d.]+)"},
+    })})
+
+    t.equals(loaded({http = http}).rule_count, 1,
+      "only the rule that cannot raise may ship")
   end,
 }
 
@@ -612,4 +678,85 @@ suite[#suite + 1] = {
   end,
 }
 
+
+suite[#suite + 1] = {
+  name = "a detect rule is validated exactly as it will be run",
+  fn = function()
+    -- The gate used to wrap the pattern in parentheses to force the one capture
+    -- it insisted on, which validated a DIFFERENT string from the one stored.
+    -- Measured against real Lua: the raw pattern "X)%" is refused while
+    -- "(X)%)" is accepted - the prepended "(" absorbs the stray ")" and the
+    -- trailing "%" escapes the appended one - so the probe shipped and the raw
+    -- pattern went to string.find, costing the port its entire result.
+    local http = t.http_double()
+    serve_catalog(http, {probes = {schema = 1, probes = {
+      {name = "wrapped-only", alias = "cpe:/a:x:y",
+       detect = {{channel = "body", regex = "X)%"}},
+       extract = {{regex = "v([%d.]+)"}}, paths = {"/v"}},
+      {name = "good", alias = "cpe:/a:x:z",
+       detect = {{channel = "body", regex = "zed"}},
+       extract = {{regex = "v([%d.]+)"}}, paths = {"/v"}},
+    }}})
+
+    local catalog = loaded({http = http})
+    t.length(catalog.probes, 1,
+      "a pattern that only survives its own wrapper may not ship")
+    t.equals(catalog.probes[1].alias, "cpe:/a:x:z")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a detect rule whose regex is not a string is dropped, not run",
+  fn = function()
+    -- The gate validated tostring(rule.regex) and stored the raw value, and
+    -- tostring({}) is "table: 0x...", which is a perfectly good one-capture
+    -- pattern. The probe was kept and string.find then raised "string expected,
+    -- got table" - costing the port its entire result, which is the one outcome
+    -- this whole section exists to prevent.
+    local http = t.http_double()
+    serve_catalog(http, {probes = {schema = 1, probes = {
+      {name = "bad", alias = "cpe:/a:x:y",
+       detect = {{channel = "body", regex = {}}},
+       extract = {{regex = "v([%d.]+)"}}, paths = {"/v"}},
+      {name = "good", alias = "cpe:/a:x:z",
+       detect = {{channel = "body", regex = "zed"}},
+       extract = {{regex = "v([%d.]+)"}}, paths = {"/v"}},
+    }}})
+
+    local catalog = loaded({http = http})
+    t.length(catalog.probes, 1,
+      "only the probe whose detector is a pattern may ship")
+    t.equals(catalog.probes[1].alias, "cpe:/a:x:z")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "an index naming a file that is not one is refused",
+  fn = function()
+    -- The guard excluded characters rather than requiring a shape, and "." was
+    -- inside the permitted class - so ".." matched nothing, passed, and the
+    -- fetch walked to the parent of the operator's catalog_url.
+    local http = t.http_double()
+    serve_catalog(http, {index = {
+      schema = 1, serial = 9,
+      catalogs = {fingerprints = {file = ".."}, paths = {file = "paths.json"},
+                  probes = {file = "probes.json"}},
+    }})
+
+    -- The parent directory has to ANSWER, or this case passes for the wrong
+    -- reason: with the guard removed the fetch would simply 404 and the
+    -- catalogue would be refused anyway, measuring nothing.
+    local inner = http.handler
+    http.handler = function(request)
+      if (request.url or ""):sub(-2) == ".." then
+        return t.response({status = 200, body = json.generate(fingerprints())})
+      end
+      return inner(request)
+    end
+
+    t.equals(loaded({http = http}).rule_count, 0,
+      "an index that does not name a catalogue file is not a catalogue, " ..
+      "however willingly the server answers")
+  end,
+}
 return suite

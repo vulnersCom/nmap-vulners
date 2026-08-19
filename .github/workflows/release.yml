@@ -18,8 +18,10 @@ on:
         description: "Existing tag to build a release from"
         required: true
 
+# Only `publish` writes anything. The gates job is given a read-only token so a
+# failure there cannot touch the repository.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -35,8 +37,34 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y nmap
 
+      # Without luac, check.py SKIPS its global-reach check and still exits 0 -
+      # so the barrier against a local read above its own declaration would be
+      # absent from the one build that reaches users. ci.yml installs this for
+      # exactly that reason; a release must not be gated more weakly than a
+      # pull request.
+      - name: Install the Lua compiler
+        run: |
+          sudo apt-get update && sudo apt-get install -y lua5.4
+          luac5.4 -v
+          sudo ln -sf "$(command -v lua5.4)" /usr/local/bin/lua
+
       - name: Repository hygiene
         run: python3 tools/check.py
+
+      # git archive ships catalog/*.json inside the tarball, so the release
+      # carries a copy of the dictionaries and has to hold them to the same
+      # standard CI does.
+      - name: The catalogue is publishable
+        run: python3 tools/catalog.py --check
+
+      - name: The XML contract still catches a broken report
+        run: python3 tools/xml_contract.py --selftest tests/fixtures/golden_1x.xml
+
+      - name: The importer makes the decisions it is supposed to
+        run: python3 tools/fingerprints/selftest.py
+
+      - name: The publish gate refuses what it must
+        run: python3 tools/catalog_diff.py --selftest
 
       - name: Unit tests
         env:
@@ -54,18 +82,44 @@ jobs:
     name: Publish
     needs: verify
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
           fetch-depth: 0
 
+      # The tag arrives through `env`, not through a ${{ }} inside the script,
+      # because `git check-ref-format` accepts `v1.0$(...)` and backticks: an
+      # expression pasted into a run: block is substituted by the runner BEFORE
+      # bash sees it, so the shell would execute what was meant to be a name.
+      # Pushing a tag needs write access, so this is a barrier rather than a
+      # hole - but it is three lines, and it has to hold before the value is
+      # used anywhere else.
+      #
+      # Validation therefore happens HERE, in the step that first touches the
+      # value, not two steps later.
       - name: Name the release
         id: name
+        env:
+          RAW_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "prefix=nmap-vulners-${TAG#v}" >> "$GITHUB_OUTPUT"
+          case "$RAW_TAG" in
+            v[0-9]*.[0-9]*) : ;;
+            *) echo "::error::tag should look like v1.5, got '$RAW_TAG'"; exit 1 ;;
+          esac
+          # An annotated tag carries the release notes; a lightweight one is a
+          # pointer to a commit, and %(contents) then falls back to that
+          # commit's MESSAGE - which "tail -n +2" would silently behead,
+          # publishing the commit body as though it were the release note.
+          if [ "$(git cat-file -t "$RAW_TAG")" != tag ]; then
+            echo "::error::$RAW_TAG is a lightweight tag; the release notes come"
+            echo "from the annotation. Use: git tag -a $RAW_TAG -m '...'"
+            exit 1
+          fi
+          printf 'tag=%s\n' "$RAW_TAG" >> "$GITHUB_OUTPUT"
+          printf 'prefix=nmap-vulners-%s\n' "${RAW_TAG#v}" >> "$GITHUB_OUTPUT"
 
       # The tag names the release; the script carries its own api_version, which
       # identifies the request generation to vulners.com and travels in the
@@ -76,12 +130,7 @@ jobs:
       # so the first "git push origin v2.0" would have failed here before it
       # built anything.
       - name: Report the versions being released
-        run: |
-          case "${{ steps.name.outputs.tag }}" in
-            v[0-9]*.[0-9]*) : ;;
-            *) echo "tag should look like v1.5"; exit 1 ;;
-          esac
-          grep -H "^local api_version" vulners.nse
+        run: grep -H "^local api_version" vulners.nse
 
       # git archive honours export-ignore, so tests, CI and docs stay out.
       - name: Build the archives
@@ -106,8 +155,13 @@ jobs:
         run: |
           TAG="${{ steps.name.outputs.tag }}"
           git tag -l --format='%(contents)' "$TAG" | tail -n +2 > notes.md
+          # A failure here used to be swallowed by "|| true", which also hid an
+          # auth failure - and the same token creates the release two steps
+          # later, so a credential problem surfaced as "the notes look short"
+          # rather than as a failed step.
           gh api "repos/${{ github.repository }}/releases/generate-notes" \
-            -f tag_name="$TAG" --jq .body >> notes.md || true
+            -f tag_name="$TAG" --jq .body >> notes.md \
+            || echo "::warning::generate-notes failed; notes carry the annotation only"
           cat notes.md
 
       - name: Publish the release

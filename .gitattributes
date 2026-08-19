@@ -12,10 +12,6 @@
 *.py   text eol=lf
 *.sh   text eol=lf
 
-# Demo recordings are documentation, not plugin data: keep them out of diffs.
-*.gif  binary -diff
-*.png  binary -diff
-
 # This fixture exists to carry CRLF into the path reader; normalising it
 # would disarm the test that proves a Windows-written file still works.
 tests/fixtures/paths_crlf.txt -text

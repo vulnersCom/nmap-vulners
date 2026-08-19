@@ -91,8 +91,6 @@ local function deep_equal(a, b)
   end
   return true
 end
-M.deep_equal = deep_equal
-
 function M.same(actual, expected, msg)
   if not deep_equal(actual, expected) then
     fail(string.format("%s: expected %s, got %s",
@@ -119,7 +117,17 @@ function M.contains(list, expected, msg)
 end
 
 function M.length(value, expected, msg)
-  local n = value and #value or nil
+  -- Both halves have to be present. "value and #value or nil" collapsed "no
+  -- value" and "no expectation" onto the same nil, so t.length(nil) and
+  -- t.length(false) passed while measuring nothing at all.
+  if expected == nil then
+    fail((msg or "length") .. ": no expected length was given")
+  end
+  if type(value) ~= "table" and type(value) ~= "string" then
+    fail(string.format("%s: expected something with a length, got %s",
+      msg or "length", repr(value)))
+  end
+  local n = #value
   if n ~= expected then
     fail(string.format("%s: expected length %s, got %s (%s)",
       msg or "length", tostring(expected), tostring(n), repr(value)))
@@ -144,6 +152,14 @@ function M.raises(fn, msg, ...)
   if ok then
     fail(string.format("%s: expected an error, call succeeded", msg or "raises"))
   end
+  -- An assertion that fails INSIDE the body raises too, and this used to
+  -- report that as the error it was hoping for - so any assertion nested in a
+  -- raises() body was inert. M.no_error already unwraps this wrapper; the
+  -- difference is that there it means failure and here it meant success.
+  if type(err) == "table" and err.harness_failure then
+    fail(string.format("%s: the body failed an assertion instead of raising: %s",
+      msg or "raises", tostring(err.harness_failure)))
+  end
   return err
 end
 
@@ -166,13 +182,46 @@ end
 -- @param opts table with optional status, body, header, rawheader fields
 function M.response(opts)
   opts = opts or {}
-  local header = opts.header or {}
+  -- Two things nselib does that this double has to do as well.
+  --
+  -- Lowercased, because nselib does it unconditionally (http.lua:769,
+  -- name = string.lower(name)), so response.header in the field NEVER carries a
+  -- capital. A double that kept the fixture spelling let a case pass
+  -- {["Server"] = ...} and believe it exercised the hdr:server channel when the
+  -- match was really coming through raw - and it would equally have "proved" a
+  -- rule filed as hdr:Server, which is dead in every real scan.
+  --
+  -- Sorted, never pairs(). Lua seeds its string hash per process, so building
+  -- these in table order gave a DIFFERENT raw channel on every nmap run: one
+  -- fixture produced five distinct header orders across six runs, and the raw
+  -- channel is table.concat(response.rawheader, "\n"). Any rule spanning two
+  -- header lines then passed or failed by hash seed.
+  local names = {}
+  for name in pairs(opts.header or {}) do
+    names[#names + 1] = name
+  end
+  table.sort(names, function(a, b) return tostring(a) < tostring(b) end)
+
+  local header = {}
+  for _, name in ipairs(names) do
+    local value = opts.header[name]
+    local key = type(name) == "string" and name:lower() or name
+    -- Two spellings of one header name collide on the lowercase key. nselib
+    -- joins repeated headers with ", " (http.lua:771-776) rather than letting
+    -- the last one win, and two Set-Cookie lines is the commonest real
+    -- response there is.
+    header[key] = header[key] and (header[key] .. ", " .. value) or value
+  end
+
   local rawheader = opts.rawheader
   if not rawheader then
     rawheader = {}
-    for name, value in pairs(header) do
-      rawheader[#rawheader + 1] = string.format("%s: %s", name, value)
+    for _, name in ipairs(names) do
+      rawheader[#rawheader + 1] = string.format("%s: %s", name, opts.header[name])
     end
+    -- The blank line that ends the header block. nselib splits the raw header
+    -- on newlines, so the trailing empty element is always there.
+    rawheader[#rawheader + 1] = ""
   end
   -- rawbody defaults to body, because that is the only shape nselib produces.
   -- nselib/http.lua sets rawbody to the UNDECODED bytes and then replaces body
@@ -183,10 +232,28 @@ function M.response(opts)
   --
   -- Pass rawbody explicitly to model a compressed response: rawbody is what
   -- arrived on the wire, body is what nmap decoded for the script.
+  -- A response nmap could not get is NOT a response with an empty body. nselib
+  -- builds it in http_error (http.lua:1208) and sets body = nil, rawbody = nil.
+  -- This double returned "" for both, so every "the server could not be
+  -- reached" case in the suite ran against a string - and an `or ""` dropped
+  -- anywhere on a failure path would stay green here while a real scan raised
+  -- and lost the port its entire result.
+  if opts.status == nil then
+    return {
+      status = nil,
+      ["status-line"] = opts["status-line"] or "Error creating socket.",
+      header = {},
+      rawheader = {},
+      body = nil,
+      rawbody = nil,
+      incomplete = opts.incomplete,
+    }
+  end
+
   return {
     status = opts.status,
     ["status-line"] = opts["status-line"] or
-      (opts.status and string.format("HTTP/1.1 %d", opts.status) or "no response"),
+      string.format("HTTP/1.1 %d", opts.status),
     header = header,
     rawheader = rawheader,
     body = opts.body or "",
@@ -363,6 +430,11 @@ function M.port(opts)
       -- banner channel and the paid audit/smart call both read it, and until
       -- this field existed no case could build a port that had one.
       service_fp = opts.service_fp,
+      -- "probed" when -sV settled the service, "table" when the name is only
+      -- nmap's ports-file guess. The sweep gate reads it, because a guess is
+      -- not nmap naming anything: 7080 is guessed "empowerid" and 8088
+      -- "radan-http", and both are real HTTP ports this script must sweep.
+      service_dtype = opts.service_dtype,
     }
   end
   return {
@@ -572,10 +644,18 @@ function M.load_script(path, opts)
   opts = opts or {}
 
   local name = path:match("([^/\\]+)%.nse$") or path
+  -- Exactly what nse_main.lua:619-624 puts in the LOAD-TIME environment, and
+  -- nothing else. SCRIPT_TYPE is deliberately absent: nmap sets it per thread
+  -- (nse_main.lua:467-472), never at load time, so a file-scope read of it is
+  -- fatal in the field - "variable 'SCRIPT_TYPE' is not declared", verified
+  -- against real nmap - while the harness, which pre-declared it, loaded the
+  -- file happily. vulners.nse carries a comment warning about that exact trap,
+  -- and the harness was the one thing that could not catch a regression on it.
   local env = setmetatable({}, {__index = _G})
   env.SCRIPT_NAME = opts.script_name or name
   env.SCRIPT_PATH = path
-  env.SCRIPT_TYPE = opts.script_type or "portrule"
+  env.categories = {}
+  env.dependencies = {}
   for k, v in pairs(opts.env or {}) do env[k] = v end
 
   -- Swap the requested libraries in package.loaded, so the script's own
@@ -596,7 +676,7 @@ function M.load_script(path, opts)
   if not chunk then
     M.restore_script_args()
     for modname, entry in pairs(swapped) do package.loaded[modname] = entry.previous end
-    fail(string.format("cannot load %s: %s", path, tostring(load_err)))
+    error(string.format("cannot load %s: %s", path, tostring(load_err)), 0)
   end
 
   local ok, run_err = pcall(chunk)
@@ -607,8 +687,12 @@ function M.load_script(path, opts)
   for modname, entry in pairs(swapped) do package.loaded[modname] = entry.previous end
 
   if not ok then
-    fail(string.format("error while loading %s: %s", path, tostring(run_err)))
+    error(string.format("error while loading %s: %s", path, tostring(run_err)), 0)
   end
+
+  -- Now, and not before: nmap gives the running thread its SCRIPT_TYPE after
+  -- the chunk has been loaded, so this is where a case can read or override it.
+  env.SCRIPT_TYPE = opts.script_type or "portrule"
 
   return env
 end
@@ -784,13 +868,5 @@ function M.collect_output(output)
   end
   return plain, order
 end
-
---- Render one result row through the script's __tostring metatable, which is
--- what the user actually sees in nmap output.
-function M.render(row)
-  return tostring(row)
-end
-
-M.stdnse = stdnse
 
 return M

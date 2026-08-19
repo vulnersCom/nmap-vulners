@@ -34,6 +34,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.parse
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -44,7 +45,7 @@ import xml_contract  # noqa: E402  (needs the path above)
 REPO = Path(__file__).resolve().parents[2]
 FAKE_KEY = "FAKE-TEST-KEY-NOT-A-REAL-TOKEN"
 
-# Banners the shipped patterns in http-vulners-regex.json recognise.
+# Banners the rules in catalog/fingerprints.json recognise.
 TARGET_HEADERS = {
     "Server": "nginx/1.13.4",
     "X-Powered-By": "PHP/5.6.38",
@@ -235,12 +236,20 @@ class BannerTarget(socketserver.BaseRequestHandler):
             pass
 
 
+class QuietTCPServer(socketserver.ThreadingTCPServer):
+    """The raw-socket twin of QuietHTTPServer; same reason, same silence."""
+
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        pass
+
+
 def serve_tcp(handler):
     """Start a raw TCP listener in a daemon thread; return its port."""
     for attempt in range(5):
         try:
-            server = socketserver.ThreadingTCPServer(("127.0.0.1", free_port()),
-                                                     handler)
+            server = QuietTCPServer(("127.0.0.1", free_port()), handler)
         except OSError:
             if attempt == 4:
                 raise
@@ -509,6 +518,19 @@ class ApiHandler(Recording):
         self.send_error(404)
 
 
+class QuietHTTPServer(http.server.ThreadingHTTPServer):
+    """A server that does not narrate its own disconnections.
+
+    nmap resets a pipelined connection as soon as it has what it wants, and
+    socketserver answers each reset with a full traceback on stderr. Measured:
+    37 KB and 29 tracebacks per clean run - on the same stream a real failure
+    would use, which is exactly where noise costs the most.
+    """
+
+    def handle_error(self, request, client_address):
+        pass
+
+
 def serve(handler, port=None):
     """Start a server in a daemon thread; return its port and its Recorder.
 
@@ -521,7 +543,7 @@ def serve(handler, port=None):
     for attempt in range(attempts):
         chosen = port if port is not None else free_port()
         try:
-            server = http.server.ThreadingHTTPServer(("127.0.0.1", chosen), handler)
+            server = QuietHTTPServer(("127.0.0.1", chosen), handler)
         except OSError:
             if attempt == attempts - 1:
                 raise
@@ -556,7 +578,22 @@ def clean_env(**overrides):
 
 
 def run_nmap(args, timeout=300, env=None):
-    """Run nmap and return its combined output."""
+    """Run nmap and return its combined output.
+
+    Raises when the script did not survive the scan. nmap exits 0 either way -
+    it prints the error, discards the port's findings and carries on - so the
+    exit status says nothing, and a check reading the output would only notice
+    if it happened to assert on something the lost findings would have carried.
+
+    The two failures look different and both matter:
+
+      "failed to initialize the script engine"  the chunk did not compile
+      "ERROR: Script execution failed"          it compiled and then raised
+
+    Only the first was ever checked, and only in one place. It is also the one
+    `tools/check.py` already catches with luac before CI gets here; the runtime
+    raise, which is the case that reaches users, went unnoticed.
+    """
     completed = subprocess.run(
         ["nmap", *args],
         cwd=REPO,
@@ -565,7 +602,14 @@ def run_nmap(args, timeout=300, env=None):
         timeout=timeout,
         env=env if env is not None else clean_env(),
     )
-    return completed.stdout + completed.stderr
+    output = completed.stdout + completed.stderr
+    for marker in ("ERROR: Script execution failed",
+                   "failed to initialize the script engine"):
+        if marker in output:
+            raise AssertionError(
+                "nmap reported %r; every finding on that port was discarded.\n"
+                "  nmap %s\n%s" % (marker, " ".join(args), output[-2000:]))
+    return output
 
 
 class Checks:
@@ -604,17 +648,35 @@ class Checks:
         self.passed += other.passed
         self.skipped += other.skipped
 
-    def report(self):
+    def report(self, expected_at_least=None):
         print("\n".join(self.lines))
         tail = f", {self.skipped} skipped" if self.skipped else ""
         print(f"\n{self.passed} passed, {len(self.failures)} failed{tail}")
-        return 1 if self.failures else 0
+        if self.failures:
+            return 1
+        # A run in which every check quietly vanished is not a run that passed.
+        # With the check list empty this printed "0 passed, 0 failed" and
+        # exited 0 - the same scar the unit runner carried, where a typo in
+        # `only=` reported SUITE OK for a suite that never ran a case.
+        if expected_at_least is not None and self.passed < expected_at_least:
+            print(f"\nFAILED: only {self.passed} assertions ran, and this gate "
+                  f"is expected to make at least {expected_at_least}. A gate "
+                  f"that measures nothing reports success.")
+            return 1
+        return 0
 
 
-# Set once the catalogue server is up; every run points at it. CATALOG is its
-# Recorder, so a check can count what a scan actually fetched.
+# The floor this gate must clear to be believed. It is a PINNED number, not
+# len(OFFLINE_CHECKS): deriving it from the check list would make an empty
+# check list satisfy itself, which is the failure being guarded against. Set
+# comfortably below the 61 assertions made today, so ordinary growth never
+# touches it while a collapse still fails the run.
+MINIMUM_ASSERTIONS = 50
+
+# Set once the catalogue server is up; every run points at it. A check that
+# wants to COUNT catalogue fetches starts a server of its own, because this one
+# is answering every other check at the same time.
 CATALOG_PORT = None
-CATALOG = None
 
 
 def vulners_args(api_port, extra=None):
@@ -629,7 +691,7 @@ def vulners_args(api_port, extra=None):
     it the script fetches its dictionaries from GitHub, so a check would pass or
     fail on what is published rather than on what is in this tree.
     """
-    args = [f"vulners.api_host=127.0.0.1", f"vulners.api_port={api_port}"]
+    args = ["vulners.api_host=127.0.0.1", f"vulners.api_port={api_port}"]
     if CATALOG_PORT is not None:
         args.append(f"vulners.catalog_url=http://127.0.0.1:{CATALOG_PORT}/")
     if extra:
@@ -681,7 +743,16 @@ class World:
         self.checks = Checks()
         self.target_port, self.target = serve(TargetHandler)
         self.api_port, self.api = serve(ApiHandler)
-        self.xml = REPO / "tests" / "e2e" / f"_e2e_{name}.xml"
+        # A private directory per world, not a fixed path in the source tree.
+        # The report used to live at tests/e2e/_e2e_<name>.xml, which made it
+        # process-global: two runs of this gate at once deleted each other's
+        # reports and read each other's, so a check could assert happily
+        # against a NEIGHBOUR's XML - or against one left by an earlier run
+        # while the current scan produced nothing at all. Measured: with
+        # `run_nmap` stubbed to run no scan whatsoever, the XML checks reported
+        # "6 passed, 0 failed".
+        self._scratch = tempfile.TemporaryDirectory(prefix="e2e-report-")
+        self.xml = Path(self._scratch.name) / f"{name}.xml"
 
     def check(self, *args, **kwargs):
         self.checks.check(*args, **kwargs)
@@ -693,15 +764,24 @@ class World:
         """One offline run against this world's own target and API."""
         kwargs.setdefault("target_port", self.target_port)
         kwargs.setdefault("api_port", self.api_port)
+        # Remembered so report() can refuse anything older: a report that
+        # predates the scan is not this scan's answer, whatever it says.
+        self._scan_started = time.time()
         return run_vulners(**kwargs)
 
     def report(self):
-        """The XML of the last scan that asked for one."""
-        return self.xml.read_text() if self.xml.exists() else ""
+        """The XML of the last scan that asked for one, and only that."""
+        if not self.xml.exists():
+            return ""
+        started = getattr(self, "_scan_started", None)
+        if started is not None and self.xml.stat().st_mtime < started:
+            raise AssertionError(
+                "the report at %s predates the scan that was supposed to write "
+                "it; reading it would assert against stale output" % self.xml)
+        return self.xml.read_text()
 
     def close(self):
-        if self.xml.exists():
-            self.xml.unlink()
+        self._scratch.cleanup()
 
 
 def concurrently(*thunks):
@@ -734,8 +814,10 @@ def check_fingerprint(world):
     world.check("cpe:/a:php:php:5.6.38" in keys,
                 "the sweep finds a CPE nmap's own detection cannot",
                 f"{keys}\n{output[-800:]}")
-    world.check("SCRIPT ENGINE" not in output.upper(),
-                "nmap loads the merged script without script engine errors", output)
+    # The script surviving the scan is asserted for EVERY scan in this file
+    # now, inside run_nmap, rather than for this one check by a string that
+    # only ever matched a compile failure.
+
     world.check(world.target.compressed_replies > 0,
                 "the path sweep asks the server to compress, and still matches",
                 f"compressed replies: {world.target.compressed_replies}")
@@ -1015,8 +1097,14 @@ def check_xml_contract(world):
     run_nmap([
         "-Pn", "-sV", "-p", str(world.target_port),
         "--script", script("vulners.nse"),
-        "--script-args",
-        f"vulners.api_host=127.0.0.1,vulners.api_port={world.api_port}",
+        # Through the shared helper, like every other check. Hand-rolled here,
+        # this omitted catalog_url - so the one check that claims to validate
+        # the report shape fetched its dictionaries from raw.githubusercontent
+        # on every run, against the file's own promise that no traffic leaves
+        # the machine. It passes today only because the catalog branch is not
+        # published yet; the moment 2.0 publishes it, this check would start
+        # validating whatever is live and go red whenever GitHub is down.
+        "--script-args", vulners_args(world.api_port),
         "-oX", str(world.xml),
         "127.0.0.1",
     ])
@@ -1314,8 +1402,8 @@ def main():
                         help="checks to run at once (1 to serialise)")
     args = parser.parse_args()
 
-    global CATALOG_PORT, CATALOG, SCRATCH_HOME
-    CATALOG_PORT, CATALOG = serve(CatalogHandler)
+    global CATALOG_PORT, SCRATCH_HOME
+    CATALOG_PORT, _ = serve(CatalogHandler)
     scratch = tempfile.TemporaryDirectory()
     SCRATCH_HOME = Path(scratch.name)
     (SCRATCH_HOME / ".nmap").mkdir()
@@ -1335,7 +1423,7 @@ def main():
         checks.skip("live API contract", "run with --live to include it")
 
     scratch.cleanup()
-    return checks.report()
+    return checks.report(expected_at_least=MINIMUM_ASSERTIONS)
 
 
 if __name__ == "__main__":

@@ -134,13 +134,27 @@ CHANNEL_ALIASES = {
     "headers-raw": "raw",
 }
 
+# Lowercase only, and ASCII only. nselib lowercases every response header name
+# unconditionally, so the matcher can only ever look up a lowercase key; the
+# permissive \w spelling this used to carry also admitted uppercase and every
+# unicode letter, none of which any rule can be reached by. tools/catalog.py
+# imports this so the producer and the publish gate cannot drift apart.
 CHANNEL_KEY = re.compile(r"^(?:raw|body|title|script|banner|cookie"
-                         r"|hdr:[\w.-]+|meta:[\w.:-]+)$")
+                         r"|hdr:[a-z0-9.\-_]+|meta:[a-z0-9.:\-_]+)$")
 
 
 def channel_key(channel, field=None):
     """The runtime key, or None when nothing would ever look the rule up."""
     field = (field or "").lower()
+
+    # An already-normalised key passes through. Without this, a hand-edited
+    # entry - which CLAUDE.md promises survives a rebuild when it carries no
+    # `source` - was silently deleted on any channel spelled the way the
+    # catalogue itself spells it, which is 246 of the 722 shipped rules: only
+    # the source spellings ("server", "header", "meta") were understood, never
+    # "hdr:server" or "meta:generator".
+    if CHANNEL_KEY.match(channel or ""):
+        return channel
 
     key = CHANNEL_ALIASES.get(channel)
     if key is None:
