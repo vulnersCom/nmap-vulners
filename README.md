@@ -15,6 +15,12 @@ answer inside the scan report - worst first, by what is actually exploitable.
 [![data](https://img.shields.io/badge/data-vulners.com-ff5f56)](https://vulners.com)
 [![stars](https://img.shields.io/github/stars/vulnersCom/nmap-vulners?logo=github&color=yellow)](https://github.com/vulnersCom/nmap-vulners/stargazers)
 
+<img src="docs/demo.gif" alt="Three scans: an SSH port with no API key, the same port with one, and a web port where the sweep names the Tomcat behind a Coyote banner" width="900">
+
+<sub>Real scans of hosts published for scanning. No key, then a key, then a web
+port: nmap's <code>-sV</code> reports a Coyote banner and the sweep names the
+Tomcat and the jQuery behind it.</sub>
+
 </div>
 
 ---
@@ -148,7 +154,7 @@ curl -fsSL https://raw.githubusercontent.com/vulnersCom/nmap-vulners/master/inst
 ./install.sh --prefix /usr/local/share/nmap
 
 # a specific release
-./install.sh --ref v1.5
+./install.sh --ref v2.0
 
 # remove everything it installed
 ./install.sh --uninstall
@@ -211,7 +217,7 @@ The directory holding `nse_main.lua` is the one this nmap uses.
 | Argument | Default | Meaning |
 |---|---|---|
 | `vulners.mincvss` | `0` | Hide findings scored below this. Unscored bulletins and anything with a known exploit are shown whatever the threshold |
-| `vulners.paths` | the published 939 paths | Paths for the web sweep: a Lua list, one string naming a file with one path per line, or `none` to switch the sweep off |
+| `vulners.paths` | the published 939 paths | Paths for the web sweep: a Lua list, one string naming a file with one path per line, or `none` to switch the sweep off. A file you name that cannot be read stops the sweep and says so, rather than falling back to the published list |
 | `vulners.width` | `80` | Terminal width the table is laid out for |
 | `vulners.max_items` | `32` | Ceiling on billed items for the whole scan |
 | `vulners.api_key` | - | API token. Leaky: nmap copies its own command line into `-oX` |
@@ -239,8 +245,10 @@ report, so the token ends up in the `args` attribute of `-oX` output and in your
 shell history. The script itself never writes the token anywhere, including its
 debug output - there is a regression test that says so.
 
-A key file you name explicitly and that cannot be read stops the run, rather
-than quietly falling back: an operator who names a file means that file.
+A key file you name explicitly and that cannot be read stops the run rather
+than quietly falling back - an operator who names a file means that file - and
+the report says which file it was. A mistyped path cannot look like a clean
+scan.
 
 ## Where the fingerprints come from
 
@@ -255,8 +263,9 @@ https://raw.githubusercontent.com/vulnersCom/nmap-vulners/catalog/
     probes.json         targeted version probes
 ```
 
-That is one request per scan - not per host and not per port - for 34 KB
-compressed, in nmap's pre-scan phase. An installed script therefore picks up new
+That is four requests per scan - one per file, not per host and not per port -
+for 40 KB compressed out of 250 KB of JSON, in nmap's pre-scan phase. Measured
+against the published branch. An installed script therefore picks up new
 fingerprints without being updated.
 
 **It writes nothing to your filesystem.** The dictionaries are held for the
@@ -272,7 +281,7 @@ you to read an empty result as a clean network.
 
 | argument | what it does |
 |---|---|
-| `vulners.catalog_url=<url>` | fetch from a mirror instead - for an airgapped network |
+| `vulners.catalog_url=<url>` | fetch from a mirror instead - for an airgapped network. A host name or an IPv6 address in brackets, `http://[fd00::1]/catalog/` |
 | `vulners.catalog=none` | do not fetch at all; look up only what nmap named |
 
 ## The sweep, and how loud it is
@@ -289,16 +298,20 @@ shrinks; the rate does:
 
 | | batches | wait between them | measured, one web port |
 |---|---|---|---|
-| `-T0` paranoid | 188 x 5 | 2 s | |
-| `-T1` sneaky | 94 x 10 | 1 s | |
-| `-T2` polite | 38 x 25 | 0.5 s | 25.5 s |
-| `-T3` normal | 10 x 100 | 0.1 s | 7.3 s |
-| `-T4` aggressive | 4 x 250 | none | 6.3 s |
-| `-T5` insane | 1 | none | 6.3 s |
+| `-T0` paranoid | 188 x 5 | 2 s | 11 m 22 s |
+| `-T1` sneaky | 94 x 10 | 1 s | 1 m 56 s |
+| `-T2` polite | 38 x 25 | 0.5 s | 26.2 s |
+| `-T3` normal | 10 x 100 | 0.1 s | 7.6 s |
+| `-T4` aggressive | 4 x 250 | none | 6.7 s |
+| `-T5` insane | 1 | none | 6.6 s |
 
-`-sV` alone against the same server is 6.1 s, so the default costs about a
-second. The requests are pipelined over 34-48 connections with at most four open
-at once, which is nselib's `pipeline_go` - the same machinery nmap's own
+All six measured in one run against the same local server. `-sV` alone against
+it is 6.1 s, so the sweep costs a second and a half at the default. The two slow
+rows are what `-T0` and `-T1` are for rather than a surprise: 188 and 94 batches
+with a deliberate wait between each.
+
+The requests are pipelined over 34-48 connections with at most four open at
+once, which is nselib's `pipeline_go` - the same machinery nmap's own
 `http-enum` uses, honouring the server's `Keep-Alive: max=` and
 `--script-args http.max-pipeline=N`.
 
@@ -399,21 +412,28 @@ A scan of a network asks the API far less than it looks:
 ## Development
 
 The tests, the hygiene gate and `CONTRIBUTING.md` are in the git repository
-only; the release archive ships the scripts and their data. Three gates, all
-offline except where noted:
+only; the release archive ships the scripts and their data. Seven gates, all
+offline except where noted, and CI runs exactly these:
 
 ```sh
 nmap -sn -Pn --script ./tests/run.nse --script-args testdir=tests,root=. 127.0.0.1
 python3 tests/e2e/run_e2e.py
 python3 tools/check.py
+python3 tools/catalog.py --check
+python3 tools/xml_contract.py --selftest
+python3 tools/fingerprints/selftest.py
+python3 tools/catalog_diff.py --selftest
 ```
 
-Over 250 unit cases run inside nmap against the real NSE libraries; 60 end-to-end
+266 unit cases run inside nmap against the real NSE libraries; 60 end-to-end
 cases drive the real nmap binary against a local web server and a stand-in
 Vulners API that enforces what the real one enforces; the hygiene gate keeps
-secrets, scan output and editor clutter out of the tree, and checks that the
-published catalogue still matches what the script will accept. `python3 tests/e2e/run_e2e.py --live`
-adds checks against the real service. See [CONTRIBUTING.md](CONTRIBUTING.md).
+secrets, scan output and editor clutter out of the tree and refuses a global
+read that NSE would turn into a lost result; and the last four hold the data and
+the tools that publish it - the catalogue's shape, the XML contract every
+importer reads, the pattern translator, and the gate that decides a rebuild is
+safe to publish. `python3 tests/e2e/run_e2e.py --live` adds checks against the
+real service. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## FAQ
 
@@ -441,6 +461,13 @@ published; a v2 score of 9.3 is not a v3 score of 9.3.
 
 **Why is a low-scoring entry shown when I set `mincvss`?** Because it has a
 known exploit, or because the source never scored it. Both are deliberate.
+
+**The report says the catalogue could not be downloaded.** Then the web
+fingerprinting did not run and everything else did: the software nmap itself
+named was still looked up. It is said out loud for that reason - a capability
+that did not run reads as a capability that found nothing. The two causes have
+separate wording: "could not be downloaded" is the network, and "answered, but
+one of its dictionaries could not be read" is the mirror you pointed it at.
 
 **It found nothing on a host I know is vulnerable.** Run with `-d2`: it logs
 every identity it asked about. Usually nmap named the service but not its

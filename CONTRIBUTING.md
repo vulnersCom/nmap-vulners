@@ -11,13 +11,34 @@ nmap -sn -Pn --script ./tests/run.nse --script-args testdir=tests,root=. 127.0.0
 # 2. end-to-end tests - real nmap against a local web server and a stand-in API
 python3 tests/e2e/run_e2e.py
 
-# 3. repository hygiene - secrets, AI artifacts, clutter, line endings
+# 3. repository hygiene - secrets, AI artifacts, clutter, line endings, and a
+#    global read that NSE would turn into a lost result
 python3 tools/check.py
+
+# 4. the catalogue is shaped the way the script reads it
+python3 tools/catalog.py --check
+
+# 5. the XML contract every importer reads still catches a broken report
+python3 tools/xml_contract.py --selftest
+
+# 6. the PCRE-to-Lua translator still makes the decisions it is supposed to
+python3 tools/fingerprints/selftest.py
+
+# 7. the publish gate still refuses a rebuild that loses ground
+python3 tools/catalog_diff.py --selftest
 ```
 
+The last four are the data and the tools that publish it. They matter as much as
+the first three, because the catalogue rebuilds itself on a schedule and
+publishes without a human: a translator that starts writing patterns nothing can
+execute, or a gate that stops noticing loss, reaches every installed script
+within a day and there is no release to hold it back.
+
 The unit suite takes under a second and the end-to-end suite about seven, so
-there is no reason to run them one at a time or only at the end. Working on one
-unit suite, load just that file:
+there is no reason to run them one at a time or only at the end. The ten unit
+suites are `test_harness`, `test_config`, `test_catalog`, `test_fingerprints`,
+`test_channels`, `test_sweep`, `test_lookup`, `test_keyed`, `test_render` and
+`test_notice`. Working on one, load just that file:
 
 ```sh
 nmap -sn -Pn --script ./tests/run.nse \
@@ -42,6 +63,12 @@ covers on a scratch copy of the script and confirm the test fails:
 ```sh
 cp vulners.nse /tmp/intact && <edit vulners.nse> && <run the gate> && cp /tmp/intact vulners.nse
 ```
+
+**Give the mutation run a timeout.** One mutation did not fail the suite, it
+hung it, and a harness with no per-run bound turns that finding into an
+afternoon. The same lesson holds outside the tests: every CI job now carries
+`timeout-minutes`, because three of them once sat on `apt-get install` for
+twenty-five minutes against a six-hour default.
 
 **Run a script by its absolute path when testing by hand.** nmap resolves a
 relative `--script ./vulners.nse` against its own `script.db` first, so it
@@ -90,7 +117,7 @@ nmap -sV --script "$PWD/vulners.nse" \
 only what nmap itself identified, which is also what happens on a machine with
 no route to GitHub.
 
-Run all three from the repository root. Each exits non-zero on failure, and CI
+Run all seven from the repository root. Each exits non-zero on failure, and CI
 runs exactly the same commands.
 
 Useful while working on one thing:
@@ -134,13 +161,15 @@ and that is precisely why the checks could not overlap.
 Tag it and push the tag; `.github/workflows/release.yml` does the rest:
 
 ```sh
-git tag -a v1.5 -m "nmap-vulners 1.5"
-git push origin v1.5
+git tag -a v2.0 -m "nmap-vulners 2.0"
+git push origin v2.0
 ```
 
 The workflow runs the gates first, then builds `.tar.gz` and `.zip` archives
 with `git archive` - so they hold exactly what a user downloads: `vulners.nse`,
-`catalog/*.json`, both installers, the README and the LICENSE - writes
+`catalog/*.json`, both installers, the README and the LICENSE, and nothing else:
+`.gitattributes` keeps the tests, the tools, the workflows and the README's
+653 KB demonstration out of it - writes
 `SHA256SUMS`, and publishes a release with generated notes.
 
 The catalogue ships in the archive even though nothing installs it and the
@@ -179,6 +208,22 @@ plugin generations apart.
 
 CI runs both on Linux, macOS and Windows, installs, verifies and uninstalls
 again, so a change to either is exercised on the platforms it claims.
+
+## The workflows
+
+Four of them: `ci.yml` on every push and pull request, `release.yml` on a tag,
+`catalog.yml` publishing `catalog/` to the `catalog` branch, and
+`catalog-refresh.yml` rebuilding the dictionaries weekly from the upstream
+corpora.
+
+Two things they learned by being run rather than read. Every job carries
+`timeout-minutes`, because the default is six hours and a hung job is a publish
+that silently never happens. And every apt call goes through
+`.github/actions/apt`, which bounds each one at seven minutes and retries once:
+a healthy `apt-get install` on these runners takes 12 to 49 seconds and a bad
+one has never finished, so a hang is not a slow success and should not be
+waited out. A hang is also not a failure - it never returns, so nothing retries
+it by itself.
 
 ## House rules
 
