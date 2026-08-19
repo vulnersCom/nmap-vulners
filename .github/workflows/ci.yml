@@ -20,8 +20,8 @@ jobs:
   hygiene:
     name: Repository hygiene
     runs-on: ubuntu-latest
-    # checks 54 files; a minute when apt behaves
-    timeout-minutes: 15
+    # checks 54 files; seconds of work, and up to 14 minutes of apt retry
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -33,9 +33,12 @@ jobs:
       # it finds no luac, and a barrier that skips in CI is not a barrier. This
       # step fails instead.
       - name: Install the Lua compiler
-        run: |
-          sudo apt-get update && sudo apt-get install -y lua5.4
-          luac5.4 -v
+        uses: ./.github/actions/apt
+        with:
+          packages: lua5.4
+
+      - name: The Lua compiler is really there
+        run: luac5.4 -v
 
       - name: Check for secrets, AI artifacts and clutter
         run: python3 tools/check.py
@@ -72,16 +75,19 @@ jobs:
   tests:
     name: NSE test suite
     runs-on: ubuntu-latest
-    # the unit gate is under a second and the e2e about seven
-    timeout-minutes: 20
+    # the unit gate is under a second and the e2e about seven; the rest is
+    # apt, which may retry once at seven minutes a go
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
       - name: Install nmap
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y nmap
-          nmap --version
+        uses: ./.github/actions/apt
+        with:
+          packages: nmap
+
+      - name: nmap is really there
+        run: nmap --version
 
       # The suite runs inside nmap so the scripts are exercised against the
       # real NSE libraries of the nmap version this job installed.
@@ -104,8 +110,8 @@ jobs:
   install:
     name: Installer on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # measured: 10s on macOS, 1m03 on Windows, 5m34 on ubuntu
-    timeout-minutes: 20
+    # measured: 10s on macOS, 1m03 on Windows, 5m34 on ubuntu on a bad day
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -115,7 +121,9 @@ jobs:
 
       - name: Install nmap (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y nmap
+        uses: ./.github/actions/apt
+        with:
+          packages: nmap
 
       - name: Install nmap (macOS)
         if: runner.os == 'macOS'

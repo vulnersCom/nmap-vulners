@@ -27,26 +27,29 @@ jobs:
   verify:
     name: Gates
     runs-on: ubuntu-latest
-    # runs all seven gates
-    timeout-minutes: 25
+    # runs all seven gates, after an apt that may retry once
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
-      - name: Install nmap
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y nmap
-
+      # Both at once, in one apt call. Two separate steps meant two
+      # `apt-get update` runs in the same job and twice the exposure to a
+      # mirror that hangs.
+      #
       # Without luac, check.py SKIPS its global-reach check and still exits 0 -
       # so the barrier against a local read above its own declaration would be
       # absent from the one build that reaches users. ci.yml installs this for
       # exactly that reason; a release must not be gated more weakly than a
       # pull request.
-      - name: Install the Lua compiler
+      - name: Install nmap and the Lua compiler
+        uses: ./.github/actions/apt
+        with:
+          packages: nmap lua5.4
+
+      - name: Both are really there
         run: |
-          sudo apt-get update && sudo apt-get install -y lua5.4
           luac5.4 -v
           sudo ln -sf "$(command -v lua5.4)" /usr/local/bin/lua
 

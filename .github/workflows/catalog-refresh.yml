@@ -57,14 +57,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # nmap runs the unit suite; lua is the oracle the importer verifies
+      # every translated pattern against, and without it the importer would
+      # ship patterns nothing had ever executed.
       - name: Install nmap and lua
-        # nmap runs the unit suite; lua is the oracle the importer verifies
-        # every translated pattern against, and without it the importer would
-        # ship patterns nothing had ever executed.
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y nmap lua5.4
-          sudo ln -sf "$(command -v lua5.4)" /usr/local/bin/lua
+        uses: ./.github/actions/apt
+        with:
+          packages: nmap lua5.4
+
+      - name: The importer's oracle answers to the name it calls
+        run: sudo ln -sf "$(command -v lua5.4)" /usr/local/bin/lua
 
       - name: Keep what is published now
         run: cp -r catalog /tmp/published

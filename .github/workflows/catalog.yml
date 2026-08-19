@@ -61,7 +61,7 @@ jobs:
     name: Publish catalog/ to the catalog branch
     runs-on: ubuntu-latest
     # this is the distribution mechanism; it must fail loudly, not hang
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,7 +70,9 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Install nmap
-        run: sudo apt-get update && sudo apt-get install -y nmap
+        uses: ./.github/actions/apt
+        with:
+          packages: nmap
 
       - name: The catalogue is readable by the script
         run: python3 tools/catalog.py --check

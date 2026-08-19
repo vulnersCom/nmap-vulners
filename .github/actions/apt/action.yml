@@ -1,0 +1,58 @@
+name: Install packages with apt
+description: >
+  apt, bounded and retried. GitHub's package mirrors hang, and a hang is not a
+  failure: it does not stop, so nothing retries it, and the job's own timeout is
+  the only thing that ends it - by which point nothing has been installed and
+  the run is long past the point anybody was watching.
+
+inputs:
+  packages:
+    description: Space-separated package names.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: apt-get, with a bound on how long it may sit there
+      shell: bash
+      env:
+        # Through the environment, not interpolated into the script: an input
+        # substituted straight into `run:` is executed by the shell, and this
+        # action is called from a workflow that publishes to every installed
+        # scanner.
+        PACKAGES: ${{ inputs.packages }}
+      run: |
+        set -u
+
+        # Measured on this repository's own runs rather than guessed. A healthy
+        # apt step took 12s and 49s; a slow but SUCCESSFUL one took 5m27s; the
+        # hung ones were still going at 15 and 25 minutes when something else
+        # killed them. Seven minutes separates "slow" from "stuck" with room on
+        # both sides.
+        #
+        # -k, because apt does not always stop on TERM and a half-killed apt
+        # keeps the dpkg lock the next attempt needs. DPkg::Lock::Timeout for
+        # the same reason from the other side: the runner's own unattended
+        # upgrades hold that lock, and waiting a minute for it beats failing.
+        attempts=2
+        limit=420
+        attempt=1
+        while [ "$attempt" -le "$attempts" ]; do
+          # Unquoted on purpose: several packages arrive as one space-separated
+          # string and have to word-split into separate arguments.
+          # shellcheck disable=SC2086
+          if sudo timeout -k 30 "$limit" apt-get update &&
+             sudo timeout -k 30 "$limit" apt-get install -y \
+               -o DPkg::Lock::Timeout=60 $PACKAGES; then
+            exit 0
+          fi
+          echo "::warning::apt attempt $attempt for '$PACKAGES' failed or was" \
+               "cut off at ${limit}s"
+          attempt=$((attempt + 1))
+          sleep 15
+        done
+
+        echo "::error::apt could not install '$PACKAGES' in $attempts attempts," \
+             "each cut off at ${limit}s. A healthy run takes under a minute, so" \
+             "this is the mirror, not the package list."
+        exit 1
