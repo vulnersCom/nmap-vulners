@@ -441,9 +441,14 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "paths are requested in a stable order",
+  name = "paths are requested in the order they were given",
   fn = function()
-    local env, http = load({paths = {"/zeta", "/alpha", "/mid"}})
+    -- Stable, and no longer sorted. The catalogue publishes its paths most
+    -- likely to answer first, and the script requests a prefix of that list
+    -- bounded by -T, so sorting them alphabetically threw away the one thing
+    -- the order carried - and made the budget keep an arbitrary slice.
+    local given = {"/zeta", "/alpha", "/mid"}
+    local env, http = load({paths = given})
     always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
 
     env.action(t.host(), t.port())
@@ -452,8 +457,116 @@ suite[#suite + 1] = {
     for _, request in ipairs(sweep_requests(http)) do
       order[#order + 1] = request.path
     end
-    t.same(order, {"/alpha", "/mid", "/zeta"},
-      "a rescan of the same target must request the same paths in the same order")
+    t.same(order, given, "the order given is the order requested")
+  end,
+}
+
+--- A catalogue whose path list is long enough to be cut by a budget.
+local function many_paths(count)
+  local list = {}
+  for index = 1, count do
+    list[index] = string.format("/p%03d", index)
+  end
+  return list
+end
+
+--- Sweep `count` catalogue paths at a faked -T level.
+--
+-- @return how many requests went out, and the clock that counted the waiting
+local function with_timing(count, timing)
+  local documents = t.published_catalog(root)
+  local env, http, _, clock = t.load_vulners({
+    root = root,
+    paths = "embedded",
+    nmap = t.nmap_double({timing = timing}),
+    catalog = {
+      fingerprints = documents.fingerprints,
+      paths = {schema = 1, paths = many_paths(count)},
+      probes = {schema = 1, probes = {}},
+    },
+  })
+  always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+  env.action(t.host(), t.port())
+  return #sweep_requests(http), clock
+end
+
+suite[#suite + 1] = {
+  name = "every published path is requested, whatever the timing template",
+  fn = function()
+    -- -T decides how FAST, never how much. Asking less would find less, and
+    -- what an operator says with -T is how much of the target's attention this
+    -- scan may take - not which questions it may ask.
+    for level = 0, 5 do
+      t.equals((with_timing(1000, level)), 1000,
+        string.format("-T%d must still request every path", level))
+    end
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "how fast the sweep goes is what nmap's -T says",
+  fn = function()
+    -- Batches, with a wait between them. nmap's own templates delay between
+    -- PROBES - 15 s at -T1 - which applied per request to a thousand-path sweep
+    -- would take four hours, so the wait is per batch. The clock is counted,
+    -- not performed.
+    for _, case in ipairs({
+      -- level, batch size, seconds between batches
+      {0, 5, 2.0},
+      {1, 10, 1.0},
+      {2, 25, 0.5},
+      {3, 100, 0.1},
+    }) do
+      local level, batch, delay = case[1], case[2], case[3]
+      local _, clock = with_timing(1000, level)
+      local waits = math.ceil(1000 / batch) - 1
+      t.equals(clock.sleeps, waits, string.format(
+        "-T%d must send %d batches of %d, so wait %d times",
+        level, waits + 1, batch, waits))
+      t.is_true(math.abs(clock.slept - waits * delay) < 0.001, string.format(
+        "-T%d must wait %.1fs between batches, slept %.2fs in total",
+        level, delay, clock.slept))
+    end
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "an aggressive timing template does not wait at all",
+  fn = function()
+    local _, four = with_timing(1000, 4)
+    local _, five = with_timing(1000, 5)
+
+    t.equals(four.sleeps, 0, "-T4 sends its batches back to back")
+    t.equals(five.sleeps, 0, "-T5 sends one batch")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a list shorter than one batch costs no waiting",
+  fn = function()
+    local sent, clock = with_timing(20, 3)
+
+    t.equals(sent, 20, "all of it goes out")
+    t.equals(clock.sleeps, 0, "and there is nothing to wait between")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a path list the operator supplied is paced the same way",
+  fn = function()
+    -- The rate is about the target, not about where the list came from.
+    local mine = many_paths(300)
+    local env, http, _, clock = t.load_vulners({
+      root = root, paths = mine,
+      nmap = t.nmap_double({timing = 2}),
+    })
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+
+    env.action(t.host(), t.port())
+
+    t.equals(#sweep_requests(http), 300, "the whole list goes out")
+    t.equals(clock.sleeps, math.ceil(300 / 25) - 1,
+      "in batches of 25, because -T2 is what the operator asked for")
   end,
 }
 

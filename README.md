@@ -250,7 +250,7 @@ before the first host is touched:
 https://raw.githubusercontent.com/vulnersCom/nmap-vulners/catalog/
     index.json          what exists, at which serial
     fingerprints.json   722 product and version rules
-    paths.json          the paths the sweep requests
+    paths.json          939 paths the sweep requests
     probes.json         targeted version probes
 ```
 
@@ -273,6 +273,35 @@ you to read an empty result as a clean network.
 |---|---|
 | `vulners.catalog_url=<url>` | fetch from a mirror instead - for an airgapped network |
 | `vulners.catalog=none` | do not fetch at all; look up only what nmap named |
+
+## The sweep, and how loud it is
+
+On an HTTP port the script requests every path the catalogue publishes - 939 of
+them - and matches all 722 rules against every answer. The paths come from
+WhatWeb, nuclei and FingerprintHub: places a product is recognised, rather than
+guesses. Even a path belonging to software you are not running is worth the
+request, because the answer still carries `Server`, `X-Powered-By`, a cookie and
+a title, and those are where the rules find the stack in front of it.
+
+**How fast that goes is your `-T`**, not a setting of ours. The list never
+shrinks; the rate does:
+
+| | batches | wait between them | measured, one web port |
+|---|---|---|---|
+| `-T0` paranoid | 188 x 5 | 2 s | |
+| `-T1` sneaky | 94 x 10 | 1 s | |
+| `-T2` polite | 38 x 25 | 0.5 s | 25.5 s |
+| `-T3` normal | 10 x 100 | 0.1 s | 7.3 s |
+| `-T4` aggressive | 4 x 250 | none | 6.3 s |
+| `-T5` insane | 1 | none | 6.3 s |
+
+`-sV` alone against the same server is 6.1 s, so the default costs about a
+second. The requests are pipelined over 34-48 connections with at most four open
+at once, which is nselib's `pipeline_go` - the same machinery nmap's own
+`http-enum` uses, honouring the server's `Keep-Alive: max=` and
+`--script-args http.max-pipeline=N`.
+
+`--script-args vulners.paths=none` turns the sweep off entirely.
 
 ## How it works
 
@@ -387,7 +416,12 @@ adds checks against the real service. See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## FAQ
 
 **Does it exploit anything?** No. It reads banners and pages and asks a
-database. It is in nmap's `safe` category.
+database - it sends no payload and tries no credential. It is categorised
+`discovery, intrusive, vuln, external` rather than `safe`, for one reason: the
+path sweep requests up to 936 URLs of a web port, and nmap's definition of
+`safe` excludes scripts that use large amounts of bandwidth. nmap's own
+`http-enum` requests 2 204 and carries the same label. How many go out is bounded
+by your `-T`: 150 at the default `-T3`, 9 at `-T1`, everything at `-T5`.
 
 **Does it work without an API key?** Yes, fully. Without one it uses the free
 endpoint, which returns the same vulnerabilities for a CPE as the paid one. A

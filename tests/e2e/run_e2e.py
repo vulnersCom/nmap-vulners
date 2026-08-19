@@ -755,25 +755,42 @@ def check_sweep_can_be_disabled(world):
     itself, so a run that sweeps nothing still shows a handful of requests that
     were never the script's.
 
-    Three scans against three servers rather than three against one, so they can
+    Four scans against four servers rather than four against one, so they can
     run at the same time and each still counts only its own traffic.
     """
-    (control_port, control), (off_port, off), (on_port, on) = \
-        [serve(TargetHandler) for _ in range(3)]
+    (control_port, control), (off_port, off), (on_port, on), (quiet_port, quiet) = \
+        [serve(TargetHandler) for _ in range(4)]
 
     concurrently(
         lambda: run_nmap(["-Pn", "-sV", "-p", str(control_port), "127.0.0.1"]),
         lambda: world.scan(target_port=off_port, extra="vulners.paths=none"),
         lambda: world.scan(target_port=on_port),
+        lambda: run_nmap(["-Pn", "-sV", "-T4", "-p", str(quiet_port),
+                          "--script", script("vulners.nse"),
+                          "--script-args", vulners_args(world.api_port),
+                          "127.0.0.1"]),
     )
-    baseline, disabled, swept = control.requests, off.requests, on.requests
+    baseline, disabled = control.requests, off.requests
+    swept, polite = on.requests, quiet.requests
+
+    published = len(json.loads((REPO / "catalog" / "paths.json").read_text())["paths"])
 
     world.check(disabled <= baseline,
                 "vulners.paths=none adds no requests of its own to the target",
                 f"baseline {baseline}, with paths=none {disabled}")
-    world.check(swept > baseline + 50,
-                "and the sweep really is what those requests would have been",
-                f"baseline {baseline}, swept {swept}")
+
+    # Every published path, always. -T changes the rate and never the list, so a
+    # polite scan has to ask exactly the same questions as an ordinary one.
+    world.check(swept >= baseline + published,
+                "every path the catalogue publishes is actually requested",
+                f"baseline {baseline}, swept {swept}, catalogue has {published}")
+    # -T4 rather than -T2: the rate ladder itself is pinned by unit cases against
+    # a counted clock, precisely and instantly, where a real -T2 run would sit
+    # here sleeping 19 seconds to prove something already proved. What only the
+    # real nmap can show is that a different -T still asks the whole list.
+    world.check(polite >= baseline + published,
+                "and a different timing template still asks all of them",
+                f"baseline {baseline}, at -T4 {polite}, catalogue has {published}")
 
 
 def check_works_without_sv(world):
@@ -1251,7 +1268,7 @@ def check_live(world):
 # the pool takes them in this order and a long check started last decides when
 # the whole run ends.
 OFFLINE_CHECKS = [
-    check_sweep_can_be_disabled,   # three nmap runs
+    check_sweep_can_be_disabled,   # four nmap runs
     check_scan_cache,              # two, one of them over two hosts
     check_fingerprint,
     check_free_path,

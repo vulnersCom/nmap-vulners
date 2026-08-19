@@ -382,12 +382,22 @@ end
 -- installation rather than the checkout.
 --
 -- @param opts fetchfile - function(name) used by the script under test
+--             timing   - the -T level the script should see (0..5)
 function M.nmap_double(opts)
   opts = opts or {}
   local double = {
     set_port_version_calls = {},
     registry = nmap.registry,
   }
+
+  -- The sweep asks nmap how aggressive this scan may be, and the answer decides
+  -- how much of the catalogue goes on the wire. Faked, because the real one
+  -- returns whatever -T the suite itself was run with.
+  if opts.timing ~= nil then
+    function double.timing_level()
+      return opts.timing
+    end
+  end
 
   function double.set_port_version(host, port, detail)
     double.set_port_version_calls[#double.set_port_version_calls + 1] = {

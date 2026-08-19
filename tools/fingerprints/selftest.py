@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import luaeval                                                    # noqa: E402
 import normalize                                                  # noqa: E402
+import paths as path_builder                                      # noqa: E402
 import sample                                                     # noqa: E402
 from pcre2lua import (translate, literal_anchor, literal_runs,     # noqa: E402
                       capture_can_hold_a_digit, Untranslatable)
@@ -236,6 +237,80 @@ def check_shrink_guard(checks):
         checks.that(not raised, "--force is the deliberate override")
 
 
+def check_paths(checks):
+    """What the sweep is allowed to knock on.
+
+    The list goes out against every web port of every host in a scan, so a bad
+    entry is not one wasted request - it is one per port per host, from a script
+    that has to be able to explain every packet it sends.
+    """
+    refused = {
+        "/../../etc/passwd": "traversal",
+        "/a\\b": "a backslash asks for a parser bug, not a fingerprint",
+        "/{{BaseURL}}/x{{n}}": "an unresolved interpolation",
+        "/%c0": "a percent escape, which in this corpus is normaliser abuse",
+        "/?map=*": "a wildcard the operator was meant to fill in",
+        "/.settings/rules.json?auth=FIREBASE_SECRET": "an ALL_CAPS placeholder",
+        "/:9182": "a host:port fragment somebody pasted into a path field",
+        "/&?=?": "punctuation, not a path",
+        "/logo.gif": "an image; no rule can read one",
+        "/fonts/x.woff2": "a font",
+        "https://example.com/x": "somebody else's host",
+        "/" + "a" * 200: "longer than any real fingerprinting path",
+        "": "nothing at all",
+    }
+    for path, why in refused.items():
+        checks.that(path_builder.normalise(path) is None,
+                    "a path is refused: %s" % why,
+                    "normalise(%r) returned %r" % (path, path_builder.normalise(path)))
+
+    kept = {
+        "/wp-login.php": "/wp-login.php",
+        "wp-login.php": "/wp-login.php",          # WhatWeb omits the slash
+        "{{BaseURL}}/CHANGELOG.txt": "/CHANGELOG.txt",   # nuclei writes it so
+        "/data?get=prodServerGen": "/data?get=prodServerGen",
+        "/?=PHPB8B5F2A0-3C92-11d3-A3A9-4C7B08C10000":
+            "/?=PHPB8B5F2A0-3C92-11d3-A3A9-4C7B08C10000",
+        "/bootstrap/css/bootstrap.min.css": "/bootstrap/css/bootstrap.min.css",
+    }
+    for raw, expected in kept.items():
+        checks.that(path_builder.normalise(raw) == expected,
+                    "a usable path survives normalisation: %s" % raw,
+                    "got %r" % (path_builder.normalise(raw),))
+
+    # Order is load-bearing: the script requests a PREFIX of this list, bounded
+    # by -T, so the informative paths have to come before the guesses.
+    import collections
+    report = collections.defaultdict(collections.Counter)
+    candidates = path_builder.Candidates()
+    candidates.add("/wp-login.php", "wordpress", "whatweb")
+    candidates.add("/wp-login.php", "wordpress-detect", "nuclei")
+    candidates.add("/only-once.php", "obscure appliance", "whatweb")
+    chosen, named = path_builder.select(candidates, lambda tokens: None, report)
+
+    checks.that(chosen[0] == "/",
+                "the front page is asked first, always",
+                "got %r" % (chosen[:1],))
+    checks.that(chosen.index("/wp-login.php") < chosen.index("/only-once.php"),
+                "a path two catalogues name outranks one only a single plugin does",
+                "%r" % (chosen[:14],))
+    front = path_builder.front_pages()
+    checks.that(chosen.index("/only-once.php") < chosen.index(front[-1]),
+                "and every upstream path outranks the front-page guesses",
+                "%r" % (chosen[-4:],))
+
+    # A path a probe owns is not swept as well: the probe is conditional and the
+    # sweep is not, and only the probe carries the version extractor.
+    chosen, _ = path_builder.select(candidates, lambda tokens: None, report,
+                                    exclude={"/wp-login.php"})
+    checks.that("/wp-login.php" not in chosen,
+                "a path a targeted probe owns is left out of the sweep",
+                "%r" % (chosen[:12],))
+
+    checks.that(path_builder.ALWAYS[0] == "/" and "/robots.txt" in path_builder.ALWAYS,
+                "the universal list is the front page and robots.txt")
+
+
 def main():
     if luaeval.LUA is None:
         print("FAIL  no lua interpreter on PATH; the translation cases need one")
@@ -247,6 +322,7 @@ def main():
     check_capture_digit(checks)
     check_samples(checks)
     check_identities(checks)
+    check_paths(checks)
     check_shrink_guard(checks)
     return checks.report()
 

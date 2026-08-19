@@ -39,7 +39,9 @@ came from.
 --       anything with a known exploit are shown whatever the threshold.
 -- @args vulners.paths Paths for the web sweep: a list of strings, one string
 --       naming a file with one path per line, or "none" to disable the sweep.
---       Defaults to the list the catalogue publishes.
+--       Defaults to every path the catalogue publishes. How fast they go out
+--       is nmap's own -T: batches of 5 two seconds apart at -T0, of 100 a
+--       tenth of a second apart at the default -T3, all at once at -T5.
 -- @args vulners.catalog "none" to run without the fingerprint catalogue: no
 --       web fingerprinting, and no request for it. Defaults to fetching it.
 -- @args vulners.catalog_url Base URL to fetch the catalogue from, for a mirror
@@ -86,7 +88,14 @@ license = "Same as Nmap--See https://nmap.org/book/man-legal.html"
 -- target's software to a third party, and a plain -sC must not do that without
 -- being asked. nmap's own shipped copy is {"vuln","safe","external"} for the
 -- same reason.
-categories = {"vuln", "safe", "external"}
+--
+-- "safe" is deliberately absent too, and that is a change from 1.x. nmap's own
+-- definition excludes scripts that "use large amounts of network bandwidth",
+-- and the sweep now requests up to 936 paths of a web port at -T5. nmap's
+-- http-enum requests 2 204 and is categorised {"discovery","intrusive","vuln"};
+-- this script does the same kind of thing to a server, so it carries the same
+-- label. "external" stays, because the lookups leave the operator's network.
+categories = {"discovery", "intrusive", "vuln", "external"}
 
 local http = require "http"
 local io = require "io"
@@ -230,6 +239,36 @@ local MAX_CATALOG_STRING = 2048
 -- The dictionaries, and the order they are fetched in.
 local CATALOG_FILES = {"fingerprints", "paths", "probes"}
 
+-- The whole published list is always requested. What nmap's timing template
+-- changes is the RATE: how many paths go out together, and how long the sweep
+-- waits between batches. Asking less would mean finding less, which is not what
+-- -T is for; -T is the operator saying how much of the target's attention this
+-- scan may take.
+--
+-- nmap's own templates set a delay between probes - 5 min at -T0, 15 s at -T1,
+-- 0.4 s at -T2, none above - and applying those per REQUEST to a 939-path sweep
+-- would take four hours at -T1. So the delay is per batch, which makes the
+-- ladder land where the operator would expect it. Against the published list:
+--
+--   0 paranoid     188 batches of  5, 2.0 s apart   ~6 min per web port
+--   1 sneaky        94 batches of 10, 1.0 s apart   ~1.5 min
+--   2 polite        38 batches of 25, 0.5 s apart   ~19 s
+--   3 normal        10 batches of 100, 0.1 s apart  ~1 s   (the default)
+--   4 aggressive     4 batches of 250, no wait
+--   5 insane         one batch, no wait
+--
+-- Pipelining inside a batch is nselib's, and it already honours the server's
+-- own Keep-Alive limit and the http.max-pipeline script argument.
+local PACE_BY_TIMING = {
+  [0] = {5, 2.0},
+  [1] = {10, 1.0},
+  [2] = {25, 0.5},
+  [3] = {100, 0.1},
+  [4] = {250, 0},
+  [5] = {math.huge, 0},
+}
+local DEFAULT_PACE = {100, 0.1}
+
 -- ---------------------------------------------------------------- 1. Util
 
 --- Index a chain of keys in somebody else's JSON without raising.
@@ -369,7 +408,8 @@ local MAX_IDENTITY = 256
 -- look up. MAX_IDENTITY caps the LENGTH of one identity, not the NUMBER of
 -- them: measured, an 8 KB body of repeated "Server: nginx/9.x.y" lines produced
 -- 301 <cpe> elements on nmap's own service element and 903 GETs to the API,
--- from a script in category "safe" - with the count chosen by the target. A
+-- from a scan the operator did not ask for - with the count chosen by the
+-- target. A
 -- real web stack has fewer than ten.
 local MAX_IDENTITIES_PER_PORT = 24
 local MAX_LOOKUPS_PER_SCAN = 512
@@ -1912,10 +1952,20 @@ end
 
 -- --------------------------------------------------------- 9. Fingerprint
 
---- The paths to sweep, from the argument or the embedded list.
+--- How fast the sweep may go, from nmap's own timing template.
+--
+-- @return paths per batch, seconds to wait between batches
+local function sweep_pace()
+  local ok, level = pcall(nmap.timing_level)
+  local pace = ok and type(level) == "number" and PACE_BY_TIMING[level]
+  pace = pace or DEFAULT_PACE
+  return pace[1], pace[2]
+end
+
+--- The paths to sweep, from the argument or the catalogue.
 --
 -- An operator who names a file means that file: a named file that yields
--- nothing stops the sweep rather than quietly substituting the embedded list,
+-- nothing stops the sweep rather than quietly substituting the catalogue list,
 -- which would send a scan somewhere it was told not to go.
 local function sweep_paths(paths_arg)
   local chosen
@@ -1976,8 +2026,12 @@ local function sweep_paths(paths_arg)
     chosen = catalog().paths
   end
 
-  -- Sorted and deduplicated, so scanning the same target twice requests the
-  -- same paths in the same order.
+  -- The catalogue's own order is load-bearing and the argument's is the
+  -- operator's, so neither is sorted. It used to be sorted alphabetically for
+  -- determinism, which a file already provides - and which threw away the one
+  -- thing the order carries: the paths most likely to answer are published
+  -- first, so a sweep that is cut short by a dead server has already asked its
+  -- best questions.
   local unique, seen = {}, {}
   for _, path in ipairs(chosen) do
     local text = type(path) == "string" and path or tostring(path)
@@ -1986,29 +2040,16 @@ local function sweep_paths(paths_arg)
       unique[#unique + 1] = text
     end
   end
-  table.sort(unique)
   return unique
 end
 
---- Request every path, keeping the ones a broken pipeline dropped.
+--- Request one slice of the path list, keeping what a broken pipeline dropped.
 --
 -- http.pipeline_go returns responses in queue order and stops as soon as the
 -- first request on a fresh connection fails, so one path a tarpit or a WAF
--- refuses costs every path queued behind it - and the queue is sorted, which
--- makes that deterministic rather than unlucky.
-local function fetch_paths(host, port, paths)
-  local options = {
-    header = {["Accept-Encoding"] = ACCEPT_ENCODING},
-    max_body_size = MAX_BODY_SIZE,
-    truncated_ok = true,
-  }
-  local responses = {}
-  local pending = {}
-
-  for index = 1, #paths do
-    pending[#pending + 1] = index
-  end
-
+-- refuses costs every path queued behind it. The rounds are what get those
+-- back.
+local function fetch_batch(host, port, paths, pending, options, responses)
   for _ = 1, MAX_FETCH_ROUNDS do
     if #pending == 0 then
       break
@@ -2040,6 +2081,41 @@ local function fetch_paths(host, port, paths)
     end
 
     pending = left
+  end
+end
+
+--- Request every path, at the rate nmap's timing template allows.
+--
+-- The whole list, always: asking less would find less. What -T changes is how
+-- many go out together and how long the sweep waits in between, so an operator
+-- who said "be quiet" gets a quiet sweep of the same list rather than a loud
+-- sweep of a shorter one.
+--
+-- stdnse.sleep yields to the script scheduler, so the wait costs this port's
+-- sweep time and nothing else: other hosts keep running through it.
+local function fetch_paths(host, port, paths)
+  local options = {
+    header = {["Accept-Encoding"] = ACCEPT_ENCODING},
+    max_body_size = MAX_BODY_SIZE,
+    truncated_ok = true,
+  }
+  local responses = {}
+  local batch_size, delay = sweep_pace()
+
+  local first = 1
+  while first <= #paths do
+    local last = math.min(first + batch_size - 1, #paths)
+    local pending = {}
+    for index = first, last do
+      pending[#pending + 1] = index
+    end
+
+    fetch_batch(host, port, paths, pending, options, responses)
+
+    first = last + 1
+    if first <= #paths and delay > 0 then
+      stdnse.sleep(delay)
+    end
   end
 
   return responses
@@ -2374,7 +2450,7 @@ end
 
 --- Go and ask a product that would not say, and read the version off the answer.
 --
--- Sent only when all three of these hold, which is what keeps a "safe" script
+-- Sent only when all three of these hold, which is what keeps a probing script
 -- from knocking on doors:
 --
 -- * a detector fired, so the product really is here;
@@ -3254,13 +3330,13 @@ local function port_action(host, port)
 
   -- The sweep is gated here rather than in the portrule, because the portrule
   -- must stay wide enough to look up a versioned SSH or MySQL port. Without
-  -- this gate, D4 read literally would fire a 125-path HTTP sweep at every
+  -- this gate, D4 read literally would fire the whole path sweep at every
   -- versioned SSH, SMTP and RDP port - measured at roughly 494 requests per
-  -- port once the retry rounds are counted - from a script claiming "safe".
-  -- shortport.http is "port number OR service name", so on the eleven likely
-  -- HTTP ports the number wins even when -sV positively identified something
-  -- else - and SSH on 8000 was swept with 125 requests by a script claiming
-  -- "safe". A service nmap named, that is not an HTTP one, is not swept.
+  -- port once the retry rounds are counted, on the 125-path list, and the list
+  -- is longer now. shortport.http is "port number OR service name", so on the
+  -- eleven likely HTTP ports the number wins even when -sV positively
+  -- identified something else - and SSH on 8000 was swept in full. A service
+  -- nmap named, that is not an HTTP one, is not swept.
   local named = as_string(port.service) or as_string(dig(port, "version", "name"))
   local misidentified = false
   if named then

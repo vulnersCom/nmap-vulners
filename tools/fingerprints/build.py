@@ -44,6 +44,7 @@ import normalize                                  # noqa: E402
 import sample                                     # noqa: E402
 from pcre2lua import (translate, literal_runs,     # noqa: E402
                       capture_can_hold_a_digit, Untranslatable)
+import paths as path_builder                      # noqa: E402
 import probes as probe_builder                    # noqa: E402
 from sources import legacy, nuclei, recog, wappalyzer  # noqa: E402
 
@@ -95,7 +96,7 @@ def write_catalog(path, payload):
 MIN_RETAINED = 0.80
 
 
-def refuse_to_shrink(out_path, fresh_count, sources_found, force):
+def refuse_to_shrink(out_path, fresh_count, sources_found, force, kind="rules"):
     """Stop before writing when this build looks like a mistake."""
     if force:
         return
@@ -115,13 +116,13 @@ def refuse_to_shrink(out_path, fresh_count, sources_found, force):
     except (OSError, ValueError):
         return
 
-    previous = len(existing.get("rules") or existing or {})
+    previous = len(existing.get(kind) or existing or {})
     if previous and fresh_count < previous * MIN_RETAINED:
         raise SystemExit(
-            "this build produces %d rules where the published catalogue has "
+            "this build produces %d %s where the published catalogue has "
             "%d. That is a %.0f%% loss, which is a missing source far more "
             "often than an intended edit. Pass --force if it is intended."
-            % (fresh_count, previous, 100 * (1 - fresh_count / previous)))
+            % (fresh_count, kind, previous, 100 * (1 - fresh_count / previous)))
 
 
 def gather(sources_dir, repo_root):
@@ -649,6 +650,8 @@ def main():
     parser.add_argument("--sources", required=True,
                         help="directory holding the upstream checkouts")
     parser.add_argument("--out", default="catalog/fingerprints.json")
+    parser.add_argument("--paths-out", default="catalog/paths.json",
+                        help="where the swept path list is written")
     parser.add_argument("--probes-out", default="catalog/probes.json",
                         help="where the targeted version probes are written")
     parser.add_argument("--force", action="store_true",
@@ -713,24 +716,53 @@ def main():
     print("            aliases:  %d distinct"
           % len({e["alias"] for e in entries.values()}))
 
-    # --- targeted version probes -------------------------------------------
+    # --- the swept paths ---------------------------------------------------
     alias_for, table_size = join_table(args.sources, entries, args.nmap_probes)
-    swept = set()
-    paths_file = os.path.join(args.root, "catalog", "paths.json")
-    if os.path.exists(paths_file):
-        with open(paths_file, encoding="utf-8") as handle:
-            swept = set(json.load(handle).get("paths") or [])
+
+    # Only an identity this catalogue can actually report. The sweep matches a
+    # response against the rules we ship, so a path for software we have no rule
+    # for is a request whose answer nothing can read.
+    shipped = {entry["alias"] for entry in entries.values()}
+
+    def recognisable(tokens):
+        alias = alias_for(tokens)
+        return alias if alias in shipped else None
+
+    candidates, trees = path_builder.load(args.sources, report)
+
+    # --- targeted version probes, chosen BEFORE the sweep -------------------
+    # A probe is conditional and the sweep is not, so where both could go to the
+    # same path the probe wins and the sweep leaves it alone.
     found, unjoined = nuclei.load(os.path.join(args.sources, "nuclei-templates"),
-                                  alias_for, swept)
+                                  alias_for, set(path_builder.ALWAYS))
+    wap_rules = wappalyzer.load(os.path.join(args.sources, "wappalyzer")) \
+        if os.path.isdir(os.path.join(args.sources, "wappalyzer")) else []
+    probe_entries = probe_builder.build(wap_rules, found, report)
+    owned_by_probe = {path for entry in probe_entries.values()
+                      for path in entry["paths"]}
+
+    swept_list, named = path_builder.select(
+        candidates, recognisable, report, exclude=owned_by_probe)
+    generic = len(path_builder.ALWAYS) + len(path_builder.front_pages())
+    print("\npaths")
+    print("  read        %5d source files over %d trees: %s"
+          % (sum(report["paths_read"].values()), trees, dict(report["paths_read"])))
+    print("  usable      %5d distinct paths after filtering (%d refused)"
+          % (len(candidates.by_path), sum(report["paths_refused"].values())))
+    print("  published   %5d: %d asked of every server, %d from the upstreams"
+          % (len(swept_list), generic, len(swept_list) - generic))
+    print("              %d of them belong to software this catalogue can name; "
+          "the rest are still worth a request for the headers they answer with"
+          % report["paths_kept"]["identities named"])
+    if report["paths_dropped"]:
+        print("  dropped     %s" % dict(report["paths_dropped"]))
+
     print("\nprobes")
     print("  join table  %5d product names carry a CPE from some catalogue"
           % table_size)
     print("  nuclei      %5d templates name a path and a version pattern; "
           "%d could be joined to an identity" % (len(found) + len(unjoined), len(found)))
 
-    wap_rules = wappalyzer.load(os.path.join(args.sources, "wappalyzer")) \
-        if os.path.isdir(os.path.join(args.sources, "wappalyzer")) else []
-    probe_entries = probe_builder.build(wap_rules, found, report)
     print("  built       %5d probes that can be triggered without a request"
           % len(probe_entries))
     for label in ("probe_no_detector", "probe_no_extractor",
@@ -777,6 +809,10 @@ def main():
         })
 
     refuse_to_shrink(args.out, len(entries), upstreams, args.force)
+    refuse_to_shrink(args.paths_out, len(swept_list), trees, args.force, "paths")
+
+    write_catalog(args.paths_out, {"schema": CATALOG_SCHEMA, "paths": swept_list})
+    print("wrote       %s" % args.paths_out)
 
     write_catalog(args.probes_out, {"schema": CATALOG_SCHEMA, "probes": probes})
     print("wrote       %s" % args.probes_out)

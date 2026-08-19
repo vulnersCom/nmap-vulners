@@ -73,11 +73,21 @@ jobs:
           git clone --depth 1 -q https://github.com/rapid7/recog.git /tmp/sources/recog
           git clone --depth 1 -q https://github.com/HTTPArchive/wappalyzer.git \
             /tmp/sources/wappalyzer
+          # The two that carry the swept paths. WhatWeb is the richest: 1 832
+          # plugins, 549 distinct :url probes, each attached to a named product.
+          # FingerprintHub contributes almost no paths - six non-root ones in
+          # 3 338 templates - but it is cloned anyway because that number is
+          # measured per rebuild rather than assumed, and because a shrinking
+          # path list is what the diff gate now refuses.
+          git clone --depth 1 -q https://github.com/urbanadventurer/WhatWeb.git \
+            /tmp/sources/WhatWeb
+          git clone --depth 1 -q https://github.com/0x727/FingerprintHub.git \
+            /tmp/sources/FingerprintHub
           git clone --depth 1 --filter=blob:none --sparse -q \
             https://github.com/projectdiscovery/nuclei-templates.git \
             /tmp/sources/nuclei-templates
           git -C /tmp/sources/nuclei-templates sparse-checkout set http/technologies
-          for repo in recog wappalyzer nuclei-templates; do
+          for repo in recog wappalyzer WhatWeb FingerprintHub nuclei-templates; do
             echo "$repo $(git -C /tmp/sources/$repo rev-parse --short HEAD)" \
               >> /tmp/upstream-revisions.txt
           done
