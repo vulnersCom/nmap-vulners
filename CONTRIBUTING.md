@@ -169,7 +169,7 @@ The workflow runs the gates first, then builds `.tar.gz` and `.zip` archives
 with `git archive` - so they hold exactly what a user downloads: `vulners.nse`,
 `catalog/*.json`, both installers, the README and the LICENSE, and nothing else:
 `.gitattributes` keeps the tests, the tools, the workflows and the README's
-653 KB demonstration out of it - writes
+695 KB demonstration out of it - writes
 `SHA256SUMS`, and publishes a release with generated notes.
 
 The catalogue ships in the archive even though nothing installs it and the

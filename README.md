@@ -27,9 +27,10 @@ Tomcat and the jQuery behind it.</sub>
 
 ## What it does
 
-One NSE script. It takes the software nmap identified, asks Vulners what is
-known about it, and prints the answer ranked so that the findings somebody is
-actually being attacked with come first.
+For every open port it looks up the software nmap identified - the CPEs that
+`-sV` produced - and prints what Vulners knows about it: worst first by what is
+being exploited rather than by score alone, and each row a link to the page
+behind it.
 
 On an HTTP port it also fingerprints the web stack itself, which names software
 `-sV` cannot see - an application framework, a CMS, the PHP version behind a
@@ -62,14 +63,14 @@ more. There is no mode switch.
 PORT      STATE SERVICE VERSION
 80/tcp    open  http    Apache httpd 2.4.7 ((Ubuntu))
 | vulners: cpe:/a:apache:http_server:2.4.7  272 findings, 56 exploitable
-|   SEVERITY  CVSS    AI  FLAGS    ID
-|   ========  ====  ====  =======  ====================================
-|   CRITICAL  10.0   8.8  EXP      3E6BA608-776F-5B1F-9BA5-589CD2A5A351
-|   CRITICAL   9.8   9.9  EXP      1337DAY-ID-39214
-|   CRITICAL   9.8   9.6  EXP      PACKETSTORM:171631
-|   CRITICAL   9.8   9.9           CVE-2021-44790
-|   CRITICAL   9.8   9.8           CVE-2023-25690
-|_  262 more not shown; -v shows all, -vv adds links and provenance
+|   SEVERITY  CVSS    AI  FLAGS    LINK
+|   ========  ====  ====  =======  ==============================================================
+|   CRITICAL  10.0   8.8  EXP      https://vulners.com/gitee/3E6BA608-776F-5B1F-9BA5-589CD2A5A351
+|   CRITICAL   9.8   9.9  EXP      https://vulners.com/zdt/1337DAY-ID-39214
+|   CRITICAL   9.8   9.6  EXP      https://vulners.com/packetstorm/PACKETSTORM:171631
+|   CRITICAL   9.8   9.9           https://vulners.com/cve/CVE-2021-44790
+|   CRITICAL   9.8   9.8           https://vulners.com/cve/CVE-2023-25690
+|_  262 more not shown; -v shows all, -vv adds where each was found
 ```
 
 With a key, the same scan of the same host answers differently - `KEV` means
@@ -78,14 +79,14 @@ published probability that it will be:
 
 ```
 | vulners: cpe:/a:apache:http_server:2.4.7  272 findings, 78 exploitable
-|   SEVERITY  CVSS  EPSS  FLAGS    ID
-|   ========  ====  ====  =======  ======================================
-|   CRITICAL   9.1  >99%  KEV EXP  CVE-2024-38475
-|   CRITICAL   9.1  >99%  KEV      CNVD-2024-36387
-|   CRITICAL   9.0  >99%  KEV EXP  CVE-2021-40438
-|   CRITICAL  10.0   99%  EXP      3E6BA608-776F-5B1F-9BA5-589CD2A5A351
-|   CRITICAL   9.8   97%  EXP      CVE-2021-44790
-|_  262 more not shown; -v shows all, -vv adds links and provenance
+|   SEVERITY  CVSS  EPSS  FLAGS    LINK
+|   ========  ====  ====  =======  ==============================================================
+|   CRITICAL   9.1  >99%  KEV EXP  https://vulners.com/cve/CVE-2024-38475
+|   CRITICAL   9.0  >99%  KEV EXP  https://vulners.com/cve/CVE-2021-40438
+|   CRITICAL   9.1  >99%  KEV      https://vulners.com/cnvd/CNVD-2024-36387
+|   CRITICAL  10.0   71%  EXP      https://vulners.com/gitee/3E6BA608-776F-5B1F-9BA5-589CD2A5A351
+|   CRITICAL   9.8   97%  EXP      https://vulners.com/cve/CVE-2021-44790
+|_  262 more not shown; -v shows all, -vv adds where each was found
 ```
 
 Same 272 findings, a different order, a different top row - and 22 more of them
@@ -115,7 +116,7 @@ that is a claim an absent field cannot support.
 | | |
 |---|---|
 | **Without a key** | Every CPE nmap found is looked up on the free endpoint. Findings, scores, exploit flags and Vulners' own AI score. No credits, no account |
-| **A key, no credits** | Each finding gains what the id endpoint knows: titles, links, dates, the exploit-to-CVE linkage, CISA KEV, and - depending on the licence - EPSS and SSVC |
+| **A key, no credits** | Each finding gains what the id endpoint knows: titles, dates, the upstream advisory or exploit page, the exploit-to-CVE linkage, CISA KEV, and - depending on the licence - EPSS and SSVC |
 | **A key, one credit** | Software the free path could not name at all is identified from its raw banner. This is the only thing here that costs anything, and only for a service with no CPE |
 
 A port that already carries a CPE never costs a credit: measured across four
@@ -307,8 +308,8 @@ shrinks; the rate does:
 
 All six measured in one run against the same local server. `-sV` alone against
 it is 6.1 s, so the sweep costs a second and a half at the default. The two slow
-rows are what `-T0` and `-T1` are for rather than a surprise: 188 and 94 batches
-with a deliberate wait between each.
+rows are `-T0` and `-T1` doing their job: 188 and 94 batches, with a deliberate
+wait between each.
 
 The requests are pipelined over 34-48 connections with at most four open at
 once, which is nselib's `pipeline_go` - the same machinery nmap's own
@@ -374,25 +375,32 @@ nmap2csv and raven read:
       <elem key="exploitation">active</elem>
       <elem key="title">Apache HTTP Server SSRF in mod_proxy</elem>
       <elem key="href">https://vulners.com/cve/CVE-2021-40438</elem>
+      <elem key="source_href">https://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2021-40438</elem>
     </table>
   </table>
 </script>
 ```
 
 New in 2.0: `schema`, `mode`, `severity`, `exploit_known`, `kev`, `epss`,
-`epss_percentile`, `exploitation`, `ai_score`, `title`, `published`, `href` and
-`found_on`. Every one is present-or-absent, never empty. Nothing is nested more
-deeply than before, because a third table level is invisible to every importer
-examined.
+`epss_percentile`, `exploitation`, `ai_score`, `title`, `published`, `href`,
+`source_href` and `found_on`. Every one is present-or-absent, never empty.
+Nothing is nested more deeply than before, because a third table level is
+invisible to every importer examined.
+
+`href` is always the vulners.com page for the finding, in both modes. The
+endpoint's own `href` is the **upstream** address - nvd.nist.gov for a CVE,
+github.com for a scraped exploit - and that travels separately, as
+`source_href`, so neither field's meaning depends on which mode produced it.
 
 The structured output always carries every finding that passed `mincvss`, even
 the ones the verbosity ladder hides from the text - so no automation loses
 findings by not passing `-v`.
 
-**The rendered text is a break.** The `*EXPLOIT*` and `*HAS EXPLOIT*` tokens,
-the per-row vulners.com URL and the tab-delimited layout are gone, replaced by
-the aligned table above. Text-scraping consumers need updating; `-oX` consumers
-do not.
+**The rendered text is a break.** The `*EXPLOIT*` and `*HAS EXPLOIT*` tokens
+and the tab-delimited layout are gone, replaced by the aligned table above. The
+per-row vulners.com link stayed: it is the last column, and it is the one cell
+the layout will not shorten, because half a URL is not a URL. Text-scraping
+consumers need updating; `-oX` consumers do not.
 
 ## Scanning politely
 
@@ -425,7 +433,7 @@ python3 tools/fingerprints/selftest.py
 python3 tools/catalog_diff.py --selftest
 ```
 
-266 unit cases run inside nmap against the real NSE libraries; 60 end-to-end
+270 unit cases run inside nmap against the real NSE libraries; 60 end-to-end
 cases drive the real nmap binary against a local web server and a stand-in
 Vulners API that enforces what the real one enforces; the hygiene gate keeps
 secrets, scan output and editor clutter out of the tree and refuses a global

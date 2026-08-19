@@ -30,7 +30,8 @@ end
 local function finding(T, opts)
   return {
     id = opts.id or "CVE-2021-41773",
-    type = "cve",
+    type = opts.type or "cve",
+    href = opts.href,
     cvss = opts.cvss,
     severity = T.severity_of(opts.cvss),
     epss = opts.epss,
@@ -47,6 +48,21 @@ local function widest(text)
   local worst = 0
   for line in (text .. "\n"):gmatch("([^\n]*)\n") do
     worst = math.max(worst, #line + NMAP_PREFIX)
+  end
+  return worst
+end
+
+--- The same, ignoring the last column.
+--
+-- The last column is the link, and a link is the one cell the layout may not
+-- shorten: half a URL is not a URL. Every other column still has to fit the
+-- width it was given, and that is what this measures. Columns are separated by
+-- two spaces and no link contains one, so the final token is the link - or,
+-- on the two heading lines, the word LINK and its rule.
+local function widest_without_link(text)
+  local worst = 0
+  for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+    worst = math.max(worst, #(line:gsub("%s%s%S+$", "")) + NMAP_PREFIX)
   end
   return worst
 end
@@ -77,34 +93,119 @@ suite[#suite + 1] = {
     for _, width in ipairs({40, 60, 80, 100, 200}) do
       for _, shape in ipairs(shapes) do
         local text = T.render_rows(shape[2], width, 1)
-        local measured = widest(text)
+        local measured = widest_without_link(text)
         t.is_true(measured <= width, string.format(
-          "%s at width %d rendered %d columns", shape[1], width, measured))
+          "%s at width %d rendered %d columns before the link",
+          shape[1], width, measured))
+        for _, row in ipairs(shape[2]) do
+          local link = "https://vulners.com/cve/" .. row.id
+          t.is_true(text:find(link, 1, true) ~= nil, string.format(
+            "%s at width %d cut the link to %s", shape[1], width, row.id))
+        end
       end
     end
   end,
 }
 
 suite[#suite + 1] = {
-  name = "a narrow terminal drops the numeric column rather than overflowing",
+  name = "every row carries its vulners.com page, and never the upstream one",
   fn = function()
     local T = load()
-    local rows = {finding(T, {id = UUID, cvss = 9.8, epss = 0.94,
-                              kev = true, exploit = true})}
+    -- What the enrich endpoint really answers: href is the SOURCE, measured as
+    -- web.nvd.nist.gov for a cve and www.exploit-db.com for an exploitdb entry.
+    -- The table is a Vulners report and links to Vulners; the upstream address
+    -- travels in the XML instead, under a name that says which it is.
+    local rows = {
+      finding(T, {id = "CVE-2021-40438", cvss = 9.8,
+                  href = "https://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2021-40438"}),
+      finding(T, {id = "EDB-ID:45233", type = "exploitdb", cvss = 7.5,
+                  href = "https://www.exploit-db.com/exploits/45233"}),
+    }
 
-    -- 40 is the narrowest width the arguments allow. Keeping EPSS there used to
-    -- produce a 47-column line: the id column has a floor, so something has to
-    -- give, and the column carrying the least is the one that gives.
-    local narrow = T.render_rows(rows, 40, 1)
-    t.is_true(widest(narrow) <= 40, "the 40-column table overflowed")
-    t.is_nil(narrow:match("EPSS"), "EPSS should be dropped, not squeezed")
-    t.is_true(narrow:find("KEV EXP", 1, true) ~= nil,
+    local text = T.render_rows(rows, 100, 1)
+    t.is_true(text:find("https://vulners.com/cve/CVE-2021-40438", 1, true) ~= nil,
+      "the cve row must link to its vulners page")
+    t.is_true(text:find("https://vulners.com/exploitdb/EDB-ID:45233", 1, true) ~= nil,
+      "the type is the path segment, so an exploit links to the exploit page")
+    t.is_nil(text:match("nvd%.nist%.gov"), "the upstream link is not the report's")
+    t.is_nil(text:match("exploit%-db%.com"), "nor is the exploit's own")
+    t.matches(text, "LINK", "the column says what it holds")
+    t.is_nil(text:match("  ID%f[%W]"), "and the bare id column is gone")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a link is printed whole at every width, or it is not a link",
+  fn = function()
+    local T = load()
+    local rows = {finding(T, {id = UUID, type = "githubexploit", cvss = 9.8,
+                              epss = 0.94, kev = true, exploit = true})}
+    local link = "https://vulners.com/githubexploit/" .. UUID
+
+    for _, width in ipairs({40, 60, 80, 100, 200}) do
+      local text = T.render_rows(rows, width, 1)
+      t.is_true(text:find(link, 1, true) ~= nil,
+        string.format("width %d cut a %d-character link", width, #link))
+      t.is_nil(text:match("~"), "a clipped link would leave the clip mark")
+    end
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "-vv adds where an identity was found, and no second copy of the link",
+  fn = function()
+    local T = load()
+    local rows = {finding(T, {id = "CVE-2021-41773", cvss = 9.8})}
+    rows[1].found_on = "http://10.0.0.1:8080/CHANGELOG.txt"
+
+    local quiet = T.render_rows(rows, 100, 1)
+    t.is_nil(quiet:match("found on"), "provenance is a -vv detail, not a default")
+
+    local loud = T.render_rows(rows, 100, 3)
+    t.matches(loud, "found on http://10%.0%.0%.1:8080/CHANGELOG%.txt",
+      "-vv says which request produced the identity")
+
+    -- The link used to be printed here as well. It is a column now, so a second
+    -- copy would be one line of noise per finding.
+    local _, links = loud:gsub("https://vulners%.com/cve/CVE%-2021%-41773", "")
+    t.equals(links, 1, "the link appears once, in its column")
+
+    -- A row nobody swept has nothing to say, and says nothing.
+    local bare = {finding(T, {id = "CVE-2021-34798", cvss = 7.5})}
+    t.is_nil(T.render_rows(bare, 100, 3):match("found on"),
+      "a row with no provenance must not print an empty line for it")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "the numeric column gives way exactly when that is what makes it fit",
+  fn = function()
+    local T = load()
+
+    -- An id sized so that its link fits at 80 columns without the numeric
+    -- column and not with it: 24 characters of "https://vulners.com/cve/" plus
+    -- 23 is 47, and the room is 43 with EPSS and 49 without. The column
+    -- carrying the least is the one that gives.
+    local rows = {finding(T, {id = "CVE-2021-41773-0000-001", cvss = 9.8,
+                              epss = 0.94, kev = true, exploit = true})}
+    local squeeze = T.render_rows(rows, 80, 1)
+    t.is_true(widest(squeeze) <= 80, "the 80-column table overflowed")
+    t.is_nil(squeeze:match("EPSS"), "EPSS should be dropped, not squeezed")
+    t.is_true(squeeze:find("KEV EXP", 1, true) ~= nil,
       "the flags are what the table is for and must survive")
 
     -- With room, it comes back.
-    local wide = T.render_rows(rows, 80, 1)
+    local wide = T.render_rows(rows, 100, 1)
     t.is_true(wide:find("EPSS", 1, true) ~= nil,
       "EPSS should be present when there is room for it")
+
+    -- And a link that fits at neither width keeps it: dropping the column buys
+    -- nothing there, and the operator loses a number for no gain.
+    local long = {finding(T, {id = UUID, type = "githubexploit", cvss = 9.8,
+                              epss = 0.94, kev = true, exploit = true})}
+    local kept = T.render_rows(long, 80, 1)
+    t.is_true(kept:find("EPSS", 1, true) ~= nil,
+      "EPSS is kept when dropping it would not make the link fit")
   end,
 }
 

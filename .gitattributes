@@ -17,7 +17,7 @@
 tests/fixtures/paths_crlf.txt -text
 
 # Test and CI infrastructure is not part of the release tarball users download,
-# and neither is the README's demonstration: docs/demo.gif is 653 KB against a
+# and neither is the README's demonstration: docs/demo.gif is 695 KB against a
 # 260 KB archive, and it exists to be rendered on GitHub rather than unpacked.
 /.github         export-ignore
 /docs            export-ignore

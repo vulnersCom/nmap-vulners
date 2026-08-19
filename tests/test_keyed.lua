@@ -739,9 +739,9 @@ suite[#suite + 1] = {
     t.is_nil(plain[CPE][1].cvss, "and it must carry no score")
     t.equals(plain[CPE][1].severity, "Unknown",
       "severity is emitted on every row, unlike cvss")
-    -- Nothing but whitespace between the severity word and the id means the
+    -- Nothing but whitespace between the severity word and the link means the
     -- CVSS column was left blank rather than filled with a fabricated 0.0.
-    t.matches(text, "Unknown%s+VULNERS:UNSCORED")
+    t.matches(text, "Unknown%s+https://vulners%.com/cve/VULNERS:UNSCORED")
   end,
 }
 
@@ -767,7 +767,7 @@ suite[#suite + 1] = {
     t.equals(plain[CPE][2].id, "CVE-2023-38408", "the cve itself stays in the report")
     -- O5: *EXPLOIT* and *HAS EXPLOIT* are gone; the marker is a fixed-width
     -- token in the FLAGS column.
-    t.matches(text, "EXP%s+F0979183", "the user must see the exploit marker")
+    t.matches(text, "EXP%s+https://vulners%.com/githubexploit/F0979183", "the user must see the exploit marker")
   end,
 }
 
@@ -796,8 +796,51 @@ suite[#suite + 1] = {
     t.equals(rows["CVE-2023-38408"].kev, "true",
       "CISA listed the CVE, and the listing rode in on the exploit record")
     t.equals(rows["CVE-2023-38408"].exploit_known, "true")
-    t.matches(text, "KEV EXP  CVE%-2023%-38408",
+    t.matches(text, "KEV EXP  https://vulners%.com/cve/CVE%-2023%-38408",
       "both flags share one greppable column")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "href is the vulners page and the endpoint's own href travels beside it",
+  fn = function()
+    -- Measured against the live service: the enrich endpoint's href is the
+    -- UPSTREAM address - web.nvd.nist.gov for a cve, www.exploit-db.com for an
+    -- exploitdb entry - and the free endpoint sends no href at all, on any of
+    -- 272 rows for one real CPE. Publishing that under href would have made the
+    -- meaning of the field depend on which mode produced the report.
+    local env, http = keyed()
+    serve(http, {
+      software = {[CPE] = {
+        bulletin({id = "CVE-2023-38408", cvss = 9.8}),
+        bulletin({id = "EDB-ID:45233", type = "exploitdb", family = "exploit"}),
+      }},
+      docs = {
+        ["CVE-2023-38408"] = {
+          id = "CVE-2023-38408", type = "cve", bulletinFamily = "NVD",
+          href = "https://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2023-38408",
+        },
+        ["EDB-ID:45233"] = {
+          id = "EDB-ID:45233", type = "exploitdb", bulletinFamily = "exploit",
+          href = "https://www.exploit-db.com/exploits/45233",
+        },
+      },
+    })
+
+    local output, text = env.action(t.host(), port_with_cpe())
+    local rows = by_id(t.collect_output(output)[CPE])
+
+    t.equals(rows["CVE-2023-38408"].href, "https://vulners.com/cve/CVE-2023-38408",
+      "href is the vulners page, composed from the type and the id")
+    t.equals(rows["CVE-2023-38408"].source_href,
+      "https://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2023-38408",
+      "and what the endpoint called href is published as what it is")
+    t.equals(rows["EDB-ID:45233"].href, "https://vulners.com/exploitdb/EDB-ID:45233",
+      "the same for an exploit, whose page is under its own type")
+
+    t.matches(text, "https://vulners%.com/cve/CVE%-2023%-38408",
+      "the rendered table links to vulners, on every row")
+    t.is_nil(text:match("nvd%.nist%.gov"), "and never to the upstream page")
   end,
 }
 

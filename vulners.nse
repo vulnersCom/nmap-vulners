@@ -49,7 +49,7 @@ came from.
 --       on a network that cannot reach raw.githubusercontent.com.
 -- @args vulners.width Terminal width the table is laid out for. Defaults to 80.
 -- @args vulners.max_items Ceiling on billed items for the whole scan.
--- @args vulners.api_key API token. Note that nmap copies its own command line
+-- @args vulners.api_key API token. Leaky: nmap copies its own command line
 --       into -oX, so a key passed this way lands in the report.
 -- @args vulners.api_key_file Absolute path to a file whose first line is the token.
 -- @args vulners.api_host Domain name of the vulners API. Defaults to vulners.com.
@@ -58,12 +58,13 @@ came from.
 -- @output
 -- 80/tcp open  http    Apache httpd 2.4.7 ((Ubuntu))
 -- | vulners: cpe:/a:apache:http_server:2.4.7  272 findings, 78 exploitable
--- |   SEVERITY  CVSS  EPSS  FLAGS    ID
--- |   ========  ====  ====  =======  ====================================
--- |   CRITICAL   9.1  >99%  KEV EXP  CVE-2024-38475
--- |   CRITICAL   9.1  >99%  KEV      CNVD-2024-36387
--- |   CRITICAL   9.0  >99%  KEV EXP  CVE-2021-40438
--- |_  262 more, ranked below these; -v shows all, -vv adds links and provenance
+-- |   SEVERITY  CVSS  EPSS  FLAGS    LINK
+-- |   ========  ====  ====  =======  ==============================================================
+-- |   CRITICAL   9.1  >99%  KEV EXP  https://vulners.com/cve/CVE-2024-38475
+-- |   CRITICAL   9.0  >99%  KEV EXP  https://vulners.com/cve/CVE-2021-40438
+-- |   CRITICAL   9.1  >99%  KEV      https://vulners.com/cnvd/CNVD-2024-36387
+-- |   CRITICAL  10.0   71%  EXP      https://vulners.com/gitee/3E6BA608-776F-5B1F-9BA5-589CD2A5A351
+-- |_  262 more not shown; -v shows all, -vv adds where each was found
 --
 -- @xmloutput
 -- <elem key="schema">2.0</elem>
@@ -79,6 +80,7 @@ came from.
 --     <elem key="kev">true</elem>
 --     <elem key="epss">0.94</elem>
 --     <elem key="href">https://vulners.com/cve/CVE-2021-41773</elem>
+--     <elem key="source_href">https://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2021-41773</elem>
 --   </table>
 -- </table>
 
@@ -3249,6 +3251,18 @@ local function columns_for(rows)
   return has
 end
 
+--- The vulners.com page for one finding.
+--
+-- Composed, never read off the response. The enrich endpoint does return an
+-- href and it is the UPSTREAM source, not a vulners.com page: measured, it
+-- answers web.nvd.nist.gov for a cve, github.com for a githubexploit,
+-- 0day.today for a zdt and rapid7.com for a metasploit module. The free
+-- endpoint sends no href at all - 272 of 272 rows on one real CPE. The format
+-- below is the one nmap's own shipped 1.x copy of this script prints.
+local function vulners_link(row)
+  return string.format("https://vulners.com/%s/%s", row.type or "bulletin", row.id)
+end
+
 --- The FLAGS cell: fixed-width tokens, greppable, its own legend.
 local function flags_of(row)
   local flags = {}
@@ -3333,24 +3347,24 @@ local function render_rows(rows, width, verbosity)
   -- design forbids, and 56 of 100 columns spent saying nothing.
   local has = columns_for(shown)
 
-  -- The id column never goes below this: an id shortened past it says nothing.
-  local MIN_ID = 8
+  -- A link is atomic: it cannot be folded and cutting it produces something
+  -- that is no longer a link. It is bounded all the same, because the id inside
+  -- it is unvalidated response data - measured across 272 real findings on one
+  -- CPE, a vulners.com link runs 36 to 78 characters, so anything past this is
+  -- pathological and clipping is then the lesser evil.
+  local MAX_LINK = 120
 
-  local longest_id = 0
+  local links = {}
+  local longest_link = 0
   for _, row in ipairs(shown) do
-    longest_id = math.max(longest_id, #row.id)
+    local link = ascii(vulners_link(row), MAX_LINK)
+    links[row] = link
+    longest_link = math.max(longest_link, #link)
   end
 
   -- Two for nmap's own "| " prefix, two for the indent, two between columns.
-  --
-  -- The optional numeric column is dropped rather than allowed to push the
-  -- table past the width: at 40 columns - the narrowest the arguments allow -
-  -- keeping it produced a 47-column line, so the promise to fit was quietly
-  -- broken by the one column that carries the least.
-  local header, widths, drop_numeric, used
-  for _, without in ipairs({false, true}) do
-    drop_numeric = without
-    header, widths = {"SEVERITY", "CVSS"}, {8, 4}
+  local function measure(without)
+    local header, widths = {"SEVERITY", "CVSS"}, {8, 4}
     if not without then
       if has.epss then
         header[#header + 1] = "EPSS"
@@ -3363,28 +3377,38 @@ local function render_rows(rows, width, verbosity)
     header[#header + 1] = "FLAGS"
     widths[#widths + 1] = 7
 
-    used = 4
+    local used = 4
     for _, w in ipairs(widths) do
       used = used + w + 2
     end
-    if width - used - 2 >= MIN_ID then
-      break
+    return header, widths, used
+  end
+
+  -- The optional numeric column is dropped when dropping it is what makes the
+  -- table fit: at 40 columns - the narrowest the arguments allow - keeping it
+  -- produced a 47-column line, so the promise to fit was quietly broken by the
+  -- one column that carries the least. It is NOT dropped for a link too long to
+  -- fit either way, because losing EPSS buys nothing there.
+  local header, widths, used = measure(false)
+  local drop_numeric = false
+  if width - used - 2 < longest_link then
+    local plain_header, plain_widths, plain_used = measure(true)
+    if width - plain_used - 2 >= longest_link then
+      header, widths, used, drop_numeric = plain_header, plain_widths, plain_used, true
     end
   end
 
-  local room = width - used - 2
-  local id_width = math.max(MIN_ID, math.min(longest_id, room))
-
-  header[#header + 1] = "ID"
-  widths[#widths + 1] = id_width
-
-  local title_width = width - used - id_width - 2
+  local title_width = width - used - longest_link - 2
   if has.title and title_width >= 16 then
     header[#header + 1] = "TITLE"
     widths[#widths + 1] = title_width
   else
     title_width = nil
   end
+
+  header[#header + 1] = "LINK"
+  widths[#widths + 1] = longest_link
+
   local show_epss = has.epss and not drop_numeric
   local show_ai = has.ai and not has.epss and not drop_numeric
 
@@ -3433,25 +3457,18 @@ local function render_rows(rows, width, verbosity)
       cells[#cells + 1] = row.ai_score and string.format("%.1f", row.ai_score) or ""
     end
     cells[#cells + 1] = flags_of(row)
-    cells[#cells + 1] = ascii(row.id, id_width)
     if title_width then
       cells[#cells + 1] = ascii(row.title or "", title_width)
     end
+    cells[#cells + 1] = links[row]
     lines[#lines + 1] = row_text(cells)
 
-    if verbosity >= 3 then
-      -- Folded like every other cell. These two were the only response values
-      -- reaching the terminal raw: a newline inside href printed a second line
-      -- of script output that nmap prefixes exactly like a real finding, so the
-      -- API could forge rows in the human report.
-      local href = ascii(row.href or
-        string.format("https://vulners.com/%s/%s", row.type or "bulletin", row.id),
-        math.max(20, width - 8))
-      local provenance = ""
-      if row.found_on then
-        provenance = "  found on " .. ascii(row.found_on, 40)
-      end
-      lines[#lines + 1] = "      " .. href .. provenance
+    if verbosity >= 3 and row.found_on then
+      -- Folded like every other cell. This was one of the two response values
+      -- that reached the terminal raw: a newline inside it printed a second
+      -- line of script output that nmap prefixes exactly like a real finding,
+      -- so the API could forge rows in the human report.
+      lines[#lines + 1] = "      found on " .. ascii(row.found_on, 40)
     end
   end
 
@@ -3460,7 +3477,7 @@ local function render_rows(rows, width, verbosity)
     -- deliberately hides rows that outrank ones it shows, so the sentence told
     -- the operator the opposite of what happened.
     local footer = string.format("  %d more not shown; -v shows all", hidden)
-    local full = footer .. ", -vv adds links and provenance"
+    local full = footer .. ", -vv adds where each was found"
     if #full + 2 <= width then
       footer = full
     end
@@ -3529,8 +3546,15 @@ local function report_row(row)
   if published ~= "" then
     element.published = published
   end
-  element.href = ascii(row.href or
-    string.format("https://vulners.com/%s/%s", row.type or "bulletin", row.id), 300)
+  element.href = ascii(vulners_link(row), 300)
+  -- The upstream page, when the endpoint named one. Kept apart from href
+  -- because they are different things: href has always been documented as the
+  -- vulners.com page, and the free endpoint has no source link to publish, so
+  -- letting one field mean either would make its meaning depend on the mode.
+  local source = ascii(row.href, 300)
+  if source ~= "" then
+    element.source_href = source
+  end
   local found_on = ascii(row.found_on, 120)
   if found_on ~= "" then
     element.found_on = found_on
@@ -4184,8 +4208,8 @@ local function post_action()
   -- Deliberately unspecific about which fields a key adds: what comes back
   -- depends on the licence behind it, and a notice promising EPSS to somebody
   -- whose licence withholds it would have lied.
-  lines[#lines + 1] = "  A key adds more detail per finding - exploitation status, titles,"
-  lines[#lines + 1] = "  links and dates - and can identify software this scan could not name"
+  lines[#lines + 1] = "  A key adds more detail per finding - exploitation status, titles"
+  lines[#lines + 1] = "  and dates - and can identify software this scan could not name"
   if shared.unnamed > 0 then
     lines[#lines + 1] = string.format(
       "  (%d service%s here showed a banner that produced no usable identity).",
