@@ -3044,19 +3044,28 @@ end
 
 -- ---------------------------------------------------------------- rules
 
---- The union of what the three 1.x rules admitted.
+--- The union of what the three 1.x rules admitted, plus the banner.
 --
--- Neither half reproduces today's coverage alone: probed against real
--- listeners, shortport.http matches 8080 and 8443 where the version clause is
--- false, and the version clause matches ssh and mysql where shortport.http is
--- false. The registry clause keeps working for anything that seeded CPEs
--- before this script ran.
+-- No clause reproduces today's coverage alone: probed against real listeners,
+-- shortport.http matches 8080 and 8443 where the version clause is false, and
+-- the version clause matches ssh and mysql where shortport.http is false. The
+-- registry clause keeps working for anything that seeded CPEs before this
+-- script ran.
+--
+-- The service_fp clause is the banner channel's, and without it that channel
+-- was dead where it was meant to pay. nmap records a service fingerprint
+-- exactly when its own probes did NOT settle the service - measured against a
+-- listener greeting with an unrecognised banner, nmap hands the script a
+-- 2 209-byte service_fp and leaves name, product, version and cpe all empty. So
+-- every other clause is false precisely on the ports the banner rules were
+-- imported for, and a keyed scan never reached audit/smart for them either:
+-- both features were unreachable through the front door.
 portrule = function(host, port)
   if shortport.http(host, port) then
     return true
   end
   local version = port.version
-  if version and version.version ~= nil then
+  if version and (version.version ~= nil or version.service_fp ~= nil) then
     return true
   end
   local found = host.registry.vulners_cpe

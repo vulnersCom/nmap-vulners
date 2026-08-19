@@ -29,6 +29,7 @@ import json
 import os
 import re
 import socket
+import socketserver
 import subprocess
 import sys
 import tempfile
@@ -209,6 +210,45 @@ class ApacheTargetHandler(Recording):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+
+class BannerTarget(socketserver.BaseRequestHandler):
+    """A TCP service that greets, and that nmap cannot name.
+
+    Not HTTP, and deliberately nothing nmap's own probe database recognises: the
+    banner channel exists for exactly this port. nmap records a service
+    fingerprint when its probes did NOT settle the service, and the shipped
+    catalogue carries a recog rule that reads this greeting.
+    """
+
+    greeting = b"welcome\r\nPowerDNS Authoritative Server 4.5.2-1\r\n"
+
+    def handle(self):
+        # Greet and hang up. A listener that holds the connection open makes
+        # nmap wait out every one of its two dozen probes: measured at 93.2 s
+        # for this one port against 0.1 s here, with the same fingerprint
+        # recorded either way. Plenty of real banner services close on a
+        # command they do not understand.
+        try:
+            self.request.sendall(self.greeting)
+        except OSError:
+            pass
+
+
+def serve_tcp(handler):
+    """Start a raw TCP listener in a daemon thread; return its port."""
+    for attempt in range(5):
+        try:
+            server = socketserver.ThreadingTCPServer(("127.0.0.1", free_port()),
+                                                     handler)
+        except OSError:
+            if attempt == 4:
+                raise
+            continue
+        server.daemon_threads = True
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        return server.server_address[1]
+    raise AssertionError("unreachable")
 
 
 class CatalogHandler(Recording):
@@ -1055,6 +1095,39 @@ def check_writes_nothing(world):
                     f"appeared: {sorted(set(after) - set(before))}")
 
 
+def check_banner_port(world):
+    """A port nmap could not name is identified from its banner alone.
+
+    Three things at once, and none of them had an end-to-end guard: that the
+    portrule admits a port whose only identity is a service fingerprint, that
+    the banner rules are matched line by line against it, and that the identity
+    reaches both the report and the free lookup. Measured before the portrule
+    was widened: nmap recorded a 2 209-byte fingerprint, every clause of the
+    portrule was false, and the script never ran on the port at all.
+    """
+    banner_port = serve_tcp(BannerTarget)
+
+    output = run_nmap([
+        "-Pn", "-sV", "-p", str(banner_port),
+        "--script", script("vulners.nse"),
+        "--script-args", vulners_args(world.api_port),
+        "127.0.0.1",
+    ])
+
+    # The group heading is trimmed to the table width, so the version may be
+    # cut off it; the identity is what this asserts on.
+    world.check("cpe:/a:powerdns:authoritative_server" in output,
+                "a service nmap cannot name is identified from its banner",
+                output[-1500:])
+    world.check(CANNED_VULN_ID in output,
+                "and that identity is looked up like any other", output[-1500:])
+
+    asked = [q.get("software", "") for q in world.api.burp_queries]
+    world.check(any("powerdns" in q for q in asked),
+                "the banner identity reaches the free endpoint",
+                str(asked[:5]))
+
+
 def check_catalogue_is_fetched_once(world):
     """However many ports answer, the catalogue is downloaded once.
 
@@ -1195,6 +1268,7 @@ OFFLINE_CHECKS = [
     check_catalogue_can_be_refused,
     check_unreachable_catalogue,
     check_catalogue_is_fetched_once,
+    check_banner_port,
 ]
 
 

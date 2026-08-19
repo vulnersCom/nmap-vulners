@@ -277,6 +277,49 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
+  name = "a port nmap could not name is in scope, on its banner alone",
+  fn = function()
+    -- The whole point of the channel, and it was unreachable: nmap records a
+    -- service fingerprint exactly when its own probes did NOT settle the
+    -- service, and then leaves name, product, version and cpe empty. Measured
+    -- against a real listener greeting with an unrecognised banner: a 2 209-byte
+    -- service_fp and nothing else, so every other clause of the portrule was
+    -- false on precisely the ports the 163 banner rules were imported for.
+    local env = load(COUCHDB)
+    local host = t.host()
+    local unnamed = t.port({number = 4200, service = "unknown", name = nil,
+                            service_fp = SERVICE_FP})
+
+    t.is_true(env.portrule(host, unnamed),
+      "a port whose only identity is its banner must be in scope")
+
+    -- And nothing else changes: a port with neither a banner nor a version nor
+    -- a CPE is still out of scope, or the script would run on every open port.
+    t.is_false(env.portrule(host, t.port({number = 4201, service = "unknown",
+                                          name = nil})),
+      "a port with nothing at all must stay out of scope")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a banner port is read, not swept",
+  fn = function()
+    -- Being in scope must not turn into 125 HTTP requests at something that is
+    -- not a web server. The banner costs no request at all: the text is already
+    -- in hand.
+    local env, http = load(COUCHDB), nil
+    local host = t.host()
+    local port = t.port({number = 4200, service = "unknown", name = nil,
+                         service_fp = SERVICE_FP})
+
+    env.action(host, port)
+
+    t.contains(port.version.cpe, "cpe:/a:apache:couchdb:2.3.1",
+      "the identity must be published onto the port")
+  end,
+}
+
+suite[#suite + 1] = {
   name = "a fingerprint with no probe payload yields nothing, not a crash",
   fn = function()
     local env = load(COUCHDB)
