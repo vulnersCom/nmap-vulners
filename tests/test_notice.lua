@@ -268,6 +268,61 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
+  name = "a key file that cannot be read is named, and not called a missing key",
+  fn = function()
+    -- The whole run stops on it - port_action returns nothing for every port -
+    -- and that was said only to stdnse.verbose1. Without -v the scan produced
+    -- an empty report and this notice, which offered a free key to somebody who
+    -- already has one and mistyped its path. Measured on a live scan: 272
+    -- findings with no key at all, none whatever with an unreadable one.
+    local text = notice(nil, {
+      args = {["vulners.api_key_file"] = "/no/such/key.txt"},
+    })
+
+    t.is_true(text ~= nil, "an operator error must not be silent")
+    t.matches(text, "Nothing was looked up")
+    t.matches(text, "/no/such/key%.txt", "the path it could not read is the fix")
+    t.is_nil(text:find("Get a free key"),
+      "offering a key to somebody who has one points at the wrong repair")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a paths file that stopped the sweep is said once, at the end",
+  fn = function()
+    -- Same class of fact as the catalogue note, and it had the same problem:
+    -- the sweep requested nothing and the reason was only at -v, so a typo in
+    -- a path list read as a web stack with nothing to find.
+    local text = notice(function(shared)
+      shared.sweep_note = "the paths file /no/such/list.txt could not be " ..
+        "read, so no web fingerprinting was done"
+    end)
+
+    -- Matched in pieces: the note is wrapped to fit a terminal, so any phrase
+    -- long enough to be worth asserting on may have a newline in it.
+    t.matches(text, "/no/such/list%.txt")
+    t.matches(text, "fingerprinting")
+    t.matches(text, "Ran without an API key",
+      "and it must not replace what the notice already said")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a keyed scan with nothing else to say still reports the sweep",
+  fn = function()
+    -- The branch that returns silence. A keyed scan says nothing at all unless
+    -- something it was asked to do did not run.
+    local text = notice(function(shared)
+      shared.mode = "keyed"
+      shared.sweep_note = "the paths file /no/such/list.txt could not be read"
+    end, {token = "FAKE-NOTICE-KEY"})
+
+    t.is_true(text ~= nil, "a sweep that did not run is never silent")
+    t.matches(text, "could not be read")
+  end,
+}
+
+suite[#suite + 1] = {
   name = "every line of the notice is indented under nmap's own prefix",
   fn = function()
     -- nmap prefixes the first line with "| vulners: " and the rest with "|_",
@@ -275,6 +330,7 @@ suite[#suite + 1] = {
     local text = notice(function(shared)
       shared.unnamed = 2
       shared.catalog_note = "the catalogue is off (vulners.catalog=none)"
+      shared.sweep_note = "the paths file /no/such/list.txt could not be read"
     end)
 
     for line in (text .. "\n"):gmatch("([^\n]*)\n") do

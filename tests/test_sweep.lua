@@ -888,8 +888,8 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a named paths file that cannot be read stops the sweep",
   fn = function()
-    -- An operator who names a file means that file; quietly falling back to the
-    -- embedded 125 paths sends the scan where it was told not to go.
+    -- An operator who names a file means that file; quietly falling back to
+    -- the catalogue's paths sends the scan where it was told not to go.
     local missing = testdir .. "/fixtures/no_such_paths_file.txt"
     local env, http = load({paths = missing, files = {}})
     always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
@@ -897,6 +897,12 @@ suite[#suite + 1] = {
     env.action(t.host(), t.port())
 
     t.length(http.requests, 0, "nothing may be requested")
+    -- And the operator has to be able to tell that from a web stack with
+    -- nothing to find. This was reported only to stdnse.verbose1, so without
+    -- -v a typo in the path list was indistinguishable from a clean sweep.
+    local note = env._TEST.state().sweep_note
+    t.is_true(note ~= nil, "the reason must survive into the scan-wide notice")
+    t.matches(note, "no_such_paths_file")
   end,
 }
 

@@ -272,6 +272,84 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
+  name = "every catalogue fetch may leave the address family the scan runs in",
+  fn = function()
+    -- nselib stays in the scan's own family unless the request says otherwise,
+    -- so without this flag a mirror that answers only over IPv6 is unreachable
+    -- even by name. Measured against a catalogue served on ::1 alone:
+    -- http.get_url answered nil without any_af and 200 with it. Every API
+    -- request in this script has carried the flag from the start; the
+    -- catalogue fetch did not.
+    local http = t.http_double()
+    serve_catalog(http)
+
+    local catalog = loaded({http = http})
+
+    t.is_true(catalog.rule_count > 0, "the catalogue must have loaded")
+    local checked = 0
+    for _, request in ipairs(http.requests) do
+      if request.url then
+        checked = checked + 1
+        t.is_true(request.options ~= nil and request.options.any_af == true,
+          "no catalogue fetch may be pinned to one address family: " ..
+          tostring(request.url))
+      end
+    end
+    t.is_true(checked >= 4,
+      string.format("there must have been fetches to check, saw %d", checked))
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a mirror named by IPv6 address is asked for by address",
+  fn = function()
+    -- A URL has to bracket an IPv6 literal, and nselib's url.parse leaves the
+    -- brackets on the host, so http.get_url asks the resolver for "[fd00::1]"
+    -- and gets nothing. Measured against a real catalogue on ::1: get_url
+    -- answered nil, http.get with the brackets taken off answered 200. The
+    -- operator running a mirror on an IPv6 network without DNS has no other
+    -- way to name it.
+    local http = t.http_double()
+    local bodies = {
+      ["/index.json"] = {
+        schema = 1, serial = 7,
+        catalogs = {
+          fingerprints = {file = "fingerprints.json"},
+          paths = {file = "paths.json"},
+          probes = {file = "probes.json"},
+        },
+      },
+      ["/fingerprints.json"] = fingerprints(),
+      ["/paths.json"] = paths(),
+      ["/probes.json"] = probes(),
+    }
+    http.handler = function(request)
+      local document = request.path and bodies[request.path]
+      if document then
+        return t.response({status = 200, body = json.generate(document)})
+      end
+      return t.response({status = 404, body = ""})
+    end
+
+    local catalog = loaded({
+      http = http,
+      args = {["vulners.catalog_url"] = "http://[fd00::1]:8000/"},
+    })
+
+    t.is_true(catalog.rule_count > 0,
+      "a mirror named by address must be reachable")
+    local first = http.requests[1]
+    t.is_nil(first.url,
+      "get_url cannot resolve a bracketed host, so it must not be used")
+    t.equals(first.host, "fd00::1", "the brackets come off the host")
+    t.equals(first.port, 8000, "and the port comes from the URL")
+    t.equals(first.path, "/index.json")
+    t.equals(first.options.header["Host"], "[fd00::1]:8000",
+      "and stay on in Host, which has to be a valid authority")
+  end,
+}
+
+suite[#suite + 1] = {
   name = "an unreachable catalogue leaves a working scan and says so",
   fn = function()
     -- The airgapped case. It must not be an error and must not be silent: the
@@ -307,10 +385,19 @@ suite[#suite + 1] = {
       return answer(request)
     end
 
-    local catalog = loaded({http = http})
+    local catalog, env = loaded({http = http})
 
     t.equals(catalog.rule_count, 0, "the rules must not be used without paths")
     t.length(catalog.paths, 0, "and there must be no path list")
+    -- The index arrived and parsed, so the network is demonstrably fine and
+    -- the repair is at the publisher. Reporting this as a failed download
+    -- pointed the one operator who can fix it at the wrong thing.
+    local note = env._TEST.state().catalog_note
+    t.is_true(note ~= nil and note:find("could not be read", 1, true) ~= nil,
+      "a reachable catalogue with an unusable file is not a failed download, " ..
+      "got: " .. tostring(note))
+    t.is_true(note:find("still looked up", 1, true) ~= nil,
+      "and it must still say what DID happen")
   end,
 }
 
@@ -332,10 +419,14 @@ suite[#suite + 1] = {
       return t.response({status = 200, body = '{"schema": 1, "rules": {"a'})
     end
 
-    local catalog = loaded({http = http})
+    local catalog, env = loaded({http = http})
 
     t.equals(catalog.rule_count, 0,
       "half a dictionary must not become half a catalogue")
+    local note = env._TEST.state().catalog_note
+    t.is_true(note ~= nil and note:find("could not be read", 1, true) ~= nil,
+      "a truncated body is a publisher's problem, not a network one, got: " ..
+      tostring(note))
   end,
 }
 

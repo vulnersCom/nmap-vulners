@@ -1722,27 +1722,58 @@ end
 -- arrived intact but wrong.
 
 --- Fetch one catalogue file and parse it, or nil.
-local function catalog_fetch(url)
-  local response = http.get_url(url, {
+local function catalog_fetch(address)
+  local options = {
     header = {["User-Agent"] = USER_AGENT},
     max_body_size = MAX_CATALOG_BYTES,
     timeout = CATALOG_TIMEOUT,
-  })
+    -- The same flag every API request carries, and for the same reason:
+    -- without it nselib stays in the address family the scan is running in, so
+    -- a mirror that answers only over IPv6 was unreachable even by name.
+    -- Measured against a catalogue served on ::1 alone: nil without, 200 with.
+    any_af = true,
+  }
+
+  -- A URL naming an IPv6 address has to bracket it, and nselib's url.parse
+  -- leaves the brackets on the host, so http.get_url asks the resolver for
+  -- "[::1]" and gets nothing. Taking them off and calling http.get directly
+  -- answers 200 for the same address. Only this shape takes the branch; the
+  -- ordinary https URL keeps going through get_url, which knows more about
+  -- redirects and defaults than is worth restating here.
+  local parsed = url.parse(address) or {}
+  local literal = (parsed.host or ""):match("^%[(.*)%]$")
+  local response
+  if literal then
+    local secure = parsed.scheme == "https"
+    local port = tonumber(parsed.port) or (secure and 443 or 80)
+    local path = parsed.path or "/"
+    if parsed.query then
+      path = path .. "?" .. parsed.query
+    end
+    options.scheme = secure and "https" or "http"
+    -- Set by hand: nselib fills Host from the host argument, which is now
+    -- unbracketed, and an unbracketed IPv6 literal in a Host header is not a
+    -- valid authority.
+    options.header["Host"] = parsed.host .. (parsed.port and (":" .. parsed.port) or "")
+    response = http.get(literal, port, path, options)
+  else
+    response = http.get_url(address, options)
+  end
 
   if response == nil or response.status ~= 200 then
-    stdnse.debug1("Catalogue fetch of %s answered %s", url,
+    stdnse.debug1("Catalogue fetch of %s answered %s", address,
       tostring(response and response.status))
     return nil
   end
 
   -- A truncated body is not a special case: it stops being JSON, so it fails
   -- here and is discarded like any other malformed answer.
-  local ok, parsed = json.parse(tostring(response.body or ""))
-  if not ok or type(parsed) ~= "table" then
-    stdnse.debug1("Catalogue file %s did not parse as JSON", url)
+  local ok, document = json.parse(tostring(response.body or ""))
+  if not ok or type(document) ~= "table" then
+    stdnse.debug1("Catalogue file %s did not parse as JSON", address)
     return nil
   end
-  return parsed, tostring(response.body)
+  return document, tostring(response.body)
 end
 
 --- Is this string safe to put in a pattern position?
@@ -2172,6 +2203,20 @@ local function load_catalog()
         fetched.serial, fetched.rule_count)
       return fetched
     end
+
+    -- index.json arrived and parsed, so the base URL is reachable and the
+    -- manifest is sound: what failed is one of the files it names. The
+    -- catch-all below says "could not be downloaded", which is the wrong
+    -- diagnosis here - measured against a mirror serving a broken
+    -- fingerprints.json, it sends the operator to check the network instead
+    -- of the file they just published, and vulners.catalog_url exists for
+    -- exactly those operators.
+    shared.catalog_note = string.format(
+      "the catalogue at %s answered, but one of its dictionaries could not " ..
+      "be read, so no web fingerprinting was done; the software nmap itself " ..
+      "identified was still looked up", base)
+    stdnse.verbose1("vulners: %s", shared.catalog_note)
+    return nil
   end
 
   shared.catalog_note = "the fingerprint catalogue could not be downloaded, " ..
@@ -2233,6 +2278,8 @@ local function sweep_paths(paths_arg)
     if #chosen == 0 then
       stdnse.verbose1("vulners: the paths argument holds no usable path; " ..
         "requesting nothing")
+      state().sweep_note = "the vulners.paths argument holds no usable path, " ..
+        "so no web fingerprinting was done"
       return {}
     end
   elseif type(paths_arg) == "string" then
@@ -2243,6 +2290,9 @@ local function sweep_paths(paths_arg)
     local file = io.open(paths_arg, "r")
     if file == nil then
       stdnse.verbose1("vulners: cannot read the paths file %s; requesting nothing",
+        paths_arg)
+      state().sweep_note = string.format(
+        "the paths file %s could not be read, so no web fingerprinting was done",
         paths_arg)
       return {}
     end
@@ -2260,6 +2310,9 @@ local function sweep_paths(paths_arg)
     file:close()
     if #chosen == 0 then
       stdnse.verbose1("vulners: no usable paths in %s; requesting nothing", paths_arg)
+      state().sweep_note = string.format(
+        "the paths file %s holds no usable path, so no web fingerprinting was done",
+        paths_arg)
       return {}
     end
   end
@@ -4014,26 +4067,54 @@ local function post_action()
   -- fingerprinting, and the operator has to be able to tell that from a network
   -- where nothing was found. Silence about a capability that did not run reads
   -- as a capability that found nothing.
-  local function with_catalog(text)
-    if not shared.catalog_note then
+  local function with_notes(text)
+    local notes = {}
+    if shared.catalog_note then
+      notes[#notes + 1] = shared.catalog_note
+    end
+    -- The same class of fact as the catalogue one, and it used to be told only
+    -- at -v: a paths file that could not be read stops the sweep completely,
+    -- and a sweep that did not run reads as a sweep that found nothing.
+    if shared.sweep_note then
+      notes[#notes + 1] = shared.sweep_note
+    end
+    if #notes == 0 then
       return text
     end
     -- Wrapped by hand, like every other notice here: nmap does not wrap script
     -- output, so a sentence written as one string arrives as one line however
     -- wide the terminal is.
-    local wrapped, line = {}, "  "
-    for word in (shared.catalog_note .. "."):gmatch("%S+") do
-      if #line + #word + 1 > 74 then
-        wrapped[#wrapped + 1] = line
-        line = "  " .. word
-      else
-        line = (line == "  ") and (line .. word) or (line .. " " .. word)
+    local wrapped = {}
+    for _, note in ipairs(notes) do
+      local line = "  "
+      for word in (note .. "."):gmatch("%S+") do
+        if #line + #word + 1 > 74 then
+          wrapped[#wrapped + 1] = line
+          line = "  " .. word
+        else
+          line = (line == "  ") and (line .. word) or (line .. " " .. word)
+        end
       end
+      wrapped[#wrapped + 1] = line
     end
-    wrapped[#wrapped + 1] = line
 
     local notice = "\n" .. table.concat(wrapped, "\n")
     return text and (text .. "\n" .. notice) or notice
+  end
+
+  -- Said before anything else, and instead of everything else. An operator who
+  -- names a key file means that file, so a file that cannot be read stops the
+  -- run - port_action returns nothing for every port. That was reported only to
+  -- stdnse.verbose1, so without -v the scan produced an empty report and a
+  -- notice offering a free key to somebody who already has one and mistyped its
+  -- path. Measured against a live scan: the same host reports 272 findings with
+  -- no key at all, and nothing whatever with an unreadable one.
+  local fatal = config().fatal
+  if fatal then
+    return nil, with_notes("\n  Nothing was looked up: " .. fatal .. "." ..
+      "\n  Naming a key means the scan will not quietly fall back to the" ..
+      "\n  keyless endpoint. Correct that argument, or drop it to run" ..
+      "\n  without a key.")
   end
 
   -- Said first, and independently of everything else. A scan whose lookups
@@ -4071,19 +4152,19 @@ local function post_action()
     if shared.degraded then
       lines[#lines + 1] = "  " .. shared.degraded .. "."
     end
-    return nil, with_catalog(" " .. table.concat(lines, "\n"))
+    return nil, with_notes(" " .. table.concat(lines, "\n"))
   end
 
   if shared.mode == "keyed" then
     local warning = nothing_was_checked()
     if warning then
-      return nil, with_catalog("\n" .. table.concat(warning, "\n"))
+      return nil, with_notes("\n" .. table.concat(warning, "\n"))
     end
     -- Silence is the right output for a script with nothing to report, and CPE
     -- lookups cost nothing, so the common keyed scan says nothing at all -
     -- unless the catalogue is missing, which is never silent.
-    if shared.catalog_note then
-      return nil, with_catalog(nil)
+    if shared.catalog_note or shared.sweep_note then
+      return nil, with_notes(nil)
     end
     return nil
   end
@@ -4117,7 +4198,7 @@ local function post_action()
   lines[#lines + 1] = "    * put it in ~/.nmap/vulners.key   - picked up automatically"
   lines[#lines + 1] = "    * or set VULNERS_API_KEY in the environment"
 
-  return nil, with_catalog(table.concat(lines, "\n"))
+  return nil, with_notes(table.concat(lines, "\n"))
 end
 
 --- Load the catalogue, once, before any host is touched.

@@ -65,8 +65,29 @@ class Contract:
         return 0 if not self.broken else 1
 
 
+# nmap files prerule and postrule output under these, not under a port.
+SCAN_LEVEL = ("prescript", "postscript")
+
+
 def scripts_named(root, script_id):
-    return [s for s in root.iter("script") if s.get("id") == script_id]
+    """Finding-bearing elements, and scan-level notices, kept apart.
+
+    This script's postrule element is prose - "the catalogue could not be
+    downloaded", "ran without an API key" - and carries no findings by design.
+    Counting it as a finding-bearing element rejected a real report: a scan
+    that could not reach the API emits that notice and nothing else, which is
+    the designed outcome and not a broken contract.
+    """
+    notices = [element
+               for container in SCAN_LEVEL
+               for parent in root.iter(container)
+               for element in parent.findall("script")
+               if element.get("id") == script_id]
+    at_scan_level = {id(element) for element in notices}
+    findings = [element for element in root.iter("script")
+                if element.get("id") == script_id
+                and id(element) not in at_scan_level]
+    return findings, notices
 
 
 def check(xml_path, script_id="vulners"):
@@ -74,11 +95,20 @@ def check(xml_path, script_id="vulners"):
     contract = Contract()
     root = ET.parse(xml_path).getroot()
 
-    elements = scripts_named(root, script_id)
+    elements, notices = scripts_named(root, script_id)
     if not contract.require(
-            elements,
+            elements or notices,
             f'a <script id="{script_id}"> element is present',
-            "every downstream importer selects findings by this exact id"):
+            "every downstream importer selects findings by this exact id; a "
+            "scan that identified no vulnerable software emits none, and there "
+            "is then nothing here to check"):
+        return contract
+
+    # Nothing found, and the script said why. There is no shape to check, and
+    # calling that a broken contract would train a reader to ignore this gate.
+    if not elements:
+        contract.require(True, "the report carries a scan-level notice and no "
+                               "findings, so there is no shape to check")
         return contract
 
     groups, bulletins, elem_keys, problems = [], [], set(), []
@@ -190,7 +220,18 @@ SELFTEST_BREAKAGES = {
                             'key="Apache httpd 2.4.49"'),
     "bulletin tables gain keys":
         lambda x: x.replace('<table>\n<elem key="id"', '<table key="0">\n<elem key="id"'),
+    # The scan-level split above must not become a hole a port can hide in:
+    # a port element that carries no findings is still a broken report.
+    "a port element loses its findings":
+        lambda x: re.sub(r"<table key=.*</table>\n", "", x, flags=re.S),
 }
+
+# What a scan that found nothing and explained itself actually looks like. The
+# contract passes this; before the scan-level split it did not.
+SELFTEST_NOTICE_ONLY = """<?xml version="1.0"?>
+<nmaprun><postscript><script id="vulners" output="  Ran without an API key." />
+</postscript></nmaprun>
+"""
 
 
 def selftest(tmpdir):
@@ -219,6 +260,8 @@ def selftest(tmpdir):
 
     if verdict(SELFTEST_REPORT):
         problems.append("the contract rejects a report that satisfies it")
+    if verdict(SELFTEST_NOTICE_ONLY):
+        problems.append("the contract rejects a scan that found nothing")
     for description, break_it in SELFTEST_BREAKAGES.items():
         if not verdict(break_it(SELFTEST_REPORT)):
             problems.append(f"the contract no longer notices when {description}")
