@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///opt/homebrew/bin/../share/nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap NORMALISED -->
+<nmaprun scanner="nmap" args="nmap -Pn -sV -p TARGET_PORT -&#45;script REPO/http-vulners-regex.nse,REPO/vulners.nse,REPO/vulners_enterprise.nse -&#45;script-args vulners_enterprise.api_key=FAKE-TEST-KEY-NOT-A-REAL-TOKEN,vulners_enterprise.api_host=127.0.0.1,vulners_enterprise.api_port=API_PORT,vulners.api_host=127.0.0.1,vulners.api_port=API_PORT -oX tests/fixtures/golden_1x.xml 127.0.0.1" start="NORMALISED" startstr="NORMALISED" version="NORMALISED" xmloutputversion="NORMALISED">
+<scaninfo type="connect" protocol="tcp" numservices="1" services="TARGET_PORT"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<host starttime="NORMALISED" endtime="NORMALISED"><status state="up" reason="user-set" reason_ttl="0"/>
+<address addr="127.0.0.1" addrtype="ipv4"/>
+<hostnames>
+<hostname name="localhost" type="PTR"/>
+</hostnames>
+<ports><port protocol="tcp" portid="TARGET_PORT"><state state="open" reason="syn-ack" reason_ttl="0"/><service name="http" product="nginx" version="1.13.4" method="probed" conf="10"><cpe>cpe:/a:igor_sysoev:nginx:1.13.4</cpe><cpe>cpe:/a:f5:nginx:1.13.4</cpe><cpe>cpe:/a:php:php:5.6.38</cpe></service><script id="http-vulners-regex" output="&#xa;  /: &#xa;    cpe:/a:f5:nginx:1.13.4&#xa;    cpe:/a:php:php:5.6.38"><table key="/">
+<elem>cpe:/a:f5:nginx:1.13.4</elem>
+<elem>cpe:/a:php:php:5.6.38</elem>
+</table>
+</script><script id="vulners_enterprise" output="&#xa;  cpe:/a:igor_sysoev:nginx:1.13.4: &#xa;    &#x9;EDB-ID:45233&#x9;cvss3.1: 7.5&#x9;https://vulners.com/exploitdb/EDB-ID:45233&#x9;*HAS EXPLOIT*&#xa;    &#x9;CVE-2018-16843&#x9;cvss3.1: 7.5&#x9;https://vulners.com/cve/CVE-2018-16843&#xa;    &#x9;CVE-2019-20372&#x9;cvss3.1: 4.3&#x9;https://vulners.com/cve/CVE-2019-20372&#xa;  cpe:/a:php:php:5.6.38: &#xa;    &#x9;EDB-ID:45233&#x9;cvss3.1: 7.5&#x9;https://vulners.com/exploitdb/EDB-ID:45233&#x9;*HAS EXPLOIT*&#xa;    &#x9;CVE-2018-16843&#x9;cvss3.1: 7.5&#x9;https://vulners.com/cve/CVE-2018-16843&#xa;    &#x9;CVE-2019-20372&#x9;cvss3.1: 4.3&#x9;https://vulners.com/cve/CVE-2019-20372"><table key="cpe:/a:igor_sysoev:nginx:1.13.4">
+<table>
+<elem key="cvss_type">cvss3.1</elem>
+<elem key="type">exploitdb</elem>
+<elem key="id">EDB-ID:45233</elem>
+<elem key="is_exploit">true</elem>
+<elem key="cvss">7.5</elem>
+</table>
+<table>
+<elem key="cvss_type">cvss3.1</elem>
+<elem key="type">cve</elem>
+<elem key="cvss">7.5</elem>
+<elem key="id">CVE-2018-16843</elem>
+</table>
+<table>
+<elem key="cvss_type">cvss3.1</elem>
+<elem key="type">cve</elem>
+<elem key="cvss">4.3</elem>
+<elem key="id">CVE-2019-20372</elem>
+</table>
+</table>
+<table key="cpe:/a:php:php:5.6.38">
+<table>
+<elem key="cvss_type">cvss3.1</elem>
+<elem key="type">exploitdb</elem>
+<elem key="id">EDB-ID:45233</elem>
+<elem key="is_exploit">true</elem>
+<elem key="cvss">7.5</elem>
+</table>
+<table>
+<elem key="cvss_type">cvss3.1</elem>
+<elem key="type">cve</elem>
+<elem key="cvss">7.5</elem>
+<elem key="id">CVE-2018-16843</elem>
+</table>
+<table>
+<elem key="cvss_type">cvss3.1</elem>
+<elem key="type">cve</elem>
+<elem key="cvss">4.3</elem>
+<elem key="id">CVE-2019-20372</elem>
+</table>
+</table>
+</script><script id="vulners" output="&#xa;  cpe:/a:igor_sysoev:nginx:1.13.4: &#xa;    &#x9;CVE-2018-16843&#x9;cvss3.1: 7.5&#x9;https://vulners.com/cve/CVE-2018-16843&#xa;    &#x9;CVE-2019-20372&#x9;cvss3.1: 4.3&#x9;https://vulners.com/cve/CVE-2019-20372&#xa;    &#x9;EDB-ID:45233&#x9;cvss2.0: 0&#x9;https://vulners.com/exploitdb/EDB-ID:45233&#x9;*EXPLOIT*&#xa;  cpe:/a:php:php:5.6.38: &#xa;    &#x9;CVE-2018-16843&#x9;cvss3.1: 7.5&#x9;https://vulners.com/cve/CVE-2018-16843&#xa;    &#x9;CVE-2019-20372&#x9;cvss3.1: 4.3&#x9;https://vulners.com/cve/CVE-2019-20372&#xa;    &#x9;EDB-ID:45233&#x9;cvss2.0: 0&#x9;https://vulners.com/exploitdb/EDB-ID:45233&#x9;*EXPLOIT*"><table key="cpe:/a:igor_sysoev:nginx:1.13.4">
+<table>
+<elem key="cvss_type">cvss3.1</elem>
+<elem key="type">cve</elem>
+<elem key="id">CVE-2018-16843</elem>
+<elem key="is_exploit">false</elem>
+<elem key="cvss">7.5</elem>
+</table>
+<table>
+<elem key="cvss_type">cvss3.1</elem>
+<elem key="type">cve</elem>
+<elem key="id">CVE-2019-20372</elem>
+<elem key="is_exploit">false</elem>
+<elem key="cvss">4.3</elem>
+</table>
+<table>
+<elem key="cvss_type">cvss2.0</elem>
+<elem key="type">exploitdb</elem>
+<elem key="id">EDB-ID:45233</elem>
+<elem key="is_exploit">true</elem>
+<elem key="cvss">0</elem>
+</table>
+</table>
+<table key="cpe:/a:php:php:5.6.38">
+<table>
+<elem key="cvss_type">cvss3.1</elem>
+<elem key="type">cve</elem>
+<elem key="id">CVE-2018-16843</elem>
+<elem key="is_exploit">false</elem>
+<elem key="cvss">7.5</elem>
+</table>
+<table>
+<elem key="cvss_type">cvss3.1</elem>
+<elem key="type">cve</elem>
+<elem key="id">CVE-2019-20372</elem>
+<elem key="is_exploit">false</elem>
+<elem key="cvss">4.3</elem>
+</table>
+<table>
+<elem key="cvss_type">cvss2.0</elem>
+<elem key="type">exploitdb</elem>
+<elem key="id">EDB-ID:45233</elem>
+<elem key="is_exploit">true</elem>
+<elem key="cvss">0</elem>
+</table>
+</table>
+</script><script id="http-server-header" output="BaseHTTP/0.6 Python/3.12.3"><elem>BaseHTTP/0.6 Python/3.12.3</elem>
+</script></port>
+</ports>
+<times srtt="129" rttvar="5000" to="100000"/>
+</host>
+<runstats><finished time="NORMALISED" timestr="NORMALISED" summary="NORMALISED" elapsed="NORMALISED" exit="success"/><hosts up="1" down="0" total="1"/>
+</runstats>
+</nmaprun>

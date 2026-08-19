@@ -9,6 +9,7 @@
 #
 # Other options:
 #   --ref REF     install this branch or tag instead of master (download mode)
+#   --no-key      do not offer to store an API key
 #   --help
 #
 # macOS, Linux, Kali, WSL - anything with a POSIX shell. Windows has install.ps1.
@@ -20,13 +21,23 @@ REF="master"
 PREFIX=""
 MODE="system"
 ACTION="install"
+ASK_KEY="yes"
 
-SCRIPTS="http-vulners-regex.nse vulners.nse vulners_enterprise.nse"
-DATA="http-vulners-regex.json http-vulners-paths.txt"
+# 2.0 is one file with its data embedded. The 1.x trio is still listed, because
+# installing over it has to REMOVE it: a leftover http-vulners-regex.nse carries
+# the "default" category and keeps sweeping targets under a plain -sC, which is
+# exactly what this release stopped doing.
+SCRIPTS="vulners.nse"
+DATA=""
+LEGACY_SCRIPTS="http-vulners-regex.nse vulners_enterprise.nse"
+LEGACY_DATA="http-vulners-regex.json http-vulners-paths.txt"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
-usage() { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+# Printed from the comment block at the top, so the two cannot drift apart.
+# Bounded by the end of that block rather than a line number, which is what
+# broke the moment an option was added.
+usage() { sed -n '2,/^[^#]/p' "$0" | sed -n 's/^# \{0,1\}//p'; exit 0; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -34,6 +45,7 @@ while [ $# -gt 0 ]; do
     --prefix) PREFIX="${2:-}"; [ -n "$PREFIX" ] || die "--prefix needs a directory"; MODE="prefix"; shift 2 ;;
     --ref) REF="${2:-}"; [ -n "$REF" ] || die "--ref needs a branch or tag"; shift 2 ;;
     --uninstall) ACTION="uninstall"; shift ;;
+    --no-key) ASK_KEY="no"; shift ;;
     -h|--help) usage ;;
     *) die "unknown option: $1 (try --help)" ;;
   esac
@@ -118,14 +130,185 @@ update_db() {
   fi
 }
 
+# --------------------------------------------------------------- API key
+#
+# The script itself never asks for a key: it runs inside nmap, where there is
+# no terminal to prompt on and where writing a file would be a surprise. The
+# installer is the one moment a person is present, so it is the one place that
+# can ask.
+
+# Where nmap looks for it. nmap resolves ~/.nmap through getpwuid(getuid()),
+# not $HOME, so under sudo the file has to go to the invoking user's home and
+# be owned by them - otherwise the key is written somewhere nmap will never
+# read, owned by somebody who cannot edit it.
+key_home() {
+  if [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER}" != "root" ]; then
+    eval "printf '%s' ~${SUDO_USER}"
+  else
+    printf '%s' "$HOME"
+  fi
+}
+
+# Ask the API whether a token is good. This endpoint costs no credits and
+# needs no arguments, which makes it the cheapest possible question.
+validate_key() {
+  key=$1
+  if command -v curl >/dev/null 2>&1; then
+    code=$(curl -sS -o /dev/null -w '%{http_code}' \
+      -H "X-Api-Key: $key" \
+      -H "User-Agent: Vulners NMAP Plugin installer" \
+      "https://vulners.com/api/v3/audit/getSupportedOS/" 2>/dev/null || printf '000')
+  elif command -v wget >/dev/null 2>&1; then
+    code=$(wget -qS -O /dev/null \
+      --header="X-Api-Key: $key" \
+      --header="User-Agent: Vulners NMAP Plugin installer" \
+      "https://vulners.com/api/v3/audit/getSupportedOS/" 2>&1 |
+      sed -n 's/.*HTTP\/[0-9.]* \([0-9]*\).*/\1/p' | tail -n 1)
+    [ -n "$code" ] || code="000"
+  else
+    printf 'skip'
+    return 0
+  fi
+
+  case "$code" in
+    200) printf 'ok' ;;
+    401|403) printf 'bad' ;;
+    402) printf 'unlicensed' ;;
+    429) printf 'ratelimited' ;;
+    000) printf 'unreachable' ;;
+    *) printf 'unknown:%s' "$code" ;;
+  esac
+}
+
+# Write it where nmap will find it, readable only by its owner.
+#
+# Written to a temporary file and renamed, so an interrupted install cannot
+# leave a half-written token behind that then fails every scan with a 401 and
+# nothing to say why.
+store_key() {
+  key=$1
+  home=$(key_home)
+  dir="$home/.nmap"
+  file="$dir/vulners.key"
+
+  mkdir -p "$dir" || { say "  could not create $dir"; return 1; }
+  umask 077
+  printf '%s\n' "$key" > "$file.tmp" || { say "  could not write $file"; return 1; }
+  chmod 600 "$file.tmp"
+  mv -f "$file.tmp" "$file"
+
+  if [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER}" != "root" ]; then
+    chown "$SUDO_USER" "$file" 2>/dev/null || true
+    chown "$SUDO_USER" "$dir" 2>/dev/null || true
+  fi
+
+  say "  saved to $file (readable only by its owner)"
+  return 0
+}
+
+offer_key_entry() {
+  [ "$ASK_KEY" = "no" ] && return 0
+
+  # Nothing to ask if one is already configured.
+  if [ -n "${VULNERS_API_KEY:-}" ]; then
+    say ""
+    say "VULNERS_API_KEY is already set in the environment; leaving it alone."
+    return 0
+  fi
+  existing="$(key_home)/.nmap/vulners.key"
+  if [ -f "$existing" ]; then
+    say ""
+    say "A key is already stored in $existing; leaving it alone."
+    return 0
+  fi
+
+  # Piped into sh, or run by CI, there is nobody to answer.
+  if [ ! -t 0 ]; then
+    say ""
+    say "No API key configured. It works without one; to add a key later, put it"
+    say "in $existing or set VULNERS_API_KEY."
+    return 0
+  fi
+
+  say ""
+  say "An API key is optional. Without one the scan uses the free lookup."
+  say "A free key adds detail per finding and can identify software the free"
+  say "lookup cannot name. Get one at https://vulners.com/userinfo"
+  say ""
+  say "Anything you enter is sent to vulners.com once, to check it works,"
+  say "and then stored in $existing."
+  printf 'Paste a key, or press Enter to skip: '
+
+  # Read without echoing: a key pasted into a terminal otherwise stays in the
+  # scrollback and in any recording of the session.
+  if stty -echo 2>/dev/null; then
+    read -r entered || entered=""
+    stty echo 2>/dev/null
+    printf '\n'
+  else
+    read -r entered || entered=""
+  fi
+
+  entered=$(printf '%s' "$entered" | tr -d '[:space:]')
+  if [ -z "$entered" ]; then
+    say "No key entered; the scan will use the free lookup."
+    return 0
+  fi
+
+  say "Checking it with vulners.com..."
+  case "$(validate_key "$entered")" in
+    ok)
+      say "  the key works."
+      store_key "$entered" || true
+      ;;
+    bad)
+      say "  vulners.com does not recognise that key; it was NOT saved."
+      say "  Check it at https://vulners.com/userinfo and re-run with --key."
+      ;;
+    unlicensed)
+      say "  that key is recognised but has no active licence; it was NOT saved."
+      ;;
+    ratelimited)
+      say "  vulners.com is rate limiting right now, so the key could not be"
+      say "  checked. Saving it anyway - it is probably fine."
+      store_key "$entered" || true
+      ;;
+    unreachable|skip)
+      say "  could not reach vulners.com to check it. Saving it unchecked."
+      store_key "$entered" || true
+      ;;
+    unknown:*)
+      say "  unexpected answer from vulners.com; the key was NOT saved."
+      ;;
+  esac
+}
+
+remove_legacy() {
+  removed=""
+  for name in $LEGACY_SCRIPTS; do
+    if [ -f "$SCRIPTDIR/$name" ]; then
+      run_at "$SCRIPTDIR" rm -f "$SCRIPTDIR/$name"
+      removed="$removed  scripts/$name
+"
+    fi
+  done
+  for name in $LEGACY_DATA; do
+    if [ -f "$DATASUBDIR/$name" ]; then
+      run_at "$DATASUBDIR" rm -f "$DATASUBDIR/$name"
+      removed="$removed  nselib/data/$name
+"
+    fi
+  done
+  [ -n "$removed" ] && printf '%s' "$removed"
+  return 0
+}
+
 if [ "$ACTION" = "uninstall" ]; then
   say "Removing nmap-vulners from $DATADIR"
   for name in $SCRIPTS; do
     [ -f "$SCRIPTDIR/$name" ] && run_at "$SCRIPTDIR" rm -f "$SCRIPTDIR/$name" && say "  scripts/$name"
   done
-  for name in $DATA; do
-    [ -f "$DATASUBDIR/$name" ] && run_at "$DATASUBDIR" rm -f "$DATASUBDIR/$name" && say "  nselib/data/$name"
-  done
+  remove_legacy
   update_db
   say "Done."
   exit 0
@@ -157,10 +340,14 @@ for name in $SCRIPTS; do
   run_at "$SCRIPTDIR" cp -f "$SOURCE/$name" "$SCRIPTDIR/$name"
   say "  scripts/$name$note"
 done
-for name in $DATA; do
-  run_at "$DATASUBDIR" cp -f "$SOURCE/$name" "$DATASUBDIR/$name"
-  say "  nselib/data/$name"
-done
+legacy=$(remove_legacy)
+if [ -n "$legacy" ]; then
+  say ""
+  say "Removed the 1.x files this release replaces:"
+  # Command substitution ate the trailing newline; put one back so the next
+  # message does not run into the last path.
+  printf '%s\n' "$legacy"
+fi
 
 say "Updating the script database"
 update_db
@@ -196,7 +383,9 @@ else
   say "  export NMAPDIR=\"$DATADIR\"        # add this to your shell profile"
   say "  nmap -sV --script vulners scanme.nmap.org"
 fi
+offer_key_entry
+
 say ""
-say "vulners_enterprise needs an API key from https://vulners.com :"
-say "  export VULNERS_API_KEY=<token>"
-say "  nmap -sV --script vulners_enterprise <target>"
+say "It works without an API key. A free key adds more detail per finding and"
+say "lets it identify software the free lookup cannot name:"
+say "  https://vulners.com/userinfo   (register at https://vulners.com/ first)"

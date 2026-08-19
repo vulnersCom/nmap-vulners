@@ -1,0 +1,2688 @@
+{
+ "cpe:/a:acme:mini_httpd": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:acme:thttpd": {
+  "count": 4,
+  "tried": [
+   [
+    "7",
+    0
+   ],
+   [
+    "2.04",
+    4
+   ]
+  ]
+ },
+ "cpe:/a:acme_labs:thttpd": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:adminer:adminer": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:adobe:golive": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:adobe:robohelp": {
+  "count": 7,
+  "tried": [
+   [
+    "7",
+    7
+   ]
+  ]
+ },
+ "cpe:/a:aiohttp_project:aiohttp": {
+  "count": 0,
+  "tried": [
+   [
+    "3.7.4.post0",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:aioseo:all_in_one_seo": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:alkacon:opencms": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:allegrosoft:rompager": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:amazon:aurora_mysql": {
+  "count": 0,
+  "tried": [
+   [
+    "7.7.7",
+    0
+   ],
+   [
+    "5.7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:amazon:elastic_load_balancing": {
+  "count": 0,
+  "tried": [
+   [
+    "2.0",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:angularjs:angular.js": {
+  "count": 0,
+  "tried": [
+   [
+    "77",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:aol:aolserver": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:apache:apisix": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:apache:cocoon": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:apache:couchdb": {
+  "count": 7,
+  "tried": [
+   [
+    "7",
+    0
+   ],
+   [
+    "2.1.1",
+    7
+   ]
+  ]
+ },
+ "cpe:/a:apache:http_server": {
+  "count": 81,
+  "tried": [
+   [
+    "7",
+    0
+   ],
+   [
+    "1.3.26",
+    81
+   ]
+  ]
+ },
+ "cpe:/a:apache:james": {
+  "count": 1,
+  "tried": [
+   [
+    "2.3.2",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:apache:mod_perl": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:apache:mod_python": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:apache:mod_rack": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:apache:mod_rails": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:apache:subversion": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:apache:tomcat": {
+  "count": 344,
+  "tried": [
+   [
+    "7",
+    344
+   ]
+  ]
+ },
+ "cpe:/a:apache:traffic_server": {
+  "count": 50,
+  "tried": [
+   [
+    "7",
+    50
+   ]
+  ]
+ },
+ "cpe:/a:apachefriends:xampp": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:apple:cups": {
+  "count": 0,
+  "tried": [
+   [
+    "2.3.1",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:aprelium:abyss_web_server_x1": {
+  "count": 2,
+  "tried": [
+   [
+    "2.14",
+    2
+   ]
+  ]
+ },
+ "cpe:/a:arastta:ecommerce": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:argosoft:mail_server": {
+  "count": 0,
+  "tried": [
+   [
+    "1.8.8.8",
+    0
+   ],
+   [
+    "1.8.9.5",
+    0
+   ],
+   [
+    "1.6.1.8",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:aspen:aspen": {
+  "count": 6,
+  "tried": [
+   [
+    "0.8",
+    6
+   ]
+  ]
+ },
+ "cpe:/a:atlassian:bitbucket": {
+  "count": 33,
+  "tried": [
+   [
+    "7",
+    33
+   ]
+  ]
+ },
+ "cpe:/a:atlassian:confluence": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:atlassian:fisheye": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:auth0:auth0.js": {
+  "count": 5,
+  "tried": [
+   [
+    "7",
+    5
+   ]
+  ]
+ },
+ "cpe:/a:axtls_project:axtls": {
+  "count": 2,
+  "tried": [
+   [
+    "1.5.3",
+    2
+   ]
+  ]
+ },
+ "cpe:/a:axway:securetransport": {
+  "count": 1,
+  "tried": [
+   [
+    "5.3.6",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:backdropcms:backdrop": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:ballerina:ballerina": {
+  "count": 0,
+  "tried": [
+   [
+    "0.982.1-SNAPSHOT",
+    0
+   ],
+   [
+    "0.991.0",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:bea:weblogic_server": {
+  "count": 12,
+  "tried": [
+   [
+    "8.1 SP3",
+    12
+   ]
+  ]
+ },
+ "cpe:/a:bftpd_project:bftpd": {
+  "count": 0,
+  "tried": [
+   [
+    "2.2.1",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:blueriver:muracms": {
+  "count": 1,
+  "tried": [
+   [
+    "7",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:boa:boa": {
+  "count": 6,
+  "tried": [
+   [
+    "0.94.14rc21",
+    6
+   ]
+  ]
+ },
+ "cpe:/a:boldgrid:w3_total_cache": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:caucho:resin": {
+  "count": 5,
+  "tried": [
+   [
+    "2.1.13",
+    5
+   ]
+  ]
+ },
+ "cpe:/a:cesanta:mongoose": {
+  "count": 55,
+  "tried": [
+   [
+    "6.7.1",
+    55
+   ]
+  ]
+ },
+ "cpe:/a:chamilo:chamilo_lms": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:cherokee-project:cherokee": {
+  "count": 4,
+  "tried": [
+   [
+    "7",
+    0
+   ],
+   [
+    "1.2.104",
+    4
+   ]
+  ]
+ },
+ "cpe:/a:cherrypy:cherrypy": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:citrix:netscaler": {
+  "count": 0,
+  "tried": [
+   [
+    "6.1",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:citrix:xenserver": {
+  "count": 15,
+  "tried": [
+   [
+    "8.2.0",
+    0
+   ],
+   [
+    "7.2.0",
+    15
+   ]
+  ]
+ },
+ "cpe:/a:cmsimple:cmsimple": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:communigate:communigate_pro": {
+  "count": 0,
+  "tried": [
+   [
+    "6.2.14",
+    0
+   ],
+   [
+    "5.3.1",
+    0
+   ],
+   [
+    "4.3.12",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:compaq:compaqhttpserver": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:concrete5:concrete5": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:connectwise:control": {
+  "count": 0,
+  "tried": [
+   [
+    "6.3.13446.6374",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:contenido:contendio": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:coppermine-gallery:coppermine_photo_gallery": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:couchbase:sync_gateway": {
+  "count": 2,
+  "tried": [
+   [
+    "2.5.0",
+    2
+   ]
+  ]
+ },
+ "cpe:/a:cpanel:cpanel": {
+  "count": 514,
+  "tried": [
+   [
+    "11.44.3.0",
+    514
+   ]
+  ]
+ },
+ "cpe:/a:dancer:dancer": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:danneo:danneo_cms": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:dave_thomas:rdoc": {
+  "count": 0,
+  "tried": [
+   [
+    "77",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:directadmin:directadmin": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:djangoproject:django": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:dojotoolkit:dojo": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:dokuwiki:dokuwiki": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:doxygen:doxygen": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:dropbear_ssh_project:dropbear_ssh": {
+  "count": 27,
+  "tried": [
+   [
+    "2015.67",
+    27
+   ]
+  ]
+ },
+ "cpe:/a:drupal:drupal": {
+  "count": 383,
+  "tried": [
+   [
+    "7",
+    383
+   ]
+  ]
+ },
+ "cpe:/a:eclipse:jetty": {
+  "count": 41,
+  "tried": [
+   [
+    "7.6.9.v20130131",
+    41
+   ]
+  ]
+ },
+ "cpe:/a:edgewall:trac": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:elastic:kibana": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:elasticsearch:kibana": {
+  "count": 9,
+  "tried": [
+   [
+    "7",
+    9
+   ]
+  ]
+ },
+ "cpe:/a:embedthis:appweb": {
+  "count": 2,
+  "tried": [
+   [
+    "3.2.3",
+    0
+   ],
+   [
+    "4.0.0",
+    2
+   ]
+  ]
+ },
+ "cpe:/a:emberjs:ember.js": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:erlang:erlang%2fotp": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:f5:big-ip_local_traffic_manager": {
+  "count": 14,
+  "tried": [
+   [
+    "4.1.1a@1.791",
+    14
+   ]
+  ]
+ },
+ "cpe:/a:f5:nginx": {
+  "count": 128,
+  "tried": [
+   [
+    "7",
+    0
+   ],
+   [
+    "0.8.53",
+    128
+   ]
+  ]
+ },
+ "cpe:/a:facebook:hhvm": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:facebook:react": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:fortinet:fortisandbox": {
+  "count": 9,
+  "tried": [
+   [
+    "5.0.5",
+    9
+   ]
+  ]
+ },
+ "cpe:/a:fortinet:fortivoice": {
+  "count": 0,
+  "tried": [
+   [
+    "7.31b00",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:freeswitch:freeswitch": {
+  "count": 32,
+  "tried": [
+   [
+    "1.10.4",
+    32
+   ]
+  ]
+ },
+ "cpe:/a:genivia:gsoap": {
+  "count": 11,
+  "tried": [
+   [
+    "2.7",
+    11
+   ]
+  ]
+ },
+ "cpe:/a:getbootstrap:bootstrap": {
+  "count": 0,
+  "tried": [
+   [
+    "7777777",
+    0
+   ],
+   [
+    "7.7.7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:git-scm:git": {
+  "count": 0,
+  "tried": [
+   [
+    "77",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:gitlist:gitlist": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:glpi-project:glpi": {
+  "count": 139,
+  "tried": [
+   [
+    "7.7.7",
+    139
+   ]
+  ]
+ },
+ "cpe:/a:google:firebase_cloud_messaging": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:google:mod_pagespeed": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:google:web_toolkit": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:h2o:h2o": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:handlebars.js_project:handlebars.js": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:hp:integrated_lights_out": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:hp:web_jetadmin": {
+  "count": 1,
+  "tried": [
+   [
+    "10.3.91358",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:hydra_project:hydra": {
+  "count": 1,
+  "tried": [
+   [
+    "0.1.8",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:ibm:http_server": {
+  "count": 15,
+  "tried": [
+   [
+    "7",
+    15
+   ]
+  ]
+ },
+ "cpe:/a:ibm:lotus_domino": {
+  "count": 11,
+  "tried": [
+   [
+    "5.0.8",
+    11
+   ]
+  ]
+ },
+ "cpe:/a:ibm:tealeaf_customer_experience": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:ibm:tivoli_storage_manager": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:ibm:websphere": {
+  "count": 0,
+  "tried": [
+   [
+    "5.0",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:imagely:nextgen_gallery": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:imatix:xitami": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:impresspages:impresspages_cms": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:intel:active_management_technology": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:intel:standard_manageability": {
+  "count": 0,
+  "tried": [
+   [
+    "7.7.7.7",
+    0
+   ],
+   [
+    "5.0.50",
+    0
+   ],
+   [
+    "7.7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:ipswitch:imail_server": {
+  "count": 5,
+  "tried": [
+   [
+    "6.06",
+    0
+   ],
+   [
+    "12.4.2.27",
+    5
+   ]
+  ]
+ },
+ "cpe:/a:ipswitch:moveit_dmz": {
+  "count": 0,
+  "tried": [
+   [
+    "3.0.5.0",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:jamf:jamf": {
+  "count": 6,
+  "tried": [
+   [
+    "10.14.0-t1563397490",
+    6
+   ]
+  ]
+ },
+ "cpe:/a:jekyllrb:jekyll": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:jenkins:jenkins": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:jetbrains:teamcity": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:jfrog:artifactory": {
+  "count": 26,
+  "tried": [
+   [
+    "7",
+    26
+   ]
+  ]
+ },
+ "cpe:/a:joomla:joomla": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:jquery:jquery": {
+  "count": 0,
+  "tried": [
+   [
+    "7.7.7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:jquery:jquery_ui": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ],
+   [
+    "77",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:jqueryui:jquery_ui": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:kamailio:kamailio": {
+  "count": 2,
+  "tried": [
+   [
+    "7",
+    0
+   ],
+   [
+    "4.4.4",
+    2
+   ]
+  ]
+ },
+ "cpe:/a:kentico:kentico_cms": {
+  "count": 0,
+  "tried": [
+   [
+    "7 (build 7)",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:knot-dns:knot_dns": {
+  "count": 0,
+  "tried": [
+   [
+    "2.5.0-dev",
+    0
+   ],
+   [
+    "1.6.0",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:koha:koha": {
+  "count": 14,
+  "tried": [
+   [
+    "7",
+    14
+   ]
+  ]
+ },
+ "cpe:/a:kohanaframework:kohana": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:konghq:kong_gateway": {
+  "count": 0,
+  "tried": [
+   [
+    "0.30",
+    0
+   ],
+   [
+    "1.2.1",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:laurent_destailleur:awstats": {
+  "count": 2,
+  "tried": [
+   [
+    "7 (build 7)",
+    0
+   ],
+   [
+    "7",
+    2
+   ]
+  ]
+ },
+ "cpe:/a:liferay:liferay_portal": {
+  "count": 103,
+  "tried": [
+   [
+    "7",
+    103
+   ]
+  ]
+ },
+ "cpe:/a:liftweb:lift": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:lightbend:akka_http": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:lighttpd:lighttpd": {
+  "count": 33,
+  "tried": [
+   [
+    "1.4.16",
+    33
+   ]
+  ]
+ },
+ "cpe:/a:litespeedtech:litespeed_web_server": {
+  "count": 0,
+  "tried": [
+   [
+    "5.2.8",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:lua:lua": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:macromedia:flash_communication_server": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:mcafee:webshield": {
+  "count": 0,
+  "tried": [
+   [
+    "1.1",
+    0
+   ],
+   [
+    "1.0.1",
+    0
+   ],
+   [
+    "4.5",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:mediawiki:mediawiki": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:microsoft:.net_framework": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:microsoft:asp.net": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:microsoft:business_solutions_crm": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:microsoft:excel": {
+  "count": 51,
+  "tried": [
+   [
+    "7",
+    51
+   ]
+  ]
+ },
+ "cpe:/a:microsoft:frontpage": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:microsoft:iis": {
+  "count": 0,
+  "tried": [
+   [
+    "5.0.2195.5329",
+    0
+   ],
+   [
+    "6.0.2600.5512",
+    0
+   ],
+   [
+    "7.7.7.7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:microsoft:internet_information_services": {
+  "count": 14,
+  "tried": [
+   [
+    "7",
+    14
+   ]
+  ]
+ },
+ "cpe:/a:microsoft:outlook_web_access": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:microsoft:personal_web_server": {
+  "count": 4,
+  "tried": [
+   [
+    "4.0",
+    4
+   ]
+  ]
+ },
+ "cpe:/a:microsoft:powerpoint": {
+  "count": 11,
+  "tried": [
+   [
+    "7",
+    11
+   ]
+  ]
+ },
+ "cpe:/a:microsoft:publisher": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:microsoft:sharepoint_server": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:microsoft:word": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:miniupnp_project:miniupnpd": {
+  "count": 16,
+  "tried": [
+   [
+    "1.4",
+    16
+   ]
+  ]
+ },
+ "cpe:/a:mirasvit:cache_warmer": {
+  "count": 0,
+  "tried": [
+   [
+    "1.11.11",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:mitmproxy:mitmproxy": {
+  "count": 12,
+  "tried": [
+   [
+    "7.0.4",
+    12
+   ]
+  ]
+ },
+ "cpe:/a:mochiweb_project:mochiweb": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:modssl:mod_ssl": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:modwsgi:mod_wsgi": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:modx:modx_revolution": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:monkey-project:monkey_http_daemon": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:mortbay:jetty": {
+  "count": 10,
+  "tried": [
+   [
+    "1.4.5",
+    10
+   ]
+  ]
+ },
+ "cpe:/a:mozilla:bugzilla": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:netdata:netdata": {
+  "count": 6,
+  "tried": [
+   [
+    "1.16.1-146-g2f5e36ef",
+    6
+   ]
+  ]
+ },
+ "cpe:/a:netscape:commerce_server": {
+  "count": 0,
+  "tried": [
+   [
+    "7.q",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:netscape:fasttrack_server": {
+  "count": 0,
+  "tried": [
+   [
+    "7.q",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:ni:labview": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:nlnetlabs:name_server_daemon": {
+  "count": 0,
+  "tried": [
+   [
+    "3.2.18",
+    0
+   ],
+   [
+    "4.0.0b5",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:nortel:callpilot": {
+  "count": 0,
+  "tried": [
+   [
+    "42.02.05.22",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:novell:netware_enterprise_web_server": {
+  "count": 0,
+  "tried": [
+   [
+    "5.1",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:ntp:ntp": {
+  "count": 97,
+  "tried": [
+   [
+    "4.2.6",
+    97
+   ]
+  ]
+ },
+ "cpe:/a:ollama:ollama": {
+  "count": 38,
+  "tried": [
+   [
+    "0.1.45",
+    38
+   ]
+  ]
+ },
+ "cpe:/a:open-classifieds:open_classifieds": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:openresty:openresty": {
+  "count": 34,
+  "tried": [
+   [
+    "1.13.6.2",
+    34
+   ]
+  ]
+ },
+ "cpe:/a:opensips:opensips": {
+  "count": 12,
+  "tried": [
+   [
+    "2.2.2",
+    12
+   ]
+  ]
+ },
+ "cpe:/a:opensolution:quick.cms": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:openssl:openssl": {
+  "count": 1,
+  "tried": [
+   [
+    "7q",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:oracle:application_server": {
+  "count": 0,
+  "tried": [
+   [
+    "7q",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:oracle:application_server_portal": {
+  "count": 0,
+  "tried": [
+   [
+    "2173348032.20480.0000",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:oracle:application_server_web_cache": {
+  "count": 0,
+  "tried": [
+   [
+    "10.1.2.3.0",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:oracle:commerce_platform": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:oracle:glassfish_server": {
+  "count": 1,
+  "tried": [
+   [
+    "4.1.2",
+    0
+   ],
+   [
+    "3.1.2.14",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:oracle:http_server": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:oracle:iplanet_web_server": {
+  "count": 12,
+  "tried": [
+   [
+    "7.0",
+    12
+   ]
+  ]
+ },
+ "cpe:/a:oracle:jdk": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:oracle:jre": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:oracle:mojarra": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:oracle:mysql": {
+  "count": 14,
+  "tried": [
+   [
+    "7.7.7",
+    0
+   ],
+   [
+    "4.1.11",
+    14
+   ]
+  ]
+ },
+ "cpe:/a:oracle:opensso": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:oracle:web_cache": {
+  "count": 1,
+  "tried": [
+   [
+    "11.1.1.6.0",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:oracle:weblogic_server": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:palletsprojects:flask": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:palletsprojects:werkzeug": {
+  "count": 44,
+  "tried": [
+   [
+    "0.14.1",
+    44
+   ]
+  ]
+ },
+ "cpe:/a:parallels:parallels_plesk_panel": {
+  "count": 1,
+  "tried": [
+   [
+    "12.0.1",
+    0
+   ],
+   [
+    "7",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:paramiko:paramiko": {
+  "count": 21,
+  "tried": [
+   [
+    "2.1.3",
+    21
+   ]
+  ]
+ },
+ "cpe:/a:percona:percona_server": {
+  "count": 17,
+  "tried": [
+   [
+    "5.1.57-rel12.8",
+    17
+   ]
+  ]
+ },
+ "cpe:/a:perl:perl": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ],
+   [
+    "1.36",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:php:php": {
+  "count": 215,
+  "tried": [
+   [
+    "7",
+    215
+   ]
+  ]
+ },
+ "cpe:/a:phpfusion:phpfusion": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:phpmyadmin:phpmyadmin": {
+  "count": 32,
+  "tried": [
+   [
+    "7",
+    0
+   ],
+   [
+    "5.3.0-dev+20220208.47252f9cf8",
+    0
+   ],
+   [
+    "5.0.4",
+    32
+   ]
+  ]
+ },
+ "cpe:/a:phusion:passenger": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:phusionpassenger:phusion_passenger": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:powerdns:authoritative_server": {
+  "count": 2,
+  "tried": [
+   [
+    "4.0.0-alpha2",
+    0
+   ],
+   [
+    "3.3-rc2",
+    2
+   ]
+  ]
+ },
+ "cpe:/a:progress:sitefinity": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:prototypejs:prototype": {
+  "count": 0,
+  "tried": [
+   [
+    "77",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:public_knowledge_project:open_journal_systems": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:python:python": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:rapid7:nexpose": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:realvnc:realvnc": {
+  "count": 1,
+  "tried": [
+   [
+    "4.0",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:redhat:jboss_application_server": {
+  "count": 5,
+  "tried": [
+   [
+    "7",
+    5
+   ]
+  ]
+ },
+ "cpe:/a:redhat:jboss_community_application_server": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:redhat:jboss_enterprise_application_platform": {
+  "count": 986,
+  "tried": [
+   [
+    "7",
+    986
+   ]
+  ]
+ },
+ "cpe:/a:redhat:jboss_enterprise_web_server": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:redhat:jboss_wildfly_application_server": {
+  "count": 0,
+  "tried": [
+   [
+    "6",
+    0
+   ],
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:redhat:jbossweb": {
+  "count": 1,
+  "tried": [
+   [
+    "7",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:redhat:undertow": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:redhat:wildfly": {
+  "count": 15,
+  "tried": [
+   [
+    "8",
+    15
+   ]
+  ]
+ },
+ "cpe:/a:ruby-lang:webrick": {
+  "count": 18,
+  "tried": [
+   [
+    "7",
+    0
+   ],
+   [
+    "1.3.1",
+    18
+   ]
+  ]
+ },
+ "cpe:/a:rubyonrails:ruby_on_rails": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:sap:netweaver_application_server_abap": {
+  "count": 66,
+  "tried": [
+   [
+    "731",
+    66
+   ]
+  ]
+ },
+ "cpe:/a:sap:netweaver_application_server_java": {
+  "count": 38,
+  "tried": [
+   [
+    "7.01",
+    38
+   ]
+  ]
+ },
+ "cpe:/a:sap:sql_anywhere": {
+  "count": 0,
+  "tried": [
+   [
+    "16.0.0.2207",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:semperfiwebdesign:all_in_one_seo_pack": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:shopware:shopware": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:sitepark:information_enterprise_server": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:solarwinds:orion_core_services": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:solarwinds:serv-u_ftp_server": {
+  "count": 20,
+  "tried": [
+   [
+    "2.5n",
+    0
+   ],
+   [
+    "7.2",
+    0
+   ],
+   [
+    "15.1.6.31",
+    20
+   ]
+  ]
+ },
+ "cpe:/a:sonicwall:email_security": {
+  "count": 0,
+  "tried": [
+   [
+    "9.0.5.2077",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:sonicwall:universal_management_appliance": {
+  "count": 0,
+  "tried": [
+   [
+    "8.7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:spip:spip": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ],
+   [
+    "7 [7]",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:splunk:splunk": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:squid-cache:squid": {
+  "count": 51,
+  "tried": [
+   [
+    "2.3.STABLE1",
+    51
+   ]
+  ]
+ },
+ "cpe:/a:squirrelmail:squirrelmail": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:ssh:tectia_server": {
+  "count": 4,
+  "tried": [
+   [
+    "6.4.12.353",
+    4
+   ]
+  ]
+ },
+ "cpe:/a:sun:java_system_application_server": {
+  "count": 0,
+  "tried": [
+   [
+    "9.1_02",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:sun:java_system_web_proxy_server": {
+  "count": 13,
+  "tried": [
+   [
+    "4.0.2",
+    13
+   ]
+  ]
+ },
+ "cpe:/a:sun:java_system_web_server": {
+  "count": 0,
+  "tried": [
+   [
+    "3.5.1",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:teamspeak:teamspeak": {
+  "count": 0,
+  "tried": [
+   [
+    "3.13.6",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:telerik:ui_for_asp.net_ajax": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:tigervnc:tigervnc": {
+  "count": 0,
+  "tried": [
+   [
+    "4.0",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:tildeslash:monit": {
+  "count": 2,
+  "tried": [
+   [
+    "5.6",
+    2
+   ]
+  ]
+ },
+ "cpe:/a:tinyproxy_project:tinyproxy": {
+  "count": 6,
+  "tried": [
+   [
+    "1.8.2",
+    6
+   ]
+  ]
+ },
+ "cpe:/a:tornadoweb:tornado": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:treck:tcp%2fip": {
+  "count": 1,
+  "tried": [
+   [
+    "4.0.2.38",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:tridium:niagara_ax": {
+  "count": 0,
+  "tried": [
+   [
+    "3.8.111",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:twistedmatrix:twistedweb": {
+  "count": 0,
+  "tried": [
+   [
+    "13.0.0",
+    0
+   ],
+   [
+    "2.5.0",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:varnish-software:varnish_cache": {
+  "count": 3,
+  "tried": [
+   [
+    "7",
+    3
+   ]
+  ]
+ },
+ "cpe:/a:varnish_cache_project:varnish_cache": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:vbulletin:vbulletin": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:vsftpd_project:vsftpd": {
+  "count": 9,
+  "tried": [
+   [
+    "1.1.3",
+    0
+   ],
+   [
+    "2.0.5",
+    9
+   ]
+  ]
+ },
+ "cpe:/a:web-feet:coaster_cms": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:welcart:welcart": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:wftpserver:wing_ftp_server": {
+  "count": 51,
+  "tried": [
+   [
+    "3.6.0",
+    51
+   ]
+  ]
+ },
+ "cpe:/a:woocommerce:woocommerce": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:wordpress:wordpress": {
+  "count": 116,
+  "tried": [
+   [
+    "7",
+    116
+   ]
+  ]
+ },
+ "cpe:/a:wowza:streaming_engine": {
+  "count": 17,
+  "tried": [
+   [
+    "4.7.7",
+    17
+   ]
+  ]
+ },
+ "cpe:/a:xiongmaitech:uc-httpd": {
+  "count": 8,
+  "tried": [
+   [
+    "1.0.0",
+    8
+   ]
+  ]
+ },
+ "cpe:/a:xiph:icecast": {
+  "count": 1,
+  "tried": [
+   [
+    "2.4.3",
+    1
+   ]
+  ]
+ },
+ "cpe:/a:yaws:yaws": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:yoast:yoast_seo": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/a:zaphoyd:websocketpp": {
+  "count": 0,
+  "tried": [
+   [
+    "0.8.0-dev",
+    0
+   ],
+   [
+    "0.8.1",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:zeit:next.js": {
+  "count": 4,
+  "tried": [
+   [
+    "7",
+    4
+   ]
+  ]
+ },
+ "cpe:/a:zend:zend_server": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/a:zimbra:collaboration": {
+  "count": 33,
+  "tried": [
+   [
+    "7.0.0_GA_3079",
+    33
+   ]
+  ]
+ },
+ "cpe:/h:hp:integrated_lights-out": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:apple:mac_os_x": {
+  "count": 0,
+  "tried": [
+   [
+    "2.14.2",
+    0
+   ],
+   [
+    "1.20",
+    0
+   ],
+   [
+    "6.1.0",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:apple:macos": {
+  "count": 4250,
+  "tried": [
+   [
+    "3.0.2",
+    4250
+   ]
+  ]
+ },
+ "cpe:/o:cisco:ios": {
+  "count": 70,
+  "tried": [
+   [
+    "15.2.4.M3",
+    70
+   ]
+  ]
+ },
+ "cpe:/o:cisco:mds_9000_san-os": {
+  "count": 0,
+  "tried": [
+   [
+    "3.3(2)",
+    0
+   ],
+   [
+    "7.3(1)D1(1)",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:cisco:spa112_firmware": {
+  "count": 18,
+  "tried": [
+   [
+    "1.4.1SR1",
+    18
+   ]
+  ]
+ },
+ "cpe:/o:cisco:unified_sip_phone_3900_firmware": {
+  "count": 0,
+  "tried": [
+   [
+    "9.4.1",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:dd-wrt:dd-wrt": {
+  "count": 3,
+  "tried": [
+   [
+    "36104",
+    3
+   ]
+  ]
+ },
+ "cpe:/o:freebsd:freebsd": {
+  "count": 128,
+  "tried": [
+   [
+    "7",
+    128
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:gxp1610_firmware": {
+  "count": 6,
+  "tried": [
+   [
+    "1.0.4.138",
+    6
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:gxp1615_firmware": {
+  "count": 9,
+  "tried": [
+   [
+    "1.0.4.128",
+    9
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:gxp1625_firmware": {
+  "count": 9,
+  "tried": [
+   [
+    "1.0.4.128",
+    9
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:gxp1628_firmware": {
+  "count": 4,
+  "tried": [
+   [
+    "1.0.7.6",
+    4
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:gxp2200_firmware": {
+  "count": 7,
+  "tried": [
+   [
+    "1.0.3.27",
+    7
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:gxv_device_firmware": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/o:grandstream:ht801_firmware": {
+  "count": 7,
+  "tried": [
+   [
+    "1.0.3.2",
+    7
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:ht802_firmware": {
+  "count": 4,
+  "tried": [
+   [
+    "1.0.3.2",
+    4
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:ht812_firmware": {
+  "count": 4,
+  "tried": [
+   [
+    "1.0.3.5",
+    4
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:ht813_firmware": {
+  "count": 4,
+  "tried": [
+   [
+    "1.0.1.2",
+    4
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:ht814_firmware": {
+  "count": 4,
+  "tried": [
+   [
+    "1.0.9.3",
+    4
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:ht818_firmware": {
+  "count": 4,
+  "tried": [
+   [
+    "1.0.8.7",
+    4
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:ucm6202_firmware": {
+  "count": 17,
+  "tried": [
+   [
+    "1.0.15.16",
+    17
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:ucm6204_firmware": {
+  "count": 21,
+  "tried": [
+   [
+    "1.0.15.16",
+    21
+   ]
+  ]
+ },
+ "cpe:/o:grandstream:ucm6208_firmware": {
+  "count": 17,
+  "tried": [
+   [
+    "1.0.16.20",
+    17
+   ]
+  ]
+ },
+ "cpe:/o:hp:hp-ux": {
+  "count": 0,
+  "tried": [
+   [
+    "1.1.214.4",
+    0
+   ],
+   [
+    "4.2.5p154@1.1802",
+    0
+   ],
+   [
+    "4.2.6",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:hp:integrated_lights-out_firmware": {
+  "count": 0,
+  "tried": [
+   [
+    "0.0.1",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:hp:tru64_unix": {
+  "count": 0,
+  "tried": [
+   [
+    "5.60",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:ibm:aix": {
+  "count": 0,
+  "tried": [
+   [
+    "9876",
+    0
+   ],
+   [
+    "7777",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:ibm:i5os": {
+  "count": 0,
+  "tried": [
+   [
+    "6",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:ibm:os_400": {
+  "count": 0,
+  "tried": [
+   [
+    "4",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:ibm:z%2fos": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/o:intel:active_management_technology_firmware": {
+  "count": 27,
+  "tried": [
+   [
+    "7.7.7.7",
+    27
+   ]
+  ]
+ },
+ "cpe:/o:juniper:junos": {
+  "count": 297,
+  "tried": [
+   [
+    "7.0R2.7",
+    297
+   ]
+  ]
+ },
+ "cpe:/o:juniper:screenos": {
+  "count": 0,
+  "tried": [
+   [
+    "2.0",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:linux:linux_kernel": {
+  "count": 4587,
+  "tried": [
+   [
+    "1.0",
+    4587
+   ]
+  ]
+ },
+ "cpe:/o:microsoft:windows": {
+  "count": 6,
+  "tried": [
+   [
+    "2.14.2",
+    6
+   ]
+  ]
+ },
+ "cpe:/o:microsoft:windows_7": {
+  "count": 735,
+  "tried": [
+   [
+    "1.20",
+    735
+   ]
+  ]
+ },
+ "cpe:/o:microsoft:windows_ce": {
+  "count": 0,
+  "tried": [
+   [
+    "11.50.29",
+    0
+   ],
+   [
+    "4.10",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:microsoft:windows_server_2016": {
+  "count": 6672,
+  "tried": [
+   [
+    "10.0.14393",
+    6672
+   ]
+  ]
+ },
+ "cpe:/o:microsoft:windows_xp": {
+  "count": 0,
+  "tried": [
+   [
+    "1.54.0",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:mikrotik:routeros": {
+  "count": 56,
+  "tried": [
+   [
+    "6.43",
+    56
+   ]
+  ]
+ },
+ "cpe:/o:nec:sl2100_firmware": {
+  "count": 0,
+  "tried": [
+   [
+    "2.1",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:nec:sv8100_firmware": {
+  "count": 1,
+  "tried": [
+   [
+    "7",
+    1
+   ]
+  ]
+ },
+ "cpe:/o:nec:sv9100_firmware": {
+  "count": 2,
+  "tried": [
+   [
+    "7",
+    2
+   ]
+  ]
+ },
+ "cpe:/o:netapp:data_ontap": {
+  "count": 9,
+  "tried": [
+   [
+    "8.1RC2",
+    9
+   ]
+  ]
+ },
+ "cpe:/o:netbsd:netbsd": {
+  "count": 67,
+  "tried": [
+   [
+    "4.2.4p6-o",
+    0
+   ],
+   [
+    "1.5.3",
+    67
+   ]
+  ]
+ },
+ "cpe:/o:oracle:integrated_lights_out_manager_firmware": {
+  "count": 5,
+  "tried": [
+   [
+    "1.0",
+    5
+   ]
+  ]
+ },
+ "cpe:/o:oracle:solaris": {
+  "count": 186,
+  "tried": [
+   [
+    "4.2.0@1.1161-r",
+    0
+   ],
+   [
+    "11",
+    186
+   ]
+  ]
+ },
+ "cpe:/o:oracle:sunos": {
+  "count": 0,
+  "tried": [
+   [
+    "7",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:redhat:linux": {
+  "count": 0,
+  "tried": [
+   [
+    "9 (Shrike)",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:sun:solaris": {
+  "count": 0,
+  "tried": [
+   [
+    "4.2.0@1.1161-r",
+    0
+   ],
+   [
+    "4.0",
+    0
+   ]
+  ]
+ },
+ "cpe:/o:sun:sunos": {
+  "count": null,
+  "why": "no example version to ask with"
+ },
+ "cpe:/o:suse:linux_enterprise_server": {
+  "count": null,
+  "why": "no example version to ask with"
+ }
+}

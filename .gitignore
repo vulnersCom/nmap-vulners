@@ -24,6 +24,9 @@ secrets*
 *.nmap
 *.gnmap
 *.xml
+# ...except the captured 1.x report the XML contract is calibrated against.
+# Once the 1.x scripts are merged away no checkout can regenerate it.
+!tests/fixtures/golden_1x.xml
 scan-*
 scans/
 output/

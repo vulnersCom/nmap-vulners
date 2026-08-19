@@ -67,17 +67,21 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "prefix=nmap-vulners-${TAG#v}" >> "$GITHUB_OUTPUT"
 
-      # The tag names the release; each script carries its own api_version,
-      # which identifies the request generation to vulners.com and moves on its
-      # own schedule. Both are printed so the release notes can be checked
-      # against what actually shipped.
+      # The tag names the release; the script carries its own api_version, which
+      # identifies the request generation to vulners.com and travels in the
+      # User-Agent. Both are printed so the release notes can be checked against
+      # what actually shipped.
+      #
+      # This used to grep vulners_enterprise.nse as well. 2.0 deletes that file,
+      # so the first "git push origin v2.0" would have failed here before it
+      # built anything.
       - name: Report the versions being released
         run: |
           case "${{ steps.name.outputs.tag }}" in
             v[0-9]*.[0-9]*) : ;;
             *) echo "tag should look like v1.5"; exit 1 ;;
           esac
-          grep -H "^local api_version" vulners.nse vulners_enterprise.nse
+          grep -H "^local api_version" vulners.nse
 
       # git archive honours export-ignore, so tests, CI and docs stay out.
       - name: Build the archives

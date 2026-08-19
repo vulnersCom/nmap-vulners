@@ -21,6 +21,30 @@ jobs:
       - name: Check for secrets, AI artifacts and clutter
         run: python3 tools/check.py
 
+      # The dictionaries are downloaded at scan time, so a catalogue that is
+      # published broken breaks every scan everywhere until it is fixed - there
+      # is no release to hold it back. This runs the same checks the script
+      # runs before it uses a rule, so a rule that would be silently dropped in
+      # the field fails here instead.
+      - name: The catalogue is publishable
+        run: python3 tools/catalog.py --check
+
+      - name: The XML contract still catches a broken report
+        run: python3 tools/xml_contract.py --selftest tests/fixtures/golden_1x.xml
+
+      # The catalogue rebuilds itself on a schedule and publishes without a
+      # human, so the tools that decide what ships are held to the same standard
+      # as the script: the translator that writes the rules, and the gate that
+      # decides a rebuild is safe to publish.
+      - name: The importer makes the decisions it is supposed to
+        run: |
+          sudo apt-get update && sudo apt-get install -y lua5.4
+          sudo ln -sf "$(command -v lua5.4)" /usr/local/bin/lua
+          python3 tools/fingerprints/selftest.py
+
+      - name: The publish gate refuses what it must
+        run: python3 tools/catalog_diff.py --selftest
+
   tests:
     name: NSE test suite
     runs-on: ubuntu-latest
@@ -81,7 +105,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          ./install.sh
+          ./install.sh --no-key
           resolved=$(nmap -d2 --script-help vulners |
                      sed -n 's|^Fetchfile found \(.*/scripts/vulners\.nse\)$|\1|p' | head -n 1)
           echo "nmap resolves vulners to: $resolved"
@@ -94,7 +118,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PATH += ";C:\Program Files (x86)\Nmap"
-          .\install.ps1
+          .\install.ps1 -NoKey
           $resolved = $null
           foreach ($line in (nmap -d2 --script-help vulners 2>&1)) {
             if ("$line" -match '^Fetchfile found (.*vulners\.nse)$') { $resolved = $Matches[1]; break }

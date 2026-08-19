@@ -15,11 +15,32 @@ python3 tests/e2e/run_e2e.py
 python3 tools/check.py
 ```
 
+The unit suite takes under a second and the end-to-end suite about seven, so
+there is no reason to run them one at a time or only at the end. Working on one
+unit suite, load just that file:
+
+```sh
+nmap -sn -Pn --script ./tests/run.nse \
+  --script-args testdir=tests,root=.,only=test_sweep.lua 127.0.0.1
+```
+
+The end-to-end checks run in parallel, each against its own pair of servers.
+`--jobs 1` serialises them, which is worth doing when a check fails in a way that
+looks like interference.
+
 The end-to-end suite is offline by default. To additionally check that the real
 API still answers in the shape the doubles imitate:
 
 ```sh
 VULNERS_API_KEY=<token> python3 tests/e2e/run_e2e.py --live
+```
+
+**A passing test is not proof.** Six assertions in this repository were once
+green while measuring nothing. Before trusting a new test, break the behaviour it
+covers on a scratch copy of the script and confirm the test fails:
+
+```sh
+cp vulners.nse /tmp/intact && <edit vulners.nse> && <run the gate> && cp /tmp/intact vulners.nse
 ```
 
 **Run a script by its absolute path when testing by hand.** nmap resolves a
@@ -31,11 +52,42 @@ nmap -sV --script "$PWD/vulners.nse" <target>     # your file
 nmap -sV --script ./vulners.nse <target>          # possibly nmap's own copy
 ```
 
-**The data file has the same trap.** `nmap.fetchfile` looks in the nmap
-installation's `nselib/data/` before the working directory, so once
-`http-vulners-regex.json` has been installed there, editing the copy in the
-checkout changes nothing. Remove the installed copy while developing, or check
-with `-d2` which one was read.
+**The script carries no fingerprint data.** It downloads three dictionaries at
+scan time, from a GitHub branch, so the corpus can grow without a release:
+
+```
+catalog/index.json          the manifest: schema and serial
+catalog/fingerprints.json   722 product and version rules
+catalog/paths.json          125 paths the sweep requests
+catalog/probes.json         6 targeted version probes
+```
+
+Those four files are the only copy - there is no second "editable source". Edit
+them directly for a one-off correction, then:
+
+```sh
+python3 tools/catalog.py --index     # bump the serial, or nobody downloads it
+python3 tools/catalog.py --check     # the checks the script itself applies
+```
+
+`catalog/fingerprints.json` and `catalog/probes.json` are normally **generated**
+by `tools/fingerprints/build.py` from checkouts of Recog, Wappalyzer and
+nuclei-templates, and rebuilt weekly by `.github/workflows/catalog-refresh.yml`.
+A hand edit survives the next rebuild only if the entry carries no `source`
+field. You never need to rebuild them to work on the script.
+
+**While working, point the script at your own catalogue** rather than the
+published one, or you will be testing against whatever is live:
+
+```sh
+python3 -m http.server 8000 --directory catalog &
+nmap -sV --script "$PWD/vulners.nse" \
+  --script-args vulners.catalog_url=http://127.0.0.1:8000/ <target>
+```
+
+`vulners.catalog=none` turns the download off entirely; the script then looks up
+only what nmap itself identified, which is also what happens on a machine with
+no route to GitHub.
 
 Run all three from the repository root. Each exits non-zero on failure, and CI
 runs exactly the same commands.
@@ -64,10 +116,17 @@ needs to inspect what was logged.
 Adding a test file means adding it to `TEST_FILES` in `tests/run.nse`. A test
 file returns a list of `{name = ..., fn = ...}` entries.
 
-`tests/e2e/run_e2e.py` starts two local servers - a web server with recognisable
-version banners and a stand-in Vulners API - and runs the real `nmap` binary
-against them. That is what catches problems the unit suite cannot see, such as
-an argument arriving as a string where the http library expects a number.
+`tests/e2e/run_e2e.py` runs the real `nmap` binary against local servers: a web
+server with recognisable version banners, a stand-in Vulners API, and one serving
+`catalog/` out of the working tree so the checks exercise the dictionaries about
+to be committed rather than whatever is published. That is what catches problems
+the unit suite cannot see, such as an argument arriving as a string where the
+http library expects a number.
+
+Each check gets its own servers and its own counters, which is what lets them run
+at the same time. A check that needs to count requests must therefore read them
+off its own `world`, never off a handler class - the counters used to live there,
+and that is precisely why the checks could not overlap.
 
 ## Cutting a release
 
@@ -79,16 +138,23 @@ git push origin v1.5
 ```
 
 The workflow runs the three gates first, then builds `.tar.gz` and `.zip`
-archives with `git archive` - so they hold exactly what a user downloads: the
-three scripts, their two data files, both installers, the README and the
-LICENSE - writes `SHA256SUMS`, and publishes a release with generated notes.
+archives with `git archive` - so they hold exactly what a user downloads:
+`vulners.nse`, the two data files it was generated from, both installers, the
+README and the LICENSE - writes `SHA256SUMS`, and publishes a release with
+generated notes.
+
+The data files ship even though nothing installs them any more: they are the
+editable source, and at least one downstream project (CVEScannerV2) reads them
+directly.
 
 Nothing needs to be built by hand, and a release whose gates fail is never
 published. `workflow_dispatch` re-runs it for an existing tag.
 
-The per-script `api_version` is a different number: it identifies the request
+The script's `api_version` is a different number: it identifies the request
 generation to vulners.com and travels in the `User-Agent`, so it moves when the
-request shape changes, not when a release is cut. Check any bump against the
+request shape changes, not when a release is cut. The free endpoint sits behind
+a rule that answers 403 to a keyless request whose User-Agent does not contain
+`Vulners NMAP Plugin`, so that substring is a wire contract, not a label. Check any bump against the
 live service before shipping it - the header is what the service uses to tell
 plugin generations apart.
 
@@ -100,6 +166,13 @@ plugin generations apart.
   under `-d2` - that reflects the build, the package manager and `NMAPDIR`
 * **replace** an existing `vulners.nse`; nmap ships one of its own, and leaving
   it in place means nmap keeps running that copy
+* **remove the 1.x files** - `vulners_enterprise.nse`, `http-vulners-regex.nse`
+  and their two data files. A leftover fingerprint script still carries the
+  `default` category and keeps sweeping targets under a plain `-sC`
+* **offer to store an API key**, validating it against the API first and writing
+  it mode 600. Under `sudo` they resolve the home directory from `$SUDO_USER`,
+  because nmap resolves `~/.nmap` through `getpwuid(getuid())` and not `$HOME`.
+  `--no-key` / `-NoKey` skips the prompt, and a redirected stdin skips it too
 * verify by resolution, not by copying: they check that `--script vulners`
   resolves to the file they installed, and warn when it does not
 
@@ -109,13 +182,15 @@ again, so a change to either is exercised on the platforms it claims.
 ## House rules
 
 * **Comments and documentation in the project files are English only.**
-* Never commit an API key. `vulners_enterprise.nse` reads the token from
-  `--script-args api_key=`, from `VULNERS_API_KEY`, or from a file given with
-  `api_key_file=`; keep that file outside the repository.
+* Never commit an API key. The script reads a token from
+  `--script-args vulners.api_key=`, from `vulners.api_key_file=`, from
+  `VULNERS_API_KEY`, or from `~/.nmap/vulners.key`; keep any such file outside
+  the repository. `tools/check.py` looks for a bare 64-character alphanumeric
+  line, which is the shape of a key file committed by accident.
 * No AI assistant leftovers (`CLAUDE.md`, `.claude/`, `.cursorrules`, and the
   like), no OS or editor clutter, no scan output. `.gitignore` covers the usual
   names and `tools/check.py` is the second barrier.
-* `http-vulners-regex.json` is data with rules: each entry needs an
+* `catalog/fingerprints.json` is data with rules: each entry needs an
   `alias` of the form `cpe:/<part>:<vendor>:<product>` and a `regex` that is a
   valid Lua pattern with exactly one capture - the version. Patterns without a
   capture can never produce a CPE, so the test suite rejects them.

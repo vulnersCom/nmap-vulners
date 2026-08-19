@@ -22,11 +22,20 @@ prerule = function() return true end
 
 --- Test files are listed explicitly: NSE has no directory listing, and an
 -- explicit manifest also fails loudly when a file is renamed but not wired up.
+-- Named after what they test, not after the scripts they came from: 2.0 is one
+-- script, so the old names would each have pointed at a file that no longer
+-- exists.
 local TEST_FILES = {
-  "test_regex_data.lua",
-  "test_http_vulners_regex.lua",
-  "test_vulners.lua",
-  "test_vulners_enterprise.lua",
+  "test_harness.lua",      -- the harness itself
+  "test_config.lua",       -- where the key comes from, and what the numbers do
+  "test_catalog.lua",      -- fetching and refusing the dictionaries
+  "test_fingerprints.lua", -- the published pattern data
+  "test_channels.lua",     -- which part of a response each rule reads
+  "test_sweep.lua",        -- fetching paths and recognising software
+  "test_lookup.lua",       -- asking the free endpoint, and the scan cache
+  "test_keyed.lua",        -- what an API token adds, and how it degrades
+  "test_render.lua",       -- the table's width arithmetic and its escaping
+  "test_notice.lua",       -- what the scan says once, at the end
 }
 
 local function describe_error(err)
@@ -63,12 +72,19 @@ action = function()
   local root = stdnse.get_script_args("root") or (testdir .. "/..")
   local filter = stdnse.get_script_args("filter")
   local verbose = stdnse.get_script_args("verbose")
+  -- Load one file instead of all of them. Without this, working on one suite
+  -- means loading every other suite too, so an unrelated file that is mid-edit
+  -- reports as a failure of the run rather than of itself.
+  local only = stdnse.get_script_args("only")
 
   local harness = load_harness(testdir)
   local results = {}
   local passed, failed, skipped = 0, 0, 0
 
   for _, filename in ipairs(TEST_FILES) do
+    if only and filename ~= only then
+      goto next_file
+    end
     local path = testdir .. "/" .. filename
     local chunk, load_err = loadfile(path)
 

@@ -8,7 +8,7 @@ has entered the tree, and that text files keep one consistent shape.
   * AI assistant and agent leftovers
   * OS, editor and scan-output clutter
   * CRLF, trailing whitespace, missing final newline
-  * http-vulners-regex.json stays valid JSON
+  * every JSON file in the tree stays valid JSON, catalog/ included
 
 Run it from the repository root:
 
@@ -34,7 +34,6 @@ ALLOW_MARKER = "hygiene-allow"
 # Fixtures that are deliberately malformed, because a test feeds them to the
 # scripts to prove the failure path is handled.
 INTENTIONALLY_MALFORMED = {
-    "tests/fixtures/broken_regex.json",
     # Its CRLF line endings are the thing under test.
     "tests/fixtures/paths_crlf.txt",
 }
@@ -53,12 +52,34 @@ SECRET_PATTERNS = [
     ("JWT", re.compile(r"\beyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}")),
     ("Vulners API key assignment",
      re.compile(r"""api_key\s*=\s*["'][A-Za-z0-9]{20,}["']""")),
-    # A Vulners token is 64 hex characters and carries no prefix to key on, so
-    # the shape is all there is: either assigned to something named like a
-    # credential, or standing alone on its own line the way a key file holds it.
-    ("credential-shaped hex string",
-     re.compile(r"(?i)(?:api[_-]?key|token|secret|bearer)\W{0,4}\b[0-9a-f]{40,}\b")),
-    ("bare 64-character hex token", re.compile(r"^\s*[0-9a-f]{64}\s*$")),
+    # A Vulners token is 64 characters of mixed-case alphanumerics and carries
+    # no prefix to key on, so the shape is all there is: either assigned to
+    # something named like a credential, or standing alone on its own line the
+    # way a key file holds it. These two patterns used to demand [0-9a-f],
+    # which no real token satisfies - a committed key file passed the gate.
+    ("credential-shaped token",
+     re.compile(r"(?i)(?:api[_-]?key|token|secret|bearer)\W{0,4}\b[A-Za-z0-9]{40,}\b")),
+    ("bare 64-character token", re.compile(r"^\s*[A-Za-z0-9]{64}\s*$")),
+]
+
+# Samples the secret scan must keep catching, and samples it must keep
+# ignoring. They are assembled rather than written out, so that scanning this
+# file does not flag the scanner's own test data.
+_KEY_BODY = "A1B2c3D4" * 8
+
+MUST_MATCH = [
+    ("key file holding a token on its own line", _KEY_BODY),
+    ("key file line with surrounding whitespace", "  " + _KEY_BODY + "  "),
+    ("token of the shape the live service issues", "A1B2C3D4" * 8),
+    ("token written as lowercase hex", "abcdef01" * 8),
+    ("token assigned to a credential-shaped name", "VULNERS_API_KEY=" + _KEY_BODY),
+    ("bearer header", "Authorization: Bearer " + _KEY_BODY),
+]
+
+MUST_NOT_MATCH = [
+    ("ordinary prose", "the scan found nothing worth reporting here"),
+    ("a short identifier", "cpe:/a:apache:http_server:2.4.49"),
+    ("an alphanumeric run below the threshold", "B" + "a1" * 19),
 ]
 
 # Paths that must never be tracked in this repository.
@@ -196,9 +217,30 @@ def check_json(report, paths):
             report.problem(path, f"is not valid JSON: {exc}")
 
 
+def check_secret_patterns(report):
+    """The secret patterns still match the shapes they exist to catch.
+
+    Nothing else notices when one of them is narrowed: the scan simply stops
+    reporting, and a repository that publishes everything it tracks keeps
+    looking clean. That is not hypothetical - it is how the hex-only pattern
+    above survived long enough to be found by hand.
+    """
+    for label, sample in MUST_MATCH:
+        if not any(pattern.search(sample) for _, pattern in SECRET_PATTERNS):
+            report.problem("tools/check.py",
+                           f"the secret scan no longer catches a {label}")
+    for label, sample in MUST_NOT_MATCH:
+        hit = next((name for name, pattern in SECRET_PATTERNS
+                    if pattern.search(sample)), None)
+        if hit:
+            report.problem("tools/check.py",
+                           f"the secret scan now reports {label} as a {hit}")
+
+
 def main():
     paths = tracked_files()
     report = Report()
+    check_secret_patterns(report)
     check_forbidden(report, paths)
     check_secrets(report, paths)
     check_script_metadata(report, paths)

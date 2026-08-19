@@ -17,6 +17,9 @@ local stdnse = require "stdnse"
 local nmap = require "nmap"
 local table = require "table"
 local string = require "string"
+local io = require "io"
+local json = require "json"
+local os = require "os"
 
 local M = {}
 
@@ -171,6 +174,15 @@ function M.response(opts)
       rawheader[#rawheader + 1] = string.format("%s: %s", name, value)
     end
   end
+  -- rawbody defaults to body, because that is the only shape nselib produces.
+  -- nselib/http.lua sets rawbody to the UNDECODED bytes and then replaces body
+  -- with the decoded ones, so rawbody is ALWAYS present - while this double left
+  -- it nil unless a test asked for it. That let every case exercise a branch
+  -- production never takes, and hid a script that was matching its patterns
+  -- against gzip bytes on every server that compresses.
+  --
+  -- Pass rawbody explicitly to model a compressed response: rawbody is what
+  -- arrived on the wire, body is what nmap decoded for the script.
   return {
     status = opts.status,
     ["status-line"] = opts["status-line"] or
@@ -178,7 +190,7 @@ function M.response(opts)
     header = header,
     rawheader = rawheader,
     body = opts.body or "",
-    rawbody = opts.rawbody,
+    rawbody = opts.rawbody or opts.body or "",
   }
 end
 
@@ -194,11 +206,33 @@ function M.http_double()
   local double = {requests = {}}
 
   local function record(req)
+    -- Snapshot rather than read back later: options is the CALLER's table and
+    -- the write-back below mutates it, so a recorded reference would show every
+    -- request carrying whatever the last one ended up with.
+    req.scheme = req.options and req.options.scheme
+
     double.requests[#double.requests + 1] = req
     local reply = double.handler and double.handler(req, #double.requests)
     if reply == nil then
       return M.response({status = nil})
     end
+
+    -- What nselib does, and the reason it matters. On a redirect it assigns
+    -- `options.scheme = u.scheme or options.scheme` INTO THE CALLER'S TABLE
+    -- (nselib/http.lua:1799), so a caller that reuses one options table across
+    -- requests has its scheme changed out from under it by the target's own
+    -- Location header. Without this line the double is wrong in a direction
+    -- nselib never produces, and a case written to catch that bug passes
+    -- against code that has it.
+    local status = type(reply) == "table" and reply.status or nil
+    if req.options and status and status >= 300 and status < 400 then
+      local location = reply.header and (reply.header.location or reply.header.Location)
+      local scheme = type(location) == "string" and location:match("^(%a[%w+.-]*)://")
+      if scheme then
+        req.options.scheme = scheme:lower()
+      end
+    end
+
     return reply
   end
 
@@ -276,8 +310,15 @@ function M.stdnse_double()
     double.messages[#double.messages + 1] = ok and rendered or tostring(fmt)
   end
 
+  -- verbose1..verbose5 as well as verbose: the numbered forms are what the
+  -- script uses for everything it says to the operator - the degrade ladder,
+  -- the catalogue notes, the deprecation warnings. Without them those messages
+  -- fell through the metatable to the real library and a case that asserted on
+  -- one was asserting on an empty log.
   for _, name in ipairs({"debug1", "debug2", "debug3", "debug4", "debug5",
-                         "debug", "print_debug", "verbose", "print_verbose"}) do
+                         "debug", "print_debug",
+                         "verbose1", "verbose2", "verbose3", "verbose4",
+                         "verbose5", "verbose", "print_verbose"}) do
     double[name] = function(first, ...)
       -- stdnse.debug(level, fmt, ...) takes the level first, the rest do not.
       if name == "debug" or name == "print_debug" or name == "verbose"
@@ -318,6 +359,10 @@ function M.port(opts)
       version = opts.version,
       cpe = opts.cpe or {},
       name = opts.name or "http",
+      -- What nmap writes when its own probes did NOT settle the service. The
+      -- banner channel and the paid audit/smart call both read it, and until
+      -- this field existed no case could build a port that had one.
+      service_fp = opts.service_fp,
     }
   end
   return {
@@ -360,6 +405,113 @@ function M.nmap_double(opts)
   return setmetatable(double, {__index = nmap})
 end
 
+--- A stand-in for "os" whose getenv only sees what a test declares.
+--
+-- The merged script discovers its API key from the environment and from
+-- $HOME/.nmap/vulners.key, so a suite that does not fake this reads the
+-- developer's real key: the same case would pass on a machine with no key and
+-- fail on the maintainer's laptop. The environment is always faked, never
+-- merely overridden - unsetting a variable in the test process would not help,
+-- because the developer's shell is what exported it.
+--
+-- @param vars table of variable name -> value; everything else reads as unset
+function M.os_double(vars, files)
+  vars = vars or {}
+  local double = {removed = {}, renamed = {}}
+
+  function double.getenv(name)
+    return vars[name]
+  end
+
+  -- Nothing in the script renames or removes a file, and these are here to keep
+  -- it that way: the metatable falls through to the real os, so a regression
+  -- that started moving files would move the developer's, quietly, instead of
+  -- being recorded and asserted on.
+  if files then
+    function double.remove(path)
+      double.removed[#double.removed + 1] = path
+      files[path] = nil
+      return true
+    end
+    function double.rename(from, to)
+      double.renamed[#double.renamed + 1] = from .. " -> " .. to
+      if files[from] == nil then
+        return nil, from .. ": No such file or directory"
+      end
+      files[to] = files[from]
+      files[from] = nil
+      return true
+    end
+  end
+
+  return setmetatable(double, {__index = os})
+end
+
+--- A stand-in for "io" that only knows the files a test declares.
+--
+-- @param files table of path -> contents
+function M.io_double(files)
+  files = files or {}
+  -- .written records what the script put on disk. The script is not supposed
+  -- to write anything at all, so this exists to CATCH a write rather than to
+  -- serve one: without it, an io.open(path, "w") would fall through the
+  -- metatable to the real library and create the file on the developer's
+  -- machine, and the case asserting nothing was written would pass.
+  local double = {opened = {}, written = {}, files = files}
+
+  function double.open(path, mode)
+    double.opened[#double.opened + 1] = path
+
+    if mode and mode:find("[wa]") then
+      local buffer = {}
+      if mode:find("a") and files[path] then
+        buffer[1] = files[path]
+      end
+      local handle = {}
+      function handle:write(text)
+        buffer[#buffer + 1] = tostring(text)
+        return handle
+      end
+      function handle:close()
+        local text = table.concat(buffer)
+        files[path] = text
+        double.written[path] = text
+        return true
+      end
+      function handle:read() return nil end
+      function handle:lines() return function() return nil end end
+      return handle
+    end
+
+    local contents = files[path]
+    if contents == nil then
+      return nil, path .. ": No such file or directory"
+    end
+
+    local position = 1
+    local handle = {}
+    function handle:read(what)
+      if position > #contents then return nil end
+      if what == "*all" or what == "a" then
+        local rest = contents:sub(position)
+        position = #contents + 1
+        return rest
+      end
+      local line, next_position = contents:match("([^\n]*)\n?()", position)
+      if next_position == position then return nil end
+      position = next_position
+      return line
+    end
+    function handle:lines()
+      return function() return handle:read("*line") end
+    end
+    function handle:close() return true end
+    return handle
+  end
+
+  return setmetatable(double, {__index = io})
+end
+
 -- ---------------------------------------------------------------- script load
 
 local script_arg_backup = nil
@@ -379,8 +531,10 @@ end
 
 --- Registry keys the scripts under test use for scan-wide caches.
 -- They survive between action() calls by design, so a test must start clean.
-local REGISTRY_KEYS = {"vulners_enterprise", "vulners", "vulners_cpe",
-                        "vulners_regex_patterns"}
+-- One key, because 2.0 keeps everything scan-wide under it. The 1.x names are
+-- gone with the scripts that wrote them, and host.registry.vulners_cpe is on the
+-- host table, which every case builds fresh anyway.
+local REGISTRY_KEYS = {"vulners"}
 
 --- Drop every scan-wide cache the scripts keep in nmap.registry.
 function M.reset_registry()
@@ -440,13 +594,171 @@ function M.load_script(path, opts)
   -- The script captured the doubles in its own locals during the chunk run,
   -- so package.loaded can go back to the real libraries immediately.
   -- Script arguments stay in place until the test case ends.
-  for modname, original in pairs(swapped) do package.loaded[modname] = original end
+  for modname, entry in pairs(swapped) do package.loaded[modname] = entry.previous end
 
   if not ok then
     fail(string.format("error while loading %s: %s", path, tostring(run_err)))
   end
 
   return env
+end
+
+--- A stand-in for "stdnse" whose sleep() is counted instead of performed.
+--
+-- Installed by load_vulners for EVERY case, not only the ones that measure a
+-- wait. The retry ladder sleeps 1 s, then 2, then 3 before it gives up, so any
+-- case that let a request go unanswered paid six real seconds for it - and
+-- enough of them did that the suite took 23 seconds, 22 of which were spent
+-- asleep. Counting the sleep makes those paths instant and turns "did it wait,
+-- and how long for" into something a test can assert instead of something it
+-- endures.
+--
+-- Everything else falls through to the real library, including output_table and
+-- get_script_args, which the script needs to work at all.
+function M.clock_double()
+  local double = {sleeps = 0, slept = 0}
+  function double.sleep(seconds)
+    double.sleeps = double.sleeps + 1
+    double.slept = double.slept + seconds
+  end
+  return setmetatable(double, {__index = stdnse})
+end
+
+--- The catalogue documents this repository publishes, read from disk.
+--
+-- Cached across cases: the rule dictionary is 220 KB and 148 cases load a
+-- script, so re-reading and re-parsing it every time turned a four-second suite
+-- into a much longer one for no extra coverage.
+local published_cache = nil
+function M.published_catalog(root)
+  if published_cache then
+    return published_cache
+  end
+
+  local documents = {}
+  for _, kind in ipairs({"fingerprints", "paths", "probes"}) do
+    local handle = io.open(root .. "/catalog/" .. kind .. ".json", "r")
+    if handle == nil then
+      error({harness_failure = "catalog/" .. kind ..
+        ".json is missing; the suite reads the published catalogue"})
+    end
+    local text = handle:read("a")
+    handle:close()
+    local ok, document = json.parse(text)
+    if not ok then
+      error({harness_failure = "catalog/" .. kind .. ".json is not valid JSON"})
+    end
+    documents[kind] = document
+  end
+
+  published_cache = documents
+  return documents
+end
+
+--- Hand a loaded script its catalogue, through its own readers.
+--
+-- Through the readers rather than around them: a case that hand-built the
+-- runtime tables would pass against a script whose validation rejects the very
+-- data it ships, which is the failure the readers exist to prevent.
+function M.give_catalog(env, documents)
+  local shared = env._TEST.state()
+  local fingerprints, count = env._TEST.read_fingerprints(documents.fingerprints)
+  local paths = env._TEST.read_paths(documents.paths)
+
+  if fingerprints == nil or paths == nil then
+    error({harness_failure = "the catalogue handed to the script was refused " ..
+      "by its own readers"})
+  end
+
+  shared.catalog = {
+    fingerprints = fingerprints,
+    rule_count = count,
+    paths = paths,
+    probes = env._TEST.read_probes(documents.probes) or {},
+    serial = 0,
+    fetched = 0,
+    source = "test",
+  }
+  shared.catalog_loaded = true
+  return shared.catalog
+end
+
+--- Load the merged vulners.nse with everything that reaches outside faked.
+--
+-- Every case declares its mode, because 2.0 behaves differently with a token
+-- and the difference is not cosmetic: an authenticated run enriches through
+-- search/id and can spend a credit on audit/smart. A case that leaves it to
+-- chance is really testing whoever ran it.
+--
+-- The path sweep is off unless a case asks for it. The merged action sweeps
+-- every port shortport.http accepts, and harness.port() defaults to 80/http,
+-- so without this almost every case would count 126 requests it never meant to
+-- make.
+--
+-- The catalogue is injected, not downloaded. The script now carries no
+-- fingerprint data at all - it fetches three dictionaries at scan time - so a
+-- case that did not supply them would exercise a script that recognises
+-- nothing, and would pass while measuring that. By default the REAL published
+-- catalogue is read from catalog/ and handed to the script through its own
+-- readers, so the sweep cases keep asserting against the rules that ship.
+--
+-- @param opts  root    - repository root (required)
+--              token   - API token, or nil for the free path
+--              paths   - sweep paths; nil means "none", a table enables them
+--              args    - extra script arguments
+--              env     - extra environment variables
+--              files   - files io.open should find
+--              http    - an existing http double to reuse
+--              clock   - a clock_double to reuse; one is made otherwise, so
+--                        no case ever sleeps for real
+--              catalog - false for a script with no catalogue at all, a table
+--                        of catalogue documents to inject those instead, or
+--                        nil for the published one
+-- @return env, http, io_double, clock
+function M.load_vulners(opts)
+  opts = opts or {}
+  local http = opts.http or M.http_double()
+  local clock = opts.clock or M.clock_double()
+
+  local args = {}
+  for name, value in pairs(opts.args or {}) do args[name] = value end
+  if args["vulners.paths"] == nil then
+    -- The sentinel "embedded" leaves the argument unset, which is how a case
+    -- asks for the shipped path list. An empty table used to mean that by
+    -- accident; it now means what it says - request nothing - so the intent has
+    -- to be spelled out.
+    if opts.paths ~= "embedded" then
+      args["vulners.paths"] = opts.paths or "none"
+    end
+  end
+
+  local environment = {}
+  for name, value in pairs(opts.env or {}) do environment[name] = value end
+  if opts.token then
+    environment.VULNERS_API_KEY = opts.token
+  end
+
+  local files = opts.files or {}
+  local disk = M.io_double(files)
+  local env = M.load_script((opts.root or ".") .. "/vulners.nse", {
+    args = args,
+    script_type = opts.script_type,
+    modules = {
+      http = http,
+      nmap = opts.nmap or M.nmap_double(),
+      os = M.os_double(environment, files),
+      io = disk,
+      stdnse = clock,
+    },
+  })
+
+  if opts.catalog ~= false then
+    M.give_catalog(env, opts.catalog or M.published_catalog(opts.root or "."))
+  end
+
+  -- The io double is returned so a case can assert on what reached the
+  -- filesystem, and the clock so it can assert on what the script waited for.
+  return env, http, disk, clock
 end
 
 -- ------------------------------------------------------------------- helpers

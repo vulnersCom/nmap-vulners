@@ -1,0 +1,92 @@
+name: Publish catalogue
+
+# The fingerprint dictionaries are not in the script and not in a release. They
+# live on the `catalog` branch, which vulners.nse downloads at scan time - so
+# this workflow is the whole distribution mechanism, and a bad publish reaches
+# every installed script within a day. There is no release to hold it back.
+#
+# Which is why it validates before it pushes, and refuses to publish a serial
+# that is not strictly newer than the one already live.
+
+on:
+  push:
+    branches: [master, "2.0"]
+    paths: ["catalog/**"]
+  workflow_dispatch:
+  # Called by catalog-refresh.yml once a rebuild has passed its gates. A
+  # reusable call runs in the same run, so it needs no token beyond this one -
+  # a push made with GITHUB_TOKEN does not trigger another workflow, and
+  # discovering that after a rebuild silently failed to publish would be a bad
+  # way to learn it.
+  workflow_call:
+
+permissions:
+  contents: write
+
+concurrency:
+  # Two publishes racing would leave the branch at whichever finished last,
+  # which need not be the newer serial.
+  group: catalog-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish catalog/ to the catalog branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The catalogue is readable by the script
+        run: python3 tools/catalog.py --check
+
+      - name: Fetch what is currently published
+        id: live
+        run: |
+          if git fetch origin catalog:refs/remotes/origin/catalog 2>/dev/null; then
+            live=$(git show origin/catalog:index.json 2>/dev/null \
+                   | python3 -c 'import json,sys; print(json.load(sys.stdin)["serial"])' \
+                   || echo 0)
+          else
+            live=0
+          fi
+          echo "serial=$live" >> "$GITHUB_OUTPUT"
+          echo "currently published: serial $live"
+
+      - name: The serial moved forward
+        run: |
+          new=$(python3 -c 'import json; print(json.load(open("catalog/index.json"))["serial"])')
+          live=${{ steps.live.outputs.serial }}
+          echo "publishing serial $new over $live"
+          if [ "$new" -le "$live" ]; then
+            echo "::error::serial $new is not newer than the published $live."
+            echo "Every cached copy compares this one integer to decide whether"
+            echo "to download anything, so republishing at the same serial - or"
+            echo "rolling back to a lower one - leaves every scanner on the old"
+            echo "dictionaries until its cache expires. Run tools/catalog.py"
+            echo "--index to bump it, including when reverting."
+            exit 1
+          fi
+
+      - name: Push the dictionaries
+        run: |
+          new=$(python3 -c 'import json; print(json.load(open("catalog/index.json"))["serial"])')
+          # The branch holds ONLY the dictionaries, at its root, so the fetch
+          # URL is short and nothing else on it can be mistaken for catalogue
+          # data. It is rebuilt rather than merged: the catalogue is a snapshot,
+          # not a history to reconcile.
+          work=$(mktemp -d)
+          cp catalog/*.json "$work/"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout --orphan catalog-publish
+          git rm -rq --cached .
+          find . -maxdepth 1 -mindepth 1 -not -name .git -exec rm -rf {} +
+          cp "$work"/*.json .
+
+          git add -- *.json
+          git commit -m "catalog: serial $new"
+          git push --force origin catalog-publish:catalog
+
+          echo "published serial $new to the catalog branch"

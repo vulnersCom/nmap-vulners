@@ -1,0 +1,200 @@
+name: Refresh catalogue from upstream
+
+# Rebuild the fingerprint dictionaries from Recog, Wappalyzer and nuclei, and
+# publish the result - without a human, on a schedule.
+#
+# The reason to be careful about that: the catalogue is downloaded by every
+# installed script, so this pipeline can make every scan in the world recognise
+# less than it did yesterday, within a day, with nobody having looked. Upstreams
+# reorganise, rename directories and retire fingerprints, and none of that
+# arrives as an error - it arrives as a smaller catalogue that validates
+# perfectly.
+#
+# So a rebuild has to get past four gates before it ships, in this order:
+#
+#   1. the importer refuses to write at all if an upstream is missing, or if the
+#      result loses most of the catalogue (tools/fingerprints/build.py)
+#   2. the catalogue must be readable by the script's own rules
+#      (tools/catalog.py --check)
+#   3. **the plugin's own test suites must pass against the NEW catalogue.**
+#      They assert real detections - nginx 1.13.4, Bugzilla 5.0.4 - and check
+#      every shipped pattern against its recorded example, so a rebuild that
+#      broke a detection fails here rather than in the field
+#   4. the diff against what is published must be growth, not loss
+#      (tools/catalog_diff.py)
+#
+# Growth publishes itself. Anything that loses detections opens a pull request
+# instead, and waits for somebody.
+
+on:
+  schedule:
+    # Weekly. The upstreams move on the order of days, and a catalogue that is
+    # at most a week behind is not what limits this plugin.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      force_review:
+        description: "Open a pull request even if the diff is safe"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: catalog-refresh
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    name: Rebuild and gate
+    runs-on: ubuntu-latest
+    outputs:
+      verdict: ${{ steps.diff.outputs.verdict }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nmap and lua
+        # nmap runs the unit suite; lua is the oracle the importer verifies
+        # every translated pattern against, and without it the importer would
+        # ship patterns nothing had ever executed.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nmap lua5.4
+          sudo ln -sf "$(command -v lua5.4)" /usr/local/bin/lua
+
+      - name: Keep what is published now
+        run: cp -r catalog /tmp/published
+
+      - name: Fetch the upstream catalogues
+        run: |
+          mkdir -p /tmp/sources
+          git clone --depth 1 -q https://github.com/rapid7/recog.git /tmp/sources/recog
+          git clone --depth 1 -q https://github.com/HTTPArchive/wappalyzer.git \
+            /tmp/sources/wappalyzer
+          git clone --depth 1 --filter=blob:none --sparse -q \
+            https://github.com/projectdiscovery/nuclei-templates.git \
+            /tmp/sources/nuclei-templates
+          git -C /tmp/sources/nuclei-templates sparse-checkout set http/technologies
+          for repo in recog wappalyzer nuclei-templates; do
+            echo "$repo $(git -C /tmp/sources/$repo rev-parse --short HEAD)" \
+              >> /tmp/upstream-revisions.txt
+          done
+          cat /tmp/upstream-revisions.txt
+
+      - name: The importer still makes the decisions it is supposed to
+        # Gate 0, really: if the translator is wrong, everything downstream is
+        # wrong in a way no count would show.
+        run: python3 tools/fingerprints/selftest.py
+
+      - name: The publish gate refuses what it must
+        run: python3 tools/catalog_diff.py --selftest
+
+      - name: Rebuild the dictionaries
+        run: |
+          pip install --quiet pyyaml
+          python3 tools/fingerprints/build.py --sources /tmp/sources --root .
+
+      - name: Bump the serial
+        run: python3 tools/catalog.py --index
+
+      - name: The catalogue is readable by the script
+        run: python3 tools/catalog.py --check
+
+      # nmap exits 0 when a script RAISES - it prints "Script execution failed"
+      # and carries on - so the exit status alone would report success for a
+      # suite that never ran a case. This job publishes without a human, so the
+      # output has to say the suite ran. Same guard as ci.yml.
+      - name: The plugin still works against the new catalogue
+        run: |
+          set -o pipefail
+          nmap -sn -Pn --script ./tests/run.nse \
+            --script-args testdir=tests,root=. 127.0.0.1 | tee unit.log
+          grep -q "SUITE OK" unit.log
+          python3 tests/e2e/run_e2e.py
+
+      - name: Compare against what is published
+        id: diff
+        run: |
+          set +e
+          python3 tools/catalog_diff.py \
+            --before /tmp/published --after catalog \
+            --summary /tmp/summary.md
+          status=$?
+          set -e
+          cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo ""
+            echo "Built from:"
+            sed 's/^/  - /' /tmp/upstream-revisions.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+          # 1 is broken and must fail the job; 2 is "a human should look", which
+          # is a normal outcome and must not.
+          if [ "$status" = "1" ]; then exit 1; fi
+
+      - name: Save the rebuilt catalogue
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog
+          path: catalog/
+
+      - name: Save the summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: summary
+          path: /tmp/summary.md
+
+  commit:
+    name: Commit the rebuild
+    needs: rebuild
+    if: needs.rebuild.outputs.verdict == 'auto' && !inputs.force_review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: catalog
+          path: catalog/
+
+      - name: Commit to this branch
+        run: |
+          serial=$(python3 -c 'import json; print(json.load(open("catalog/index.json"))["serial"])')
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add catalog
+          git diff --cached --quiet && { echo "nothing changed"; exit 0; }
+          git commit -m "catalog: rebuild from upstream, serial $serial"
+          git push
+
+  publish:
+    name: Publish
+    needs: [rebuild, commit]
+    if: needs.rebuild.outputs.verdict == 'auto' && !inputs.force_review
+    uses: ./.github/workflows/catalog.yml
+
+  propose:
+    name: Open a pull request
+    needs: rebuild
+    if: needs.rebuild.outputs.verdict == 'review' || inputs.force_review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: catalog
+          path: catalog/
+      - uses: actions/download-artifact@v4
+        with:
+          name: summary
+          path: /tmp/
+
+      - name: Propose the rebuild
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: catalog/refresh
+          title: "Catalogue rebuild needs a look"
+          body-path: /tmp/summary.md
+          commit-message: "catalog: rebuild from upstream"
+          labels: catalogue
+          delete-branch: true
