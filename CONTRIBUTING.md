@@ -26,9 +26,12 @@ python3 tools/fingerprints/selftest.py
 
 # 7. the publish gate still refuses a rebuild that loses ground
 python3 tools/catalog_diff.py --selftest
+
+# 8. the tree still meets Nmap's own Code Standards
+python3 tools/nmap_style.py
 ```
 
-The last four are the data and the tools that publish it. They matter as much as
+Gates four to seven are the data and the tools that publish it. They matter as much as
 the first three, because the catalogue rebuilds itself on a schedule and
 publishes without a human: a translator that starts writing patterns nothing can
 execute, or a gate that stops noticing loss, reaches every installed script
@@ -117,7 +120,23 @@ nmap -sV --script "$PWD/vulners.nse" \
 only what nmap itself identified, which is also what happens on a machine with
 no route to GitHub.
 
-Run all seven from the repository root. Each exits non-zero on failure, and CI
+Gate eight is what nmap asks of a script that lives in its tree. `HACKING`
+points at [Nmap's Code Standards](https://secwiki.org/w/Nmap/Code_Standards),
+and that page links a check script; `tools/nmap_style.py` is that page as a
+test - the whitespace rules, 80 columns, no semicolons, no `bin`/`bit`,
+explicit endianness, structured output, the four script fields, `--;` for
+private NSEdoc, and PEP 8 through `pycodestyle` with the gist's ignore list.
+The globals half of nmap's script is already `tools/check.py`, which runs it
+with `luac`.
+
+Three things are exempt, because rewrapping them would make them a sample of
+something that never happened: a line inside a Lua `[[ long bracket ]]`, a
+line inside an `@output` or `@xmloutput` block, and `LICENSE`.
+
+Without `pycodestyle` installed the PEP 8 half **skips, loudly** - the same
+bargain `tools/check.py` makes with `luac`. CI installs it.
+
+Run all eight from the repository root. Each exits non-zero on failure, and CI
 runs exactly the same commands.
 
 Useful while working on one thing:

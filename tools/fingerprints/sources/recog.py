@@ -1,10 +1,10 @@
 """Read Rapid7 Recog into normalised rules.
 
 Recog is the only source in the catalogue that ships an oracle: every
-fingerprint carries `<example>` elements, and an example may state the values it
-is expected to yield. That turns "did the translation preserve the meaning" from
-a judgement into a measurement, so nothing here is imported on the strength of
-the pattern looking right.
+fingerprint carries `<example>` elements, and an example may state the values
+it is expected to yield. That turns "did the translation preserve the meaning"
+from a judgement into a measurement, so nothing here is imported on the
+strength of the pattern looking right.
 
 Its second gift is `matches=` on the file element, which names the field the
 pattern is written against - `http_header.server`, `ssh.banner`, `html_title`.
@@ -108,14 +108,16 @@ def load(root_dir):
                     positions[pname] = pos
 
             cpe = params.get("service.cpe23") or params.get("os.cpe23")
-            version_group = positions.get("service.version") or positions.get("os.version")
+            version_group = (positions.get("service.version")
+                             or positions.get("os.version"))
 
             examples = []
             for example in node.findall("example"):
                 subject = _decode(example)
                 if subject is None or subject == "":
                     continue
-                expected = example.get("service.version") or example.get("os.version")
+                expected = (example.get("service.version")
+                            or example.get("os.version"))
                 examples.append({"subject": subject, "version": expected})
 
             flags = node.get("flags", "")
@@ -129,12 +131,14 @@ def load(root_dir):
                 "multiline": "REG_MULTILINE" in flags,
                 "version_group": version_group,
                 "cpe_template": cpe,
-                "vendor": params.get("service.vendor") or params.get("os.vendor"),
-                "product": params.get("service.product") or params.get("os.product"),
+                "vendor": (params.get("service.vendor")
+                           or params.get("os.vendor")),
+                "product": (params.get("service.product")
+                            or params.get("os.product")),
                 "description": node.findtext("description", "").strip(),
                 "examples": examples,
-                # A recog pattern is written against one field's whole value, so
-                # the field is the subject and ^ means the start of it.
+                # A recog pattern is written against one field's whole value,
+                # so the field is the subject and ^ means the start of it.
                 "field_scoped": True,
             })
     return rules

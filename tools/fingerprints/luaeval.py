@@ -7,8 +7,8 @@ fingerprint that silently stopped matching in the field.
 
 The interpreter is spoken to over a pipe: a JSON array of jobs in, a JSON array
 of captures out. `lua` on PATH is Lua 5.5 where nmap embeds 5.4, which for
-`string.find` is the same engine; the authoritative re-check happens in the unit
-suite, under nmap's own Lua, against the same recorded examples.
+`string.find` is the same engine; the authoritative re-check happens in the
+unit suite, under nmap's own Lua, against the same recorded examples.
 """
 
 import json
@@ -31,7 +31,11 @@ local at = 1
 local function skip()
   while true do
     local c = text:sub(at, at)
-    if c == " " or c == "\n" or c == "\r" or c == "\t" then at = at + 1 else break end
+    if c == " " or c == "\n" or c == "\r" or c == "\t" then
+      at = at + 1
+    else
+      break
+    end
   end
 end
 local function read_string()
@@ -171,15 +175,18 @@ def time_pattern(pattern, subject, timeout=60):
 def run(jobs):
     """Match each (pattern, subject) pair.
 
-    @return list, one entry per job: False when the pattern raised, None when it
+    @return list, one entry per job: False when the pattern raised, None
+    when it
             did not match, or the list of captures when it did.
     """
     if LUA is None:
-        raise NoLua("no lua interpreter on PATH; install lua to verify patterns")
+        raise NoLua("no lua interpreter on PATH; install lua to verify "
+            "patterns")
 
     out = []
     for start in range(0, len(jobs), BATCH):
-        chunk = [[pattern, subject] for pattern, subject in jobs[start:start + BATCH]]
+        chunk = [[pattern, subject] for pattern,
+                  subject in jobs[start:start + BATCH]]
         payload = json.dumps(chunk, ensure_ascii=True)
         result = subprocess.run(
             [LUA, "-e", DRIVER],

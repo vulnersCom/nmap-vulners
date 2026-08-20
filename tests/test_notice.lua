@@ -3,8 +3,8 @@
 -- This is the only place the script speaks about the scan rather than about a
 -- port, and every sentence in it is there because its absence was misleading:
 -- a capability that did not run reads as a capability that found nothing, and
--- an empty report reads as a clean network. Until this file existed exactly one
--- of its branches was covered.
+-- an empty report reads as a clean network. Until this file existed exactly
+-- one of its branches was covered.
 --
 -- The postrule is reached the way nmap reaches it - by loading the script and
 -- setting SCRIPT_TYPE - because the dispatch table is part of what is being
@@ -16,7 +16,7 @@ local t, testdir, root = ...
 local string = require "string"
 local table = require "table"
 
---- Load the script, put the scan in the state a case describes, and ask the
+--; Load the script, put the scan in the state a case describes, and ask the
 -- postrule what it has to say.
 --
 -- @param setup function(shared) - mutates the scan-wide state
@@ -53,10 +53,10 @@ suite[#suite + 1] = {
     -- nmap -sn with this script loaded reaches the postrule having touched no
     -- port. Advertising a key to somebody who ran a ping sweep is noise.
     --
-    -- The scan-wide state is created first, without marking anything consulted:
-    -- the prerule makes it on every run, so "there is no state at all" is not
-    -- the case being tested and a version that only checked for that would pass
-    -- while advertising to every ping sweep.
+    -- The scan-wide state is created first, without marking anything
+    -- consulted: the prerule makes it on every run, so "there is no state at
+    -- all" is not the case being tested and a version that only checked for
+    -- that would pass while advertising to every ping sweep.
     t.reset_registry()
     local env = t.load_vulners({root = root, catalog = false})
     local shared = env._TEST.state()
@@ -78,7 +78,8 @@ suite[#suite + 1] = {
     local text = notice(function(shared) shared.mode = "keyed" end,
                         {token = "FAKE-NOTICE-KEY"})
 
-    t.is_nil(text, "a working keyed scan must be silent, got: " .. tostring(text))
+    t.is_nil(text,
+      "a working keyed scan must be silent, got: " .. tostring(text))
   end,
 }
 
@@ -109,7 +110,8 @@ suite[#suite + 1] = {
     end)
 
     t.matches(text, "Ran without a usable API key")
-    t.matches(text, "answered 401", "and the reason must survive into the notice")
+    t.matches(text, "answered 401",
+      "and the reason must survive into the notice")
     t.is_true(text:find("Ran without an API key", 1, true) == nil,
       "the two cases must not both be reported")
   end,
@@ -127,7 +129,8 @@ suite[#suite + 1] = {
 
     t.matches(text, "No vulnerability lookups were made")
     t.matches(text, "could not be reached", "with the reason")
-    t.matches(text, "not a\n  report that the software is free of known problems",
+    t.matches(text,
+      "not a\n  report that the software is free of known problems",
       "and in as many words")
   end,
 }
@@ -166,9 +169,9 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "credits spent are reported, with what is left",
   fn = function()
-    -- Reported before the mode is looked at: every path that stops the spending
-    -- also drops the mode to free, so reporting the spend inside the keyed
-    -- branch suppressed the number at exactly the moment it mattered.
+    -- Reported before the mode is looked at: every path that stops the
+    -- spending also drops the mode to free, so reporting the spend inside the
+    -- keyed branch suppressed the number at exactly the moment it mattered.
     local text = notice(function(shared)
       shared.mode = "keyed"
       shared.spent = 3
@@ -233,8 +236,8 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a keyed scan with nothing else to say still reports the catalogue",
   fn = function()
-    -- The branch that returns silence. Losing the note here is how a keyed scan
-    -- would fingerprint nothing and never mention it.
+    -- The branch that returns silence. Losing the note here is how a keyed
+    -- scan would fingerprint nothing and never mention it.
     local text = notice(function(shared)
       shared.mode = "keyed"
       shared.catalog_note = "the fingerprint catalogue could not be downloaded"
@@ -262,18 +265,20 @@ suite[#suite + 1] = {
       line_count = line_count + 1
     end
     t.is_true(longest <= 78,
-      string.format("no line may exceed a narrow terminal, longest is %d", longest))
+      string.format("no line may exceed a narrow terminal, longest is %d",
+        longest))
     t.is_true(line_count > 1, "and the note must actually have been broken up")
   end,
 }
 
 suite[#suite + 1] = {
-  name = "a key file that cannot be read is named, and not called a missing key",
+  name = "a key file that cannot be read is named, and not called a " ..
+    "missing key",
   fn = function()
     -- The whole run stops on it - port_action returns nothing for every port -
     -- and that was said only to stdnse.verbose1. Without -v the scan produced
-    -- an empty report and this notice, which offered a free key to somebody who
-    -- already has one and mistyped its path. Measured on a live scan: 272
+    -- an empty report and this notice, which offered a free key to somebody
+    -- who already has one and mistyped its path. Measured on a live scan: 272
     -- findings with no key at all, none whatever with an unreadable one.
     local text = notice(nil, {
       args = {["vulners.api_key_file"] = "/no/such/key.txt"},
@@ -281,7 +286,8 @@ suite[#suite + 1] = {
 
     t.is_true(text ~= nil, "an operator error must not be silent")
     t.matches(text, "Nothing was looked up")
-    t.matches(text, "/no/such/key%.txt", "the path it could not read is the fix")
+    t.matches(text, "/no/such/key%.txt",
+      "the path it could not read is the fix")
     t.is_nil(text:find("Get a free key"),
       "offering a key to somebody who has one points at the wrong repair")
   end,

@@ -16,7 +16,8 @@ Four things happen, in this order, and the third is the one that matters:
 3. **every translated rule is run against its upstream examples in a real Lua
    interpreter, and a rule that does not reproduce its documented extraction is
    dropped.** No rule ships on the strength of the translation looking right
-4. rules are de-duplicated, and the aliases this repository has already measured
+4. rules are de-duplicated, and the aliases this repository has already
+   measured
    against the live API win over the catalogues' opinion
 
 The output is `catalog/fingerprints.json` and `catalog/probes.json`, which are
@@ -49,8 +50,8 @@ import probes as probe_builder                    # noqa: E402
 from sources import legacy, nuclei, recog, wappalyzer  # noqa: E402
 
 # The channel a rule is matched against is decided in normalize.py, which owns
-# both halves of that vocabulary: CHANNEL_ALIASES maps the source spellings onto
-# runtime keys and FIXED_CHANNELS lists the ones that need no mapping.
+# both halves of that vocabulary: CHANNEL_ALIASES maps the source spellings
+# onto runtime keys and FIXED_CHANNELS lists the ones that need no mapping.
 
 # Must match tools/catalog.py and the CATALOG_SCHEMA in vulners.nse.
 CATALOG_SCHEMA = 1
@@ -62,26 +63,27 @@ def write_catalog(path, payload):
     if directory:
         os.makedirs(directory, exist_ok=True)
     with open(path, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=1, sort_keys=True, ensure_ascii=False)
+        json.dump(payload, handle, indent=1, sort_keys=True,
+                  ensure_ascii=False)
         handle.write("\n")
-
 
 
 # A rebuild may only shrink the catalogue by this much before it is treated as
 # an accident rather than an edit.
 #
 # This is not hypothetical. The upstream checkouts live outside the repository,
-# in a scratch directory; when they were cleaned up, a rebuild read no recog and
-# no wappalyzer, produced the 195 rules it could still see, and overwrote 722
-# with them. Nothing failed - the tool did exactly what it was told - and the
-# only signal was a count in a line of output nobody was reading.
+# in a scratch directory; when they were cleaned up, a rebuild read no recog
+# and no wappalyzer, produced the 195 rules it could still see, and overwrote
+# 722 with them. Nothing failed - the tool did exactly what it was told - and
+# the only signal was a count in a line of output nobody was reading.
 #
 # A generator that overwrites its own input has to notice when its input
 # disappeared.
 MIN_RETAINED = 0.80
 
 
-def refuse_to_shrink(out_path, fresh_count, sources_found, force, kind="rules"):
+def refuse_to_shrink(out_path, fresh_count, sources_found, force,
+                     kind="rules"):
     """Stop before writing when this build looks like a mistake."""
     if force:
         return
@@ -89,8 +91,9 @@ def refuse_to_shrink(out_path, fresh_count, sources_found, force, kind="rules"):
     if not sources_found:
         raise SystemExit(
             "no upstream catalogue was found under --sources, so this build "
-            "would publish only what is already in the repository. Clone recog "
-            "and wappalyzer into that directory, or pass --force if replacing "
+            "would publish only what is already in the repository. Clone "
+            "recog and wappalyzer into that directory, or pass --force if "
+            "replacing "
             "the catalogue with the baseline is really what you want.")
 
     if not os.path.exists(out_path):
@@ -107,7 +110,8 @@ def refuse_to_shrink(out_path, fresh_count, sources_found, force, kind="rules"):
             "this build produces %d %s where the published catalogue has "
             "%d. That is a %.0f%% loss, which is a missing source far more "
             "often than an intended edit. Pass --force if it is intended."
-            % (fresh_count, kind, previous, 100 * (1 - fresh_count / previous)))
+            % (fresh_count, kind, previous,
+               100 * (1 - fresh_count / previous)))
 
 
 def gather(sources_dir, repo_root):
@@ -144,7 +148,8 @@ def translated(rules, report):
         if rule.get("lua"):
             # Already Lua - the repository's own patterns.
             from pcre2lua import literal_anchor
-            example = next((e for e in rule.get("examples", []) if e.get("version")), None)
+            example = next((e for e in rule.get("examples",
+                                                []) if e.get("version")), None)
             out.append(dict(rule, variants=[(
                 rule["lua"], literal_anchor(rule["lua"]),
                 example["subject"] if example else None,
@@ -172,8 +177,8 @@ def oracles(rule):
 
     Upstream examples first, because a string a human wrote down as real is
     worth more than one a generator invented. Generated samples fill in for the
-    three sources that ship none, and for recog they serve as a cross-check that
-    the generator agrees with reality.
+    three sources that ship none, and for recog they serve as a cross-check
+    that the generator agrees with reality.
     """
     found = [(e["subject"], e["version"]) for e in rule.get("examples", [])
              if e.get("version")]
@@ -220,8 +225,9 @@ def verify(rules, report):
     # was not enough: an expanded alternation ships as several patterns, and
     # attaching the rule's example to all of them documented variant B with a
     # subject only variant A matches. The suite caught it, on a pattern for
-    # "Abyss/2.12.1-X1-MacOS X AbyssLib/2.12" whose recorded example belonged to
-    # a sibling - so the example proved nothing and the anchor test failed too.
+    # "Abyss/2.12.1-X1-MacOS X AbyssLib/2.12" whose recorded example belonged
+    # to a sibling - so the example proved nothing and the anchor test failed
+    # too.
     proof = collections.defaultdict(list)
     for (position, variant, subject, expected), result in zip(index, results):
         if result is False:
@@ -311,7 +317,8 @@ def unfold(pattern):
     is a real two-character class and is left alone.
     """
     return FOLDED_LETTER.sub(
-        lambda m: m.group(1).lower() if m.group(1).lower() == m.group(2).lower()
+        lambda m: m.group(1).lower()
+        if m.group(1).lower() == m.group(2).lower()
         else m.group(0), pattern)
 
 
@@ -324,10 +331,11 @@ def adversarial(pattern, anchor):
     prefilter and gives the pattern the most places to start from.
     """
     # Every literal the pattern requires, in order - not just the longest one.
-    # Seeding with the anchor alone measured the jQuery rules as free: repeating
-    # ".js?version=" gives them no "jquery" to start from, so the scan never
-    # begins. Repeating "jquery.js?version=" starts it 7300 times and finishes
-    # none of them, which is the 5.3 seconds this gate exists to catch.
+    # Seeding with the anchor alone measured the jQuery rules as free:
+    # repeating ".js?version=" gives them no "jquery" to start from, so the
+    # scan never begins. Repeating "jquery.js?version=" starts it 7300 times
+    # and finishes none of them, which is the 5.3 seconds this gate exists to
+    # catch.
     seed = "".join(literal_runs(unfold(pattern))) or anchor \
         or "".join(ch for ch in pattern if ch.isalnum()) or "a"
     return (seed * (MAX_BODY_SIZE // len(seed) + 1))[:MAX_BODY_SIZE]
@@ -339,10 +347,10 @@ def refuse_quadratic(rules, report):
     A header value, a title or a script src is bounded to a few hundred bytes,
     so an expensive pattern there costs nothing that matters. A body is bounded
     only by MAX_BODY_SIZE, and this repository has already shipped two rules -
-    `jquery[^"\'<>]-%.js%?ver=...` - whose lazy unanchored scan restarts at every
-    occurrence. Measured on 128 KB of `jquery.js?version=`: 5.3 s for that one
-    pattern, against a sweep budget of 3 s, with the scheduler unable to
-    preempt any of it.
+    `jquery[^"\'<>]-%.js%?ver=...` - whose lazy unanchored scan restarts at
+    every occurrence. Measured on 128 KB of `jquery.js?version=`: 5.3 s for
+    that one pattern, against a sweep budget of 3 s, with the scheduler unable
+    to preempt any of it.
     """
     kept = []
     for rule in rules:
@@ -355,8 +363,10 @@ def refuse_quadratic(rules, report):
             pattern, anchor = entry[0], entry[1]
             spent = luaeval.time_pattern(pattern, adversarial(pattern, anchor))
             if spent is not None and spent > MAX_PATTERN_SECONDS:
-                report["quadratic"]["%s (%.2fs)" % (rule["channel"], spent)] += 1
-                report["quadratic_dropped"][rule.get("product") or rule["upstream"]] += 1
+                report["quadratic"]["%s (%.2fs)" % (rule["channel"],
+                                                         spent)] += 1
+                which = rule.get("product") or rule["upstream"]
+                report["quadratic_dropped"][which] += 1
                 continue
             survivors.append(entry)
         if survivors:
@@ -381,8 +391,10 @@ def find_nmap_probes(explicit):
     """The probe database to read, or a hard stop saying why there is none."""
     if explicit:
         if not os.path.exists(explicit):
-            raise SystemExit("no nmap probe database at %s. Point --nmap-probes "
-                             "at one, or pass --no-nmap-probes to build without "
+            raise SystemExit("no nmap probe database at %s. Point "
+                "--nmap-probes "
+                             "at one, or pass --no-nmap-probes to build "
+                                 "without "
                              "the deduplication it provides." % explicit)
         return explicit
     for path in NMAP_PROBE_PATHS:
@@ -403,7 +415,8 @@ def nmap_identities(path):
         for line in handle:
             if "cpe:/" not in line:
                 continue
-            for match in re.finditer(r"cpe:/([aoh]):([^:\s]+):([^:\s]+)", line):
+            for match in re.finditer(r"cpe:/([aoh]):([^:\s]+):([^:\s]+)",
+                                                                line):
                 found.add("cpe:/%s:%s:%s" % (match.group(1),
                                              match.group(2).lower(),
                                              match.group(3).lower()))
@@ -420,15 +433,16 @@ def drop_what_nmap_knows(rules, known, report):
     """Discard banner rules for identities nmap already reports itself.
 
     The banner channel reads nmap's own service fingerprint, so it competes
-    directly with nmap's service-probe database - and loses on volume. Measured,
-    it arrived as 832 patterns for 111 identities, of which MariaDB alone was
-    138, MySQL 108, OpenSSH 54 and BIND 50. Every one of those four is a CPE
-    nmap emits itself, and this script already reads `port.version.cpe`, so
-    carrying them re-derives at 286 KB what is handed over for nothing.
+    directly with nmap's service-probe database - and loses on volume.
+    Measured, it arrived as 832 patterns for 111 identities, of which MariaDB
+    alone was 138, MySQL 108, OpenSSH 54 and BIND 50. Every one of those four
+    is a CPE nmap emits itself, and this script already reads
+    `port.version.cpe`, so carrying them re-derives at 286 KB what is handed
+    over for nothing.
 
     What survives is the part nmap cannot do. The HTTP channels are never
-    filtered this way: nmap reads the Server header and stops, where these rules
-    read titles, meta tags, cookies and bodies it never looks at.
+    filtered this way: nmap reads the Server header and stops, where these
+    rules read titles, meta tags, cookies and bodies it never looks at.
     """
     if not known:
         return rules
@@ -516,7 +530,8 @@ def reduce_patterns(rules, report):
 
     covers = collections.defaultdict(set)
     if jobs:
-        for (key, rule_id, position, subject, expected), result in zip(index, luaeval.run(jobs)):
+        for (key, rule_id, position, subject, expected), result in zip(index,
+             luaeval.run(jobs)):
             if result and result is not True and result[0] == expected:
                 covers[(key, rule_id, position)].add(subject)
 
@@ -534,7 +549,8 @@ def reduce_patterns(rules, report):
         candidates = []
         for rule in group:
             for position, variant in enumerate(rule["variants"]):
-                candidates.append((covers.get((key, id(rule), position), set()),
+                candidates.append((covers.get((key, id(rule), position),
+                                                       set()),
                                    len(variant[0]), rule, variant))
 
         remaining = set(subjects)
@@ -542,7 +558,8 @@ def reduce_patterns(rules, report):
         # Most coverage first, shortest pattern to break a tie: a shorter
         # pattern is the less specific one, so it generalises further.
         while remaining:
-            candidates.sort(key=lambda item: (-len(item[0] & remaining), item[1]))
+            candidates.sort(key=lambda item: (-len(item[0] & remaining),
+                                                        item[1]))
             # A subject can survive verify() while every variant that proved it
             # was dropped afterwards, and then nothing here can cover it. The
             # loop drained the list and indexed an empty one, so a build that
@@ -564,7 +581,8 @@ def reduce_patterns(rules, report):
             merged[id(rule)].append((rule, variant))
         for entries in merged.values():
             rule = entries[0][0]
-            kept.append(dict(rule, variants=[variant for _r, variant in entries]))
+            kept.append(dict(rule, variants=[variant for _r,
+                                             variant in entries]))
 
         dropped = sum(len(r["variants"]) for r in group) - len(chosen)
         if dropped > 0:
@@ -590,7 +608,8 @@ def emit(rules):
         channel, field, pattern = key
         # The repository's own alias wins: it is the one that has been asked of
         # the live service. Otherwise recog wins over wappalyzer, because recog
-        # curates CPEs as its purpose and wappalyzer carries them as a courtesy.
+        # curates CPEs as its purpose and wappalyzer carries them as a
+        # courtesy.
         order = {"legacy": 0, "recog": 1, "wappalyzer": 2}
         rule, alias, variant = sorted(
             candidates, key=lambda item: order.get(item[0]["source"], 9))[0]
@@ -630,13 +649,13 @@ def emit(rules):
 def join_table(sources_dir, entries, nmap_known_path):
     """product name -> CPE, from every catalogue available locally.
 
-    Nuclei carries no CPE for any of its 909 templates, so its probes have to be
-    joined to an identity somebody else curated. Guessing a vendor is exactly
-    what this repository forbids, and it is forbidden for a good reason - a
-    plausible but wrong CPE produces a silent false negative - so the table is
-    built only from names that already came with a CPE attached: Wappalyzer's
-    285, Recog's product attributes, nmap's own service-probe database, and the
-    identities this file already ships.
+    Nuclei carries no CPE for any of its 909 templates, so its probes have to
+    be joined to an identity somebody else curated. Guessing a vendor is
+    exactly what this repository forbids, and it is forbidden for a good reason
+    - a plausible but wrong CPE produces a silent false negative - so the table
+    is built only from names that already came with a CPE attached:
+    Wappalyzer's 285, Recog's product attributes, nmap's own service-probe
+    database, and the identities this file already ships.
     """
     table = collections.defaultdict(set)
 
@@ -659,15 +678,19 @@ def join_table(sources_dir, entries, nmap_known_path):
     recog_dir = os.path.join(sources_dir, "recog")
     if os.path.isdir(recog_dir):
         for rule in recog.load(recog_dir):
-            add(rule.get("product"), normalize.alias_of(rule.get("cpe_template")))
+            add(rule.get("product"),
+                         normalize.alias_of(rule.get("cpe_template")))
 
     if nmap_known_path and os.path.exists(nmap_known_path):
-        with open(nmap_known_path, encoding="utf-8", errors="replace") as handle:
+        with open(nmap_known_path, encoding="utf-8",
+                  errors="replace") as handle:
             for line in handle:
                 if "cpe:/" not in line:
                     continue
-                for match in re.finditer(r"cpe:/([aoh]):([^:\s]+):([^:\s]+)", line):
-                    alias = "cpe:/%s:%s:%s" % (match.group(1), match.group(2).lower(),
+                for match in re.finditer(r"cpe:/([aoh]):([^:\s]+):([^:\s]+)",
+                                                                    line):
+                    alias = "cpe:/%s:%s:%s" % (match.group(1),
+                                               match.group(2).lower(),
                                                match.group(3).lower())
                     add(match.group(3), alias)
 
@@ -682,7 +705,8 @@ def join_table(sources_dir, entries, nmap_known_path):
                 # Where several identities share a product name, the one whose
                 # vendor equals its product is the project's own, which is the
                 # mainstream spelling far more often than a reseller's.
-                return sorted(found, key=lambda a: (a.split(":")[2] != a.split(":")[3], a))[0]
+                return sorted(found,
+                    key=lambda a: (a.split(":")[2] != a.split(":")[3], a))[0]
         return None
 
     return alias_for, len(table)
@@ -694,7 +718,8 @@ def main():
                         help="directory holding the upstream checkouts")
     parser.add_argument("--force", action="store_true",
                         help="publish even when the result loses most of the "
-                             "catalogue, which normally means a missing source")
+                             "catalogue, which normally means a missing "
+                                 "source")
     parser.add_argument("--report-unjoined", action="store_true",
                         help="list the probe templates no catalogue can name")
     # The catalogue is written UNDER --root. It used to come from three
@@ -721,14 +746,18 @@ def main():
     rules, upstreams = gather(args.sources, args.root)
     print("read        %5d rules from %d upstream catalogue(s)"
           % (len(rules), upstreams))
-    print("            %s" % dict(collections.Counter(r["source"] for r in rules)))
+    print("            "
+        "%s" % dict(collections.Counter(r["source"] for r in rules)))
 
     usable = [r for r in rules
-              if r.get("version_group") and normalize.alias_of(r.get("cpe_template"))]
-    print("versioned   %5d rules carry both a version group and a CPE" % len(usable))
+              if r.get("version_group")
+              and normalize.alias_of(r.get("cpe_template"))]
+    print("versioned   %5d rules carry both a version group and a "
+        "CPE" % len(usable))
 
     with_lua = translated(usable, report)
-    print("translated  %5d  (%d refused)" % (len(with_lua), len(usable) - len(with_lua)))
+    print("translated  %5d  (%d refused)" % (len(with_lua),
+                                                 len(usable) - len(with_lua)))
     for reason, count in report["untranslatable"].most_common(8):
         print("              %4d  %s" % (count, reason))
 
@@ -739,7 +768,8 @@ def main():
         if label != "untranslatable" and report[label]:
             print("              %-20s %s" % (label, dict(report[label])))
 
-    probe_db = None if args.no_nmap_probes else find_nmap_probes(args.nmap_probes)
+    probe_db = (None if args.no_nmap_probes
+                else find_nmap_probes(args.nmap_probes))
     known = nmap_identities(probe_db)
     if probe_db and not known:
         raise SystemExit("read %s and found no CPE in it; that file is not an "
@@ -752,8 +782,10 @@ def main():
 
     safe = refuse_quadratic(fresh, report)
     if report["quadratic"]:
-        print("timing      %5d patterns cost more than %.2fs on a hostile body: %s"
-              % (sum(report["quadratic_dropped"].values()), MAX_PATTERN_SECONDS,
+        print("timing      %5d patterns cost more than %.2fs on a hostile "
+            "body: %s"
+              % (sum(report["quadratic_dropped"].values()),
+                                                        MAX_PATTERN_SECONDS,
                  dict(report["quadratic_dropped"])))
 
     minimal = cap_per_identity(reduce_patterns(safe, report), report)
@@ -773,8 +805,8 @@ def main():
     alias_for, table_size = join_table(args.sources, entries, probe_db)
 
     # Only an identity this catalogue can actually report. The sweep matches a
-    # response against the rules we ship, so a path for software we have no rule
-    # for is a request whose answer nothing can read.
+    # response against the rules we ship, so a path for software we have no
+    # rule for is a request whose answer nothing can read.
     shipped = {entry["alias"] for entry in entries.values()}
 
     def recognisable(tokens):
@@ -784,9 +816,10 @@ def main():
     candidates, trees = path_builder.load(args.sources, report)
 
     # --- targeted version probes, chosen BEFORE the sweep -------------------
-    # A probe is conditional and the sweep is not, so where both could go to the
+    # A probe is conditional and the sweep is not, so where both could go to
     # same path the probe wins and the sweep leaves it alone.
-    found, unjoined = nuclei.load(os.path.join(args.sources, "nuclei-templates"),
+    found, unjoined = nuclei.load(os.path.join(args.sources,
+                                               "nuclei-templates"),
                                   alias_for, set(path_builder.ALWAYS))
     wap_rules = wappalyzer.load(os.path.join(args.sources, "wappalyzer")) \
         if os.path.isdir(os.path.join(args.sources, "wappalyzer")) else []
@@ -799,12 +832,14 @@ def main():
     generic = len(path_builder.ALWAYS) + len(path_builder.front_pages())
     print("\npaths")
     print("  read        %5d source files over %d trees: %s"
-          % (sum(report["paths_read"].values()), trees, dict(report["paths_read"])))
+          % (sum(report["paths_read"].values()), trees,
+                                             dict(report["paths_read"])))
     print("  usable      %5d distinct paths after filtering (%d refused)"
           % (len(candidates.by_path), sum(report["paths_refused"].values())))
     print("  published   %5d: %d asked of every server, %d from the upstreams"
           % (len(swept_list), generic, len(swept_list) - generic))
-    print("              %d of them belong to software this catalogue can name; "
+    print("              %d of them belong to software this catalogue can "
+        "name; "
           "the rest are still worth a request for the headers they answer with"
           % report["paths_kept"]["identities named"])
     if report["paths_dropped"]:
@@ -814,17 +849,20 @@ def main():
     print("  join table  %5d product names carry a CPE from some catalogue"
           % table_size)
     print("  nuclei      %5d templates name a path and a version pattern; "
-          "%d could be joined to an identity" % (len(found) + len(unjoined), len(found)))
+          "%d could be joined to an identity" % (len(found) + len(unjoined),
+                                                                  len(found)))
 
     print("  built       %5d probes that can be triggered without a request"
           % len(probe_entries))
     for label in ("probe_no_detector", "probe_no_extractor",
                   "probe_detector_untranslatable", "probe_unverifiable"):
         if report[label]:
-            print("                %-30s %d" % (label, sum(report[label].values())))
+            print("                %-30s %d" % (label,
+                                                sum(report[label].values())))
     for name in sorted(probe_entries):
         entry = probe_entries[name]
-        print("      %-22s %-40s %s" % (name[:22], entry["alias"], entry["paths"]))
+        print("      %-22s %-40s %s" % (name[:22], entry["alias"],
+                                                         entry["paths"]))
 
     if args.report_unjoined:
         print("\n  no catalogue names these %d, so they cannot be probed:"

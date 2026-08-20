@@ -97,8 +97,8 @@ suite[#suite + 1] = {
     -- (http.lua:769), so response.header in the field NEVER carries a capital.
     -- A double that kept the fixture spelling let a case pass {["Server"]=...}
     -- and believe it had exercised hdr:server when the match really came
-    -- through raw - and would equally have "proved" a rule filed as hdr:Server,
-    -- which is dead in every real scan.
+    -- through raw - and would equally have "proved" a rule filed as
+    -- hdr:Server, which is dead in every real scan.
     local answered = t.response({status = 200,
       header = {["Server"] = "nginx/1.13.4", ["X-Powered-By"] = "PHP/8.2"}})
 
@@ -113,13 +113,14 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "the raw header block is built in a stable order",
   fn = function()
-    -- Lua seeds its string hash per process, so building rawheader with pairs()
-    -- gave a different raw channel on every nmap run - measured, five distinct
-    -- orders across six runs of one fixture. The raw channel is
+    -- Lua seeds its string hash per process, so building rawheader with
+    -- pairs() gave a different raw channel on every nmap run - measured, five
+    -- distinct orders across six runs of one fixture. The raw channel is
     -- table.concat(rawheader, "\n"), so a rule spanning two header lines
     -- passed or failed by hash seed, which is the worst kind of green.
     local answered = t.response({status = 200, header = {
-      ["Server"] = "nginx", ["X-Powered-By"] = "PHP", ["Content-Type"] = "text/html",
+      ["Server"] = "nginx", ["X-Powered-By"] = "PHP",
+      ["Content-Type"] = "text/html",
       ["Set-Cookie"] = "a=1", ["X-Generator"] = "Drupal",
     }})
 

@@ -15,8 +15,8 @@ import re
 
 # The old names encode the channel as a suffix - "Bugzilla, html", "nginx,
 # headers_0_1" - because they were generated from a scraper that numbered its
-# captures. Ten entries predate the convention and are classified by reading the
-# pattern instead.
+# captures. Ten entries predate the convention and are classified by reading
+# the pattern instead.
 SUFFIX = re.compile(r",\s*(headers|html|script)(?:_[\d_]+)?$")
 
 # A pattern that names an HTTP header at its start is a header pattern whatever
@@ -30,10 +30,11 @@ def classify(name, regex):
     if match:
         # A "script" rule reads a <script src=> value, which is what the suffix
         # has always meant; 1.x had no such channel and ran it over the whole
-        # body instead. It is filed under BOTH, so nothing 1.x detected is lost,
-        # and the body copy is then subject to the same timing gate as any other
-        # body rule - which is what retires the two lazy jQuery patterns from
-        # the body while keeping them where their subject is a few hundred bytes.
+        # body instead. It is filed under BOTH, so nothing 1.x detected is
+        # lost, and the body copy is then subject to the same timing gate as
+        # any other body rule - which is what retires the two lazy jQuery
+        # patterns from the body while keeping them where their subject is a
+        # few hundred bytes.
         return {"headers": "headers-raw", "html": "body",
                 "script": "script+body"}[match.group(1)]
     if HEADER_ISH.match(regex):
@@ -49,7 +50,8 @@ def load(path):
         document = json.load(handle)
     # The catalogue wraps its dictionary; a bare map is what the pre-catalogue
     # file looked like, and reading both keeps this working across the change.
-    data = document.get("rules", document) if isinstance(document, dict) else {}
+    data = document.get("rules", document) if isinstance(document,
+                                                         dict) else {}
 
     rules = []
     for name, entry in sorted(data.items()):
@@ -66,16 +68,18 @@ def load(path):
             # would compound with every rebuild.
             continue
         channel = entry.get("channel") or classify(name, regex)
-        spread = {"both": ["headers-raw", "body"], "script+body": ["script", "body"]}
+        spread = {"both": ["headers-raw", "body"], "script+body": ["script",
+                                                                   "body"]}
         for one in spread.get(channel, [channel]):
             rules.append({
                 "source": "legacy",
                 "upstream": name,
                 "channel": one,
                 "field": entry.get("field"),
-                # Already a Lua pattern. It skips the translator entirely, which
-                # is the point: these have been in the field for years and a
-                # round trip through PCRE would be a chance to change them.
+                # Already a Lua pattern. It skips the translator entirely,
+                # which is the point: these have been in the field for years
+                # and a round trip through PCRE would be a chance to change
+                # them.
                 "lua": regex,
                 "pattern": None,
                 "version_group": 1,
@@ -84,8 +88,9 @@ def load(path):
                 "vendor": None,
                 "description": "",
                 # The generated file records one example per rule under
-                # "example"; a hand-written one may carry a list. Both are read,
-                # so a rebuild does not throw away the proof the last one made.
+                # "example"; a hand-written one may carry a list. Both are
+                # read, so a rebuild does not throw away the proof the last one
+                # made.
                 "examples": ([{"subject": entry["example"]["subject"],
                                "version": entry["example"]["version"]}]
                              if isinstance(entry.get("example"), dict)

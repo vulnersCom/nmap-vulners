@@ -9,7 +9,8 @@ see the real NSE libraries (json, stdnse, url, shortport) rather than
 re-implementations that could drift from them.
 
 Usage:
-  nmap --script tests/run.nse [--script-args testdir=tests,root=.,filter=<pattern>] -sn -Pn 127.0.0.1
+  nmap --script tests/run.nse -sn -Pn 127.0.0.1
+    [--script-args testdir=tests,root=.,filter=<pattern>]
 
 Exit status is non-zero when a test fails, which is what CI checks.
 ]]
@@ -20,7 +21,7 @@ categories = {"safe"}
 
 prerule = function() return true end
 
---- Test files are listed explicitly: NSE has no directory listing, and an
+--; Test files are listed explicitly: NSE has no directory listing, and an
 -- explicit manifest also fails loudly when a file is renamed but not wired up.
 -- Named after what they test, not after the scripts they came from: 2.0 is one
 -- script, so the old names would each have pointed at a file that no longer
@@ -45,13 +46,14 @@ local function describe_error(err)
   return tostring(err), false
 end
 
----
+--;
 -- Everything the run needs before the first case can execute.
 --
--- Kept apart from action() so that failing to get this far - a harness that was
--- renamed, moved or broken - ends the process with a non-zero status instead of
--- being swallowed by NSE, which prints "Script execution failed" and lets nmap
--- exit 0. A gate that cannot run has to be as loud as a gate that fails.
+-- Kept apart from action() so that failing to get this far - a harness that
+-- was renamed, moved or broken - ends the process with a non-zero status
+-- instead of being swallowed by NSE, which prints "Script execution failed"
+-- and lets nmap exit 0. A gate that cannot run has to be as loud as a gate
+-- that fails.
 --
 local function load_harness(testdir)
   local ok, harness = pcall(dofile, testdir .. "/lib/harness.lua")
@@ -100,13 +102,15 @@ action = function()
       if not ok then
         failed = failed + 1
         local msg = describe_error(suite)
-        results[#results + 1] = string.format("FAIL  %s  (error while building suite: %s)",
+        results[#results + 1] = string.format("FAIL  %s  (error while " ..
+          "building suite: %s)",
           filename, msg)
         goto next_file
       end
 
       for _, case in ipairs(suite) do
-        local label = string.format("%s :: %s", filename:gsub("%.lua$", ""), case.name)
+        local label = string.format("%s :: %s", filename:gsub("%.lua$", ""),
+          case.name)
         if filter and not label:find(filter) then
           skipped = skipped + 1
         else
@@ -133,7 +137,8 @@ action = function()
   end
 
   local summary = string.format("%d passed, %d failed%s",
-    passed, failed, skipped > 0 and string.format(", %d skipped", skipped) or "")
+    passed, failed, skipped > 0 and string.format(", %d skipped",
+      skipped) or "")
   results[#results + 1] = summary
 
   -- A suite that ran NOTHING is not a suite that passed. Measured: a typo in

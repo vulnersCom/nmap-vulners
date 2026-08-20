@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Prove the importer's decisions, so an automatic rebuild cannot quietly change them.
+"""Prove the importer's decisions, so an automatic rebuild cannot quietly
+change them.
 
     python3 tools/fingerprints/selftest.py
 
 Once the catalogue rebuilds itself on a schedule, nothing between an upstream
 edit and every installed scanner is looked at by a human. The catalogue gate
-(`tools/catalog_diff.py`) covers the outcome - did the rebuild lose detections -
-but it cannot tell a translation that is subtly wrong from one that is right,
+(`tools/catalog_diff.py`) covers the outcome - did the rebuild lose detections
+- but it cannot tell a translation that is subtly wrong from one that is right,
 because both produce the same number of rules.
 
 That is what this covers: the decisions the importer makes about individual
@@ -41,8 +42,10 @@ class Checks:
             self.passed += 1
             print("ok    %s" % description)
         else:
-            self.failures.append(description + (("  [%s]" % context) if context else ""))
-            print("FAIL  %s%s" % (description, ("  [%s]" % context) if context else ""))
+            self.failures.append(description + (("  "
+                "[%s]" % context) if context else ""))
+            print("FAIL  %s%s" % (description,
+                                  ("  [%s]" % context) if context else ""))
         return bool(condition)
 
     def report(self):
@@ -65,14 +68,17 @@ def check_translation(checks):
     # (pcre, capture group, ignore case, subject, expected version)
     corpus = [
         (r"^Apache/([\d.]+)", 1, False, "Apache/2.4.41", "2.4.41"),
-        # A character class range. Escaping the dash - which the first version of
-        # the translator did - turns [0-9.] into three characters instead of
-        # eleven, and every version pattern in the corpus contains such a class.
+        # A character class range. Escaping the dash - which the first version
+        # of the translator did - turns [0-9.] into three characters instead of
+        # eleven, and every version pattern in the corpus contains such a
+        # class.
         (r"^Logitech Media Server \(([0-9.]+) - [0-9]+\)$", 1, False,
          "Logitech Media Server (7.9.3 - 1586752599)", "7.9.3"),
-        (r"^Server: Boa/([\d.]+[a-z]?)$", 1, False, "Server: Boa/0.94.13", "0.94.13"),
-        # A word boundary CLOSING a word. \b became %f[%w] here - a frontier that
-        # can never hold before a hyphen - so the rule matched nothing at all.
+        (r"^Server: Boa/([\d.]+[a-z]?)$", 1, False, "Server: Boa/0.94.13",
+                                "0.94.13"),
+        # A word boundary CLOSING a word. \b became %f[%w] here - a frontier
+        # that can never hold before a hyphen - so the rule matched nothing at
+        # all.
         (r"\bTomcat\b(?:-([\d.]+))?", 1, True, "Tomcat-9.0.1", "9.0.1"),
         # An alternation that must be expanded, where only one branch captures.
         (r"(?:Apache(?:$|/([\d.]+)|[^/-])|(?:^|\b)HTTPD)", 1, False,
@@ -152,14 +158,16 @@ def check_anchors(checks):
 
     # `+` does not break a run in Lua - a+b guarantees "ab" - but the emitter
     # writes a+ as "aa*", where it does. Reading `+` as an ordinary character
-    # put a literal plus into the anchor and the prefilter then matched nothing.
+    # put a literal plus into the anchor and the prefilter then matched
+    # nothing.
     checks.that(literal_anchor("abb*c([%d.]+)") is None,
                 "a repeat breaks the run rather than being taken literally")
 
-    # The anchor has to be computed BEFORE case folding: a folded pattern is all
-    # character classes and has no literal run left to search for.
-    variants = translate(r"Adminer</a> <span class=\"version\">([\d.]+)</span>",
-                         1, ignore_case=True)
+    # The anchor has to be computed BEFORE case folding: a folded pattern is
+    # all character classes and has no literal run left to search for.
+    variants = translate(
+        r"Adminer</a> <span class=\"version\">([\d.]+)</span>",
+        1, ignore_case=True)
     anchors = [anchor for _, anchor in variants]
     checks.that(all(anchor and anchor == anchor.lower() for anchor in anchors),
                 "a case-folded rule still carries a lowercase anchor",
@@ -238,14 +246,16 @@ def check_channel_keys(checks):
 
     checks.that(normalize.channel_key("server") == "hdr:server",
                 "a source spelling is still normalised")
-    checks.that(normalize.channel_key("header", "X-Powered-By") == "hdr:x-powered-by",
+    checks.that(normalize.channel_key("header",
+                                      "X-Powered-By") == "hdr:x-powered-by",
                 "and a header field is lowercased into the key")
 
     # nselib lowercases every response header name, so an uppercase key can
     # never be looked up. Minting one would ship bytes that can never fire.
     for key in ("hdr:Server", "meta:Generator", "HDR:server"):
         checks.that(normalize.channel_key(key) is None,
-                    "%r is refused: the matcher can only ever see lowercase" % key)
+                    "%r is refused: the matcher can only ever see "
+                        "lowercase" % key)
 
 
 def check_samples(checks):
@@ -261,7 +271,8 @@ def check_samples(checks):
         for subject, captured in pairs:
             found = compiled.search(subject)
             checks.that(found is not None and found.group(group) == captured,
-                        "the generated subject really is one %s accepts" % pcre,
+                        "the generated subject really is one %s "
+                            "accepts" % pcre,
                         "%r -> %r" % (subject, captured))
 
     # A generated capture should demonstrate something. "." verifies a pattern
@@ -273,18 +284,22 @@ def check_samples(checks):
 
 
 def check_identities(checks):
-    """Alias normalisation, and the corrections measured against the live API."""
+    """Alias normalisation, and the corrections measured against the live
+    API."""
     checks.that(normalize.alias_of("cpe:2.3:a:apache:tomcat:*:*:*:*:*:*:*:*")
                 == "cpe:/a:apache:tomcat", "a 2.3 CPE becomes a 2.2 prefix")
     checks.that(normalize.alias_of("cpe:/a:perl:perl:{service.version}")
-                == "cpe:/a:perl:perl", "a recog template loses its placeholder")
+                == "cpe:/a:perl:perl",
+                    "a recog template loses its placeholder")
     checks.that(normalize.alias_of("cpe:2.3:a:{vendor}:thing:*") is None,
                 "an unfilled vendor is refused rather than guessed")
 
-    checks.that(normalize.corrected("cpe:/a:igor_sysoev:nginx") == "cpe:/a:f5:nginx",
-                "the nginx spelling that answers wins")
-    checks.that(normalize.corrected("cpe:/o:oracle:sunos") == "cpe:/o:sun:sunos",
-                "the SunOS spelling that answers wins")
+    checks.that(
+        normalize.corrected("cpe:/a:igor_sysoev:nginx") == "cpe:/a:f5:nginx",
+        "the nginx spelling that answers wins")
+    checks.that(
+        normalize.corrected("cpe:/o:oracle:sunos") == "cpe:/o:sun:sunos",
+        "the SunOS spelling that answers wins")
 
     checks.that(normalize.plausible("2.4.41"), "a dotted version is plausible")
     checks.that(normalize.plausible("3.7.4.post0"), "so is a package version")
@@ -301,7 +316,8 @@ def check_identities(checks):
 
 
 def check_shrink_guard(checks):
-    """The guard that stops a rebuild with no sources from publishing itself."""
+    """The guard that stops a rebuild with no sources from publishing
+    itself."""
     import json
     import tempfile
     import build
@@ -309,7 +325,8 @@ def check_shrink_guard(checks):
     with tempfile.TemporaryDirectory() as workspace:
         target = os.path.join(workspace, "fingerprints.json")
         with open(target, "w", encoding="utf-8") as handle:
-            json.dump({"schema": 1, "rules": {str(i): {} for i in range(100)}}, handle)
+            json.dump({"schema": 1,
+                       "rules": {str(i): {} for i in range(100)}}, handle)
 
         raised = False
         try:
@@ -323,7 +340,8 @@ def check_shrink_guard(checks):
             build.refuse_to_shrink(target, 40, sources_found=2, force=False)
         except SystemExit:
             raised = True
-        checks.that(raised, "a rebuild that loses most of the catalogue is refused")
+        checks.that(raised,
+                    "a rebuild that loses most of the catalogue is refused")
 
         raised = False
         try:
@@ -344,8 +362,8 @@ def check_paths(checks):
     """What the sweep is allowed to knock on.
 
     The list goes out against every web port of every host in a scan, so a bad
-    entry is not one wasted request - it is one per port per host, from a script
-    that has to be able to explain every packet it sends.
+    entry is not one wasted request - it is one per port per host, from a
+    script that has to be able to explain every packet it sends.
     """
     refused = {
         "/../../etc/passwd": "traversal",
@@ -353,7 +371,8 @@ def check_paths(checks):
         "/{{BaseURL}}/x{{n}}": "an unresolved interpolation",
         "/%c0": "a percent escape, which in this corpus is normaliser abuse",
         "/?map=*": "a wildcard the operator was meant to fill in",
-        "/.settings/rules.json?auth=FIREBASE_SECRET": "an ALL_CAPS placeholder",
+        "/.settings/rules.json?auth=FIREBASE_SECRET":
+            "an ALL_CAPS placeholder",
         "/:9182": "a host:port fragment somebody pasted into a path field",
         "/&?=?": "punctuation, not a path",
         "/logo.gif": "an image; no rule can read one",
@@ -365,7 +384,8 @@ def check_paths(checks):
     for path, why in refused.items():
         checks.that(path_builder.normalise(path) is None,
                     "a path is refused: %s" % why,
-                    "normalise(%r) returned %r" % (path, path_builder.normalise(path)))
+                    "normalise(%r) returned %r" % (path,
+                               path_builder.normalise(path)))
 
     kept = {
         "/wp-login.php": "/wp-login.php",
@@ -389,34 +409,38 @@ def check_paths(checks):
     candidates.add("/wp-login.php", "wordpress", "whatweb")
     candidates.add("/wp-login.php", "wordpress-detect", "nuclei")
     candidates.add("/only-once.php", "obscure appliance", "whatweb")
-    chosen, named = path_builder.select(candidates, lambda tokens: None, report)
+    chosen, named = path_builder.select(candidates, lambda tokens: None,
+                                        report)
 
     checks.that(chosen[0] == "/",
                 "the front page is asked first, always",
                 "got %r" % (chosen[:1],))
     checks.that(chosen.index("/wp-login.php") < chosen.index("/only-once.php"),
-                "a path two catalogues name outranks one only a single plugin does",
+                "a path two catalogues name outranks one only a single "
+                    "plugin does",
                 "%r" % (chosen[:14],))
     front = path_builder.front_pages()
     checks.that(chosen.index("/only-once.php") < chosen.index(front[-1]),
                 "and every upstream path outranks the front-page guesses",
                 "%r" % (chosen[-4:],))
 
-    # A path a probe owns is not swept as well: the probe is conditional and the
-    # sweep is not, and only the probe carries the version extractor.
+    # A path a probe owns is not swept as well: the probe is conditional and
+    # the sweep is not, and only the probe carries the version extractor.
     chosen, _ = path_builder.select(candidates, lambda tokens: None, report,
                                     exclude={"/wp-login.php"})
     checks.that("/wp-login.php" not in chosen,
                 "a path a targeted probe owns is left out of the sweep",
                 "%r" % (chosen[:12],))
 
-    checks.that(path_builder.ALWAYS[0] == "/" and "/robots.txt" in path_builder.ALWAYS,
+    checks.that(path_builder.ALWAYS[0] == "/"
+                and "/robots.txt" in path_builder.ALWAYS,
                 "the universal list is the front page and robots.txt")
 
 
 def main():
     if luaeval.LUA is None:
-        print("FAIL  no lua interpreter on PATH; the translation cases need one")
+        print("FAIL  no lua interpreter on PATH; the translation cases need "
+            "one")
         return 1
 
     checks = Checks()

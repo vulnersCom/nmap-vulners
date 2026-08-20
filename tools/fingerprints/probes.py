@@ -50,12 +50,13 @@ def _lua(pattern, group, ignore_case, report, label):
         # still be a pattern that compiles, which translate() has established.
         return variants[0]
 
-    oracle = [pair for pair in sample.samples(pattern, group, ignore_case=ignore_case)
+    oracle = [pair for pair in sample.samples(pattern, group,
+                                              ignore_case=ignore_case)
               if normalize.plausible(pair[1])]
     if not oracle:
         # Either nothing could be generated, or what it extracted is not a
-        # version. Both are disqualifying: a probe exists to append a version to
-        # a CPE, and appending "Domino A ." asks the service about a release
+        # version. Both are disqualifying: a probe exists to append a version
+        # to a CPE, and appending "Domino A ." asks the service about a release
         # that never existed.
         report["probe_unverifiable"][label] += 1
         return None
@@ -64,17 +65,19 @@ def _lua(pattern, group, ignore_case, report, label):
 
 def build(wappalyzer_rules, nuclei_probes, report):
     """Probes, keyed by a stable name, ready to be written as JSON."""
-    # Presence-only Wappalyzer rules, by the identity they detect. These are the
-    # ones this importer otherwise discards: they name a product and no version,
-    # which is useless on its own and is precisely a probe's trigger.
+    # Presence-only Wappalyzer rules, by the identity they detect. These are
+    # the ones this importer otherwise discards: they name a product and no
+    # version, which is useless on its own and is precisely a probe's trigger.
     detectors = collections.defaultdict(list)
     for rule in wappalyzer_rules:
         if rule.get("version_group") is not None:
             continue
-        alias = normalize.corrected(normalize.alias_of(rule.get("cpe_template")))
+        alias = normalize.corrected(
+            normalize.alias_of(rule.get("cpe_template")))
         if not alias:
             continue
-        if rule["channel"] not in ("header", "meta", "cookie", "body", "script"):
+        if rule["channel"] not in ("header", "meta", "cookie", "body",
+                                   "script"):
             continue
         detectors[alias].append(rule)
 
@@ -83,15 +86,17 @@ def build(wappalyzer_rules, nuclei_probes, report):
         alias = normalize.corrected(probe["alias"])
         available = detectors.get(alias)
         if not available:
-            # Nothing can recognise this product without a request, so the probe
-            # would have to be sent unconditionally - to every host, on the
-            # chance that one of them runs it. That is a scanner behaving badly.
+            # Nothing can recognise this product without a request, so the
+            # probe would have to be sent unconditionally - to every host, on
+            # the chance that one of them runs it. That is a scanner behaving
+            # badly.
             report["probe_no_detector"][alias] += 1
             continue
 
         detect = []
         for rule in available:
-            pattern = _lua(rule["pattern"], None, rule.get("ignore_case", True),
+            pattern = _lua(rule["pattern"], None, rule.get("ignore_case",
+                                                           True),
                            report, alias)
             if pattern is None:
                 continue
@@ -125,7 +130,8 @@ def build(wappalyzer_rules, nuclei_probes, report):
             "detect": detect,
             "paths": probe["paths"][:MAX_PATHS_PER_PROBE],
             "extract": extract,
-            "source": "%s:%s + wappalyzer" % (probe["source"], probe["upstream"]),
+            "source": "%s:%s + wappalyzer" % (probe["source"],
+                                                    probe["upstream"]),
         }
         if example:
             entries[probe["product"]]["example"] = example

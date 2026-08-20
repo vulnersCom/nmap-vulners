@@ -17,7 +17,7 @@
 --
 --   POST /api/v3/search/id/        needs a token, costs no credit, max 100 ids
 --     {"result":"OK","data":{"documents":{"<id>":{id,type,bulletinFamily,
---                                                 cvss,epss,cvelist,metrics}}}}
+--                                            cvss,epss,cvelist,metrics}}}}
 --
 --   POST /api/v4/audit/smart       needs a token, costs a credit
 --     {"result":[{"input":"<text>","cpe":"cpe:2.3:...","confidence":90,
@@ -43,7 +43,7 @@ local BURP = "/api/v3/burp/"
 local SEARCH_ID = "/api/v3/search/id/"
 local SMART = "/api/v4/audit/smart"
 
---- A keyed load. The token travels through the faked environment, so nothing
+--; A keyed load. The token travels through the faked environment, so nothing
 -- here can pick up the developer's real one.
 local function keyed(opts)
   opts = opts or {}
@@ -52,7 +52,7 @@ local function keyed(opts)
   return t.load_vulners(opts)
 end
 
---- A keyed load whose bounded waits are instant and countable.
+--; A keyed load whose bounded waits are instant and countable.
 local function keyed_with_clock(opts)
   opts = opts or {}
   opts.clock = t.clock_double()
@@ -60,7 +60,7 @@ local function keyed_with_clock(opts)
   return env, http, opts.clock
 end
 
---- A keyless load, spelled out rather than implied.
+--; A keyless load, spelled out rather than implied.
 local function keyless(opts)
   opts = opts or {}
   opts.root = root
@@ -70,7 +70,7 @@ end
 
 -- ------------------------------------------------------------ response parts
 
---- One burp hit's _source, as the free endpoint returns it.
+--; One burp hit's _source, as the free endpoint returns it.
 local function bulletin(opts)
   local source = {
     id = opts.id,
@@ -90,7 +90,7 @@ local function bulletin(opts)
   return source
 end
 
---- The query of a burp GET, percent-decoded back into a name -> value map.
+--; The query of a burp GET, percent-decoded back into a name -> value map.
 local function query_args(path)
   local args = {}
   for _, part in ipairs(t.split_query(path)) do
@@ -104,19 +104,20 @@ local function query_args(path)
   return args
 end
 
---- Answer the endpoints a 2.0 run really uses.
+--; Answer the endpoints a 2.0 run really uses.
 --
 -- The 1.x double ended in t.fail for anything that was not the v4 audit, which
 -- under the merge kills every case on its first request: the action sweeps an
 -- http port and then asks burp about each identity.
 --
--- @param opts software - software query value -> list of bulletin() sources;
---                        an absent key answers "warning", i.e. resolved and clean
---             docs     - bulletin id -> enrichment document
---             pages    - sweep path -> t.response() options
---             smart    - function(req) answering POST /api/v4/audit/smart
---             handler  - first refusal on every request, for error injection
---- json.parse gives back whatever the body held; a list is what we expect.
+-- @param opts software - software query value -> list
+--                        of bulletin() sources; an absent key answers
+--                        "warning", i.e. resolved and clean docs     -
+--                        bulletin id -> enrichment document pages    - sweep
+--                        path -> t.response() options smart    - function(req)
+--                        answering POST /api/v4/audit/smart handler  - first
+--                        refusal on every request, for error injection
+--; json.parse gives back whatever the body held; a list is what we expect.
 local function as_list(value)
   return type(value) == "table" and value or {}
 end
@@ -149,7 +150,8 @@ local function serve(http, opts)
       -- matched_cpe echoing search_cpe is how burp says the identity resolved.
       -- Without it the port treats an empty answer as "could not be named" and
       -- spends a credit on audit/smart, which most cases here do not mean.
-      local explain = {search_cpe = asked.software, matched_cpe = asked.software}
+      local explain = {search_cpe = asked.software,
+        matched_cpe = asked.software}
       local rows = answers[asked.software]
       if rows == nil then
         return t.response({status = 200, body = json.generate({
@@ -222,7 +224,7 @@ local function by_id(rows)
   return out
 end
 
---- The group keys of a result, past the schema and mode elems 2.0 adds.
+--; The group keys of a result, past the schema and mode elems 2.0 adds.
 local function group_keys(order)
   local keys = {}
   for _, key in ipairs(order or {}) do
@@ -235,11 +237,11 @@ local function port_with_cpe()
   return t.port({product = "OpenSSH", version = "7.4", cpe = {CPE}})
 end
 
---- A port carrying the CPE and nothing else.
+--; A port carrying the CPE and nothing else.
 --
 -- Kept because it keeps a case about one endpoint. It is no longer needed to
--- avoid audit/smart: a port that carries a CPE never reaches the billed call at
--- all, whatever else it carries. The case below is what says so.
+-- avoid audit/smart: a port that carries a CPE never reaches the billed call
+-- at all, whatever else it carries. The case below is what says so.
 local function port_cpe_only()
   return t.port({cpe = {CPE}})
 end
@@ -254,11 +256,13 @@ suite[#suite + 1] = {
     -- B2: 1.x answered a missing key with silence, so a user with no key got
     -- strictly nothing. 2.0 owes them the free path plus one notice.
     local env, http = keyless()
-    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8})}}})
+    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408",
+      cvss = 9.8})}}})
 
     local plain = t.collect_output(env.action(t.host(), port_with_cpe()))
 
-    t.same(ids_of(plain[CPE]), {"CVE-2023-38408"}, "a keyless run still reports")
+    t.same(ids_of(plain[CPE]), {"CVE-2023-38408"},
+      "a keyless run still reports")
     t.equals(plain.mode, "free", "and says which path produced it")
     t.length(http.matching(SEARCH_ID), 0, "enrichment needs a token")
     for _, request in ipairs(http.requests) do
@@ -277,7 +281,8 @@ suite[#suite + 1] = {
   name = "the API key is sent to search/id and never on the burp request",
   fn = function()
     local env, http = keyed()
-    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8})}}})
+    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408",
+      cvss = 9.8})}}})
 
     env.action(t.host(), port_with_cpe())
 
@@ -298,7 +303,8 @@ suite[#suite + 1] = {
   name = "the API key can come from the environment",
   fn = function()
     local env, http = keyed({token = "ENV-FAKE-KEY"})
-    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8})}}})
+    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408",
+      cvss = 9.8})}}})
 
     env.action(t.host(), port_with_cpe())
 
@@ -319,7 +325,8 @@ suite[#suite + 1] = {
       args = {["vulners_enterprise.api_key_file"] = keyfile},
       files = {[keyfile] = KEY .. "\n"},
     })
-    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8})}}})
+    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408",
+      cvss = 9.8})}}})
 
     env.action(t.host(), port_with_cpe())
 
@@ -338,9 +345,11 @@ suite[#suite + 1] = {
     local env, http = keyless({
       args = {["vulners_enterprise.api_key_file"] = "/etc/nmap/absent.key"},
     })
-    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8})}}})
+    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408",
+      cvss = 9.8})}}})
 
-    t.is_nil(t.no_error(function() return env.action(t.host(), port_with_cpe()) end,
+    t.is_nil(t.no_error(function() return env.action(t.host(),
+      port_with_cpe()) end,
       "an unreadable key file must not raise"))
     t.length(http.requests, 0, "and the run asks nothing at all")
   end,
@@ -349,8 +358,9 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "the API key never reaches the debug log",
   fn = function()
-    -- load_vulners cannot fake stdnse, so the hermetic load is spelled out here
-    -- with the recording double added: nmap -d output travels in bug reports.
+    -- load_vulners cannot fake stdnse, so the hermetic load is spelled out
+    -- here with the recording double added: nmap -d output travels in bug
+    -- reports.
     local http = t.http_double()
     local logger = t.stdnse_double()
     local env = t.load_script(root .. "/vulners.nse", {
@@ -363,13 +373,15 @@ suite[#suite + 1] = {
         stdnse = logger,
       },
     })
-    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8})}}})
+    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408",
+      cvss = 9.8})}}})
 
     env.action(t.host(), port_with_cpe())
 
     local log = logger.log()
     t.matches(log, "Api key is set %(%d+ characters%)",
-      "the script must log that it has a key, so this case cannot pass on silence")
+      "the script must log that it has a key, so this case cannot pass on " ..
+        "silence")
     t.is_nil(log:find(KEY, 1, true),
       "the key itself must not be written to debug output")
   end,
@@ -383,7 +395,8 @@ suite[#suite + 1] = {
     -- B5: the batched POST /api/v4/audit/software/ is on no default path any
     -- more. A CPE is asked about one identity per GET, and for free.
     local env, http = keyed()
-    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8})}}})
+    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408",
+      cvss = 9.8})}}})
 
     env.action(t.host(), port_with_cpe())
 
@@ -407,7 +420,8 @@ suite[#suite + 1] = {
       ["vulners_enterprise.api_host"] = "vulners.internal",
       ["vulners_enterprise.api_port"] = 8443,
     }})
-    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8})}}})
+    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408",
+      cvss = 9.8})}}})
 
     env.action(t.host(), port_with_cpe())
 
@@ -427,7 +441,8 @@ suite[#suite + 1] = {
       ["vulners_enterprise.api_host"] = "127.0.0.1",
       ["vulners_enterprise.api_port"] = "8443",
     }})
-    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8})}}})
+    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408",
+      cvss = 9.8})}}})
 
     env.action(t.host(), port_with_cpe())
 
@@ -441,8 +456,10 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "an unusable api_port falls back to 443",
   fn = function()
-    local env, http = keyed({args = {["vulners_enterprise.api_port"] = "not-a-port"}})
-    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8})}}})
+    local env, http =
+      keyed({args = {["vulners_enterprise.api_port"] = "not-a-port"}})
+    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408",
+      cvss = 9.8})}}})
 
     env.action(t.host(), port_with_cpe())
 
@@ -464,13 +481,16 @@ suite[#suite + 1] = {
                                     bulletinFamily = "NVD"}},
     })
 
-    local first = t.collect_output(env.action(t.host({ip = "10.0.0.1"}), port_with_cpe()))
+    local first = t.collect_output(env.action(t.host({ip = "10.0.0.1"}),
+      port_with_cpe()))
     local burp_after_first = #http.matching(BURP)
     local enrich_after_first = #http.matching(SEARCH_ID)
     t.is_true(burp_after_first > 0 and enrich_after_first > 0,
-      "the first host must have asked, or the comparison below compares nothing")
+      "the first host must have asked, or the comparison below compares " ..
+        "nothing")
 
-    local second = t.collect_output(env.action(t.host({ip = "10.0.0.2"}), port_with_cpe()))
+    local second = t.collect_output(env.action(t.host({ip = "10.0.0.2"}),
+      port_with_cpe()))
 
     t.equals(#http.matching(BURP), burp_after_first,
       "the second host must be served from the scan cache")
@@ -488,8 +508,10 @@ suite[#suite + 1] = {
     -- data, so all three are asked. Discovery is free, so this costs nothing.
     local env, http = keyed()
     serve(http, {software = {
-      ["cpe:/a:nginx:nginx:1.13.4"] = {bulletin({id = "CVE-2018-16843", cvss = 7.5})},
-      ["cpe:/a:igor_sysoev:nginx:1.13.4"] = {bulletin({id = "CVE-2009-2629", cvss = 9.0})},
+      ["cpe:/a:nginx:nginx:1.13.4"] = {bulletin({id = "CVE-2018-16843",
+        cvss = 7.5})},
+      ["cpe:/a:igor_sysoev:nginx:1.13.4"] = {bulletin({id = "CVE-2009-2629",
+        cvss = 9.0})},
     }})
 
     local port = t.port({product = "nginx", version = "1.13.4",
@@ -500,14 +522,17 @@ suite[#suite + 1] = {
     for _, request in ipairs(http.matching(BURP)) do
       asked[query_args(request.path).software] = true
     end
-    t.is_true(asked["cpe:/a:f5:nginx:1.13.4"], "the f5 spelling must be queried")
-    t.is_true(asked["cpe:/a:nginx:nginx:1.13.4"], "the nginx:nginx spelling must be queried")
+    t.is_true(asked["cpe:/a:f5:nginx:1.13.4"],
+      "the f5 spelling must be queried")
+    t.is_true(asked["cpe:/a:nginx:nginx:1.13.4"],
+      "the nginx:nginx spelling must be queried")
     t.is_true(asked["cpe:/a:igor_sysoev:nginx:1.13.4"],
       "the igor_sysoev spelling must be queried")
 
     t.length(group_keys(order), 1, "both answers belong to one result key")
     t.same(ids_of(plain["cpe:/a:nginx:nginx:1.13.4"]),
-      {"CVE-2009-2629", "CVE-2018-16843"}, "merged results stay sorted by CVSS")
+      {"CVE-2009-2629",
+        "CVE-2018-16843"}, "merged results stay sorted by CVSS")
   end,
 }
 
@@ -532,7 +557,8 @@ suite[#suite + 1] = {
     -- which is the failure mode this whole migration exists to prevent.
     t.contains(host.registry.vulners_cpe[80], "cpe:/a:php:php:5.6.38",
       "the sweep must have produced the duplicate in the first place")
-    t.length(http.matching(BURP), 1, "the duplicate must be dropped before asking")
+    t.length(http.matching(BURP), 1,
+      "the duplicate must be dropped before asking")
     t.same(ids_of(plain["cpe:/a:php:php:5.6.38"]), {"CVE-2019-11043"})
   end,
 }
@@ -542,8 +568,10 @@ suite[#suite + 1] = {
   fn = function()
     local env, http = keyed()
     serve(http, {software = {
-      ["cpe:/a:nginx:nginx:1.13.4"] = {bulletin({id = "CVE-2018-16843", cvss = 7.5})},
-      ["cpe:/a:igor_sysoev:nginx:1.13.4"] = {bulletin({id = "CVE-2018-16843", cvss = 7.5})},
+      ["cpe:/a:nginx:nginx:1.13.4"] = {bulletin({id = "CVE-2018-16843",
+        cvss = 7.5})},
+      ["cpe:/a:igor_sysoev:nginx:1.13.4"] = {bulletin({id = "CVE-2018-16843",
+        cvss = 7.5})},
     }})
 
     local port = t.port({product = "nginx", version = "1.13.4",
@@ -562,7 +590,8 @@ suite[#suite + 1] = {
   fn = function()
     local env, http = keyed()
     serve(http, {software = {
-      ["cpe:/a:isc:bind:9.8.2"] = {bulletin({id = "CVE-2012-1667", cvss = 8.5})},
+      ["cpe:/a:isc:bind:9.8.2"] = {bulletin({id = "CVE-2012-1667",
+        cvss = 8.5})},
     }})
     local healthy = http.handler
     http.handler = function() return t.response({status = 500, body = ""}) end
@@ -572,7 +601,8 @@ suite[#suite + 1] = {
     t.is_nil(env.action(t.host(), port), "the failing lookup reports nothing")
 
     http.handler = healthy
-    local plain = t.collect_output(env.action(t.host({ip = "127.0.0.2"}), port))
+    local plain = t.collect_output(env.action(t.host({ip = "127.0.0.2"}),
+      port))
     t.same(ids_of(plain["cpe:/a:isc:bind:9.8.2"]), {"CVE-2012-1667"},
       "the next host asks again and gets the answer")
   end,
@@ -585,8 +615,10 @@ suite[#suite + 1] = {
     -- let whichever was scanned first stand for the other.
     local env, http = keyed()
     serve(http, {software = {
-      ["cpe:/a:openbsd:openssh:7.4p1"] = {bulletin({id = "CVE-2016-10009", cvss = 7.5})},
-      ["cpe:/a:openbsd:openssh:7.4"] = {bulletin({id = "CVE-2018-15473", cvss = 5.3})},
+      ["cpe:/a:openbsd:openssh:7.4p1"] = {bulletin({id = "CVE-2016-10009",
+        cvss = 7.5})},
+      ["cpe:/a:openbsd:openssh:7.4"] = {bulletin({id = "CVE-2018-15473",
+        cvss = 5.3})},
     }})
 
     local first = t.collect_output(env.action(t.host(),
@@ -641,10 +673,12 @@ suite[#suite + 1] = {
       software = {[CPE] = {
         bulletin({id = "CVE-2023-38408", cvss = 9.8}),
         bulletin({id = "CVE-2018-15473", cvss = 5.3}),
-        bulletin({id = "PACKETSTORM:142013", type = "packetstorm", family = "exploit"}),
+        bulletin({id = "PACKETSTORM:142013", type = "packetstorm",
+          family = "exploit"}),
       }},
       docs = {["PACKETSTORM:142013"] = {
-        id = "PACKETSTORM:142013", type = "packetstorm", bulletinFamily = "exploit",
+        id = "PACKETSTORM:142013", type = "packetstorm",
+        bulletinFamily = "exploit",
         cvelist = {"CVE-2023-38408", "CVE-2018-15473"},
       }},
     })
@@ -686,7 +720,8 @@ suite[#suite + 1] = {
   name = "cvss version is reported alongside the score",
   fn = function()
     local env, http = keyed()
-    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8,
+    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2023-38408",
+      cvss = 9.8,
       cvss_version = "3.1"})}}})
 
     local output, text = env.action(t.host(), port_with_cpe())
@@ -764,10 +799,12 @@ suite[#suite + 1] = {
       "an exploit outranks an unexploited 9.8")
     t.equals(exploit_row.type, "githubexploit")
     t.equals(exploit_row.is_exploit, "true")
-    t.equals(plain[CPE][2].id, "CVE-2023-38408", "the cve itself stays in the report")
+    t.equals(plain[CPE][2].id, "CVE-2023-38408",
+      "the cve itself stays in the report")
     -- O5: *EXPLOIT* and *HAS EXPLOIT* are gone; the marker is a fixed-width
     -- token in the FLAGS column.
-    t.matches(text, "EXP%s+https://vulners%.com/githubexploit/F0979183", "the user must see the exploit marker")
+    t.matches(text, "EXP%s+https://vulners%.com/githubexploit/F0979183",
+      "the user must see the exploit marker")
   end,
 }
 
@@ -781,10 +818,12 @@ suite[#suite + 1] = {
     serve(http, {
       software = {[CPE] = {
         bulletin({id = "CVE-2023-38408", cvss = 9.8}),
-        bulletin({id = "PACKETSTORM:142013", type = "packetstorm", family = "exploit"}),
+        bulletin({id = "PACKETSTORM:142013", type = "packetstorm",
+          family = "exploit"}),
       }},
       docs = {["PACKETSTORM:142013"] = {
-        id = "PACKETSTORM:142013", type = "packetstorm", bulletinFamily = "exploit",
+        id = "PACKETSTORM:142013", type = "packetstorm",
+        bulletinFamily = "exploit",
         cvelist = {"CVE-2023-38408"},
         metrics = {adp = {kev = {dateAdded = "2023-09-13"}}},
       }},
@@ -802,23 +841,26 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "href is the vulners page and the endpoint's own href travels beside it",
+  name = "href is the vulners page and the endpoint's own href travels " ..
+    "beside it",
   fn = function()
     -- Measured against the live service: the enrich endpoint's href is the
     -- UPSTREAM address - web.nvd.nist.gov for a cve, www.exploit-db.com for an
     -- exploitdb entry - and the free endpoint sends no href at all, on any of
-    -- 272 rows for one real CPE. Publishing that under href would have made the
-    -- meaning of the field depend on which mode produced the report.
+    -- 272 rows for one real CPE. Publishing that under href would have made
+    -- the meaning of the field depend on which mode produced the report.
     local env, http = keyed()
     serve(http, {
       software = {[CPE] = {
         bulletin({id = "CVE-2023-38408", cvss = 9.8}),
-        bulletin({id = "EDB-ID:45233", type = "exploitdb", family = "exploit"}),
+        bulletin({id = "EDB-ID:45233", type = "exploitdb",
+          family = "exploit"}),
       }},
       docs = {
         ["CVE-2023-38408"] = {
           id = "CVE-2023-38408", type = "cve", bulletinFamily = "NVD",
-          href = "https://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2023-38408",
+          href = "https://web.nvd.nist.gov/view/vuln/detail" ..
+            "?vulnId=CVE-2023-38408",
         },
         ["EDB-ID:45233"] = {
           id = "EDB-ID:45233", type = "exploitdb", bulletinFamily = "exploit",
@@ -830,12 +872,14 @@ suite[#suite + 1] = {
     local output, text = env.action(t.host(), port_with_cpe())
     local rows = by_id(t.collect_output(output)[CPE])
 
-    t.equals(rows["CVE-2023-38408"].href, "https://vulners.com/cve/CVE-2023-38408",
+    t.equals(rows["CVE-2023-38408"].href,
+      "https://vulners.com/cve/CVE-2023-38408",
       "href is the vulners page, composed from the type and the id")
     t.equals(rows["CVE-2023-38408"].source_href,
       "https://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2023-38408",
       "and what the endpoint called href is published as what it is")
-    t.equals(rows["EDB-ID:45233"].href, "https://vulners.com/exploitdb/EDB-ID:45233",
+    t.equals(rows["EDB-ID:45233"].href,
+      "https://vulners.com/exploitdb/EDB-ID:45233",
       "the same for an exploit, whose page is under its own type")
 
     t.matches(text, "https://vulners%.com/cve/CVE%-2023%-38408",
@@ -856,7 +900,8 @@ suite[#suite + 1] = {
 
     local plain = t.collect_output(env.action(t.host(), port_with_cpe()))
 
-    t.is_true(plain and plain[CPE], "a working exploit outranks the score threshold")
+    t.is_true(plain and plain[CPE],
+      "a working exploit outranks the score threshold")
     t.same(ids_of(plain[CPE]), {"EDB-ID:45233"},
       "the 5.3 cve itself is filtered out by mincvss=9.0")
   end,
@@ -904,7 +949,8 @@ suite[#suite + 1] = {
     local port = t.port({product = "OpenSSH", version = "7.4", cpe = {}})
     local plain = t.collect_output(env.action(t.host(), port))
 
-    t.length(http.matching(BURP), 0, "there is no CPE to ask the free endpoint about")
+    t.length(http.matching(BURP), 0,
+      "there is no CPE to ask the free endpoint about")
     t.length(http.matching(SMART), 1, "the smart endpoint must be used")
     t.length(http.matching(SEARCH_ID), 1, "smart ids need resolving")
 
@@ -930,7 +976,8 @@ suite[#suite + 1] = {
 
     local plain = t.collect_output(env.action(t.host(), port_with_cpe()))
 
-    t.length(http.matching(SEARCH_ID), 2, "150 ids must be split into two calls")
+    t.length(http.matching(SEARCH_ID), 2,
+      "150 ids must be split into two calls")
     t.length(plain[CPE], 150, "every resolved id must be reported")
   end,
 }
@@ -1005,7 +1052,8 @@ suite[#suite + 1] = {
       })})
     end
 
-    t.is_nil(t.no_error(function() return env.action(t.host(), port_cpe_only()) end,
+    t.is_nil(t.no_error(function() return env.action(t.host(),
+      port_cpe_only()) end,
       "an error body must be handled"))
     t.is_true(#http.matching(BURP) > 0,
       "the request must have been made: otherwise this case passes on silence")
@@ -1020,7 +1068,8 @@ suite[#suite + 1] = {
       return t.response({status = 200, body = "<html>not json</html>"})
     end
 
-    t.is_nil(t.no_error(function() return env.action(t.host(), port_cpe_only()) end,
+    t.is_nil(t.no_error(function() return env.action(t.host(),
+      port_cpe_only()) end,
       "a broken body must be handled"))
     t.is_true(#http.matching(BURP) > 0,
       "the request must have been made: otherwise this case passes on silence")
@@ -1034,17 +1083,20 @@ suite[#suite + 1] = {
     serve(http, {
       software = {[CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8})}},
       handler = function(req)
-        if type(req.host) == "string" and req.path:find(SEARCH_ID, 1, true) then
+        if type(req.host) == "string" and req.path:find(SEARCH_ID, 1,
+          true) then
           return t.response({status = 403, body = "forbidden"})
         end
       end,
     })
 
-    local plain = t.collect_output(env.action(t.host({ip = "10.0.0.1"}), port_with_cpe()))
+    local plain = t.collect_output(env.action(t.host({ip = "10.0.0.1"}),
+      port_with_cpe()))
 
     t.length(http.matching(SEARCH_ID), 1,
       "a rejected request will not fix itself by asking again")
-    t.equals(plain.mode, "free", "a refused key drops the scan to the free path")
+    t.equals(plain.mode, "free",
+      "a refused key drops the scan to the free path")
     t.same(ids_of(plain[CPE]), {"CVE-2023-38408"},
       "and the free findings still stand")
 
@@ -1064,23 +1116,27 @@ suite[#suite + 1] = {
     serve(http, {
       software = {
         [CPE] = {bulletin({id = "CVE-2023-38408", cvss = 9.8})},
-        ["cpe:/a:isc:bind:9.8.2"] = {bulletin({id = "CVE-2012-1667", cvss = 8.5})},
+        ["cpe:/a:isc:bind:9.8.2"] = {bulletin({id = "CVE-2012-1667",
+          cvss = 8.5})},
       },
       handler = function(req)
-        if type(req.host) == "string" and req.path:find(SEARCH_ID, 1, true) then
+        if type(req.host) == "string" and req.path:find(SEARCH_ID, 1,
+          true) then
           return t.response({status = 401, body = "unauthorized"})
         end
       end,
     })
 
-    local first = t.collect_output(env.action(t.host({ip = "10.0.0.1"}), port_with_cpe()))
+    local first = t.collect_output(env.action(t.host({ip = "10.0.0.1"}),
+      port_with_cpe()))
     t.same(ids_of(first[CPE]), {"CVE-2023-38408"},
       "the findings the free path produced survive a refused key")
     t.equals(first.mode, "free")
 
     local port = port_cpe_only()
     port.version.cpe = {"cpe:/a:isc:bind:9.8.2"}
-    local second = t.collect_output(env.action(t.host({ip = "10.0.0.2"}), port))
+    local second = t.collect_output(env.action(t.host({ip = "10.0.0.2"}),
+      port))
     t.same(ids_of(second["cpe:/a:isc:bind:9.8.2"]), {"CVE-2012-1667"},
       "and the next host is still looked up")
     t.length(http.matching(SEARCH_ID), 1, "the refused key is not tried again")
@@ -1091,7 +1147,8 @@ suite[#suite + 1] = {
   name = "a 5xx answer is retried",
   fn = function()
     local env, http = keyed()
-    http.handler = function() return t.response({status = 503, body = "busy"}) end
+    http.handler = function() return t.response({status = 503,
+      body = "busy"}) end
 
     t.is_nil(env.action(t.host(), port_cpe_only()))
     t.is_true(#http.matching(BURP) > 1,
@@ -1126,7 +1183,8 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "an unreachable API is retried, then left alone for the rest of the scan",
+  name = "an unreachable API is retried, then left alone for the rest of " ..
+    "the scan",
   fn = function()
     local env, http = keyed()
     http.handler = function() return nil end
@@ -1145,7 +1203,8 @@ suite[#suite + 1] = {
 -- ------------------------------------------------------- defensive behaviour
 
 suite[#suite + 1] = {
-  name = "a port without a version table is swept and reported without crashing",
+  name = "a port without a version table is swept and reported without " ..
+    "crashing",
   fn = function()
     -- shortport.http admits a port nmap never version-scanned, so publish_cpes
     -- has to build the version table it writes into rather than assume one.
@@ -1202,10 +1261,13 @@ suite[#suite + 1] = {
 
     t.is_nil(result, "a clean port reports nothing")
     t.length(http.matching(SMART), 0,
-      "\"clean\" is an answer, and the free endpoint was measured to give the " ..
+      "\"clean\" is an answer, and the free endpoint was measured to give " ..
+        "the " ..
       "same one the paid endpoint gives - so identifying a fully patched " ..
-      "service must not cost a credit. Gating this on \"nothing was found\" " ..
-      "instead of \"no CPE at all\" billed every well maintained host, which " ..
+      "service must not cost a credit. Gating this on \"nothing was " ..
+        "found\" " ..
+      "instead of \"no CPE at all\" billed every well maintained host, " ..
+        "which " ..
       "is precisely backwards")
     t.is_true(#http.matching(BURP) > 0,
       "the free lookup still happened")
@@ -1244,7 +1306,8 @@ suite[#suite + 1] = {
     -- token on the wire in the clear, to a host the operator named.
     local env, http = keyed({args = {["vulners.api_host"] = "vulners.example",
                                      ["vulners.api_port"] = "8080"}})
-    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2021-1", cvss = 9.8})}}})
+    serve(http, {software = {[CPE] = {bulletin({id = "CVE-2021-1",
+      cvss = 9.8})}}})
     env.action(t.host(), port_with_cpe())
 
     t.is_true(#http.requests > 0, "the scan still made requests")
@@ -1261,7 +1324,8 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "the token does travel on https, and to loopback for the test harness",
+  name = "the token does travel on https, and to loopback for the test " ..
+    "harness",
   fn = function()
     for _, case in ipairs({
       {host = "vulners.example", port = "443", why = "https"},
@@ -1270,24 +1334,29 @@ suite[#suite + 1] = {
       t.reset_registry()
       local env, http = keyed({args = {["vulners.api_host"] = case.host,
                                        ["vulners.api_port"] = case.port}})
-      serve(http, {software = {[CPE] = {bulletin({id = "CVE-2021-1", cvss = 9.8})}},
-                   docs = {["CVE-2021-1"] = {id = "CVE-2021-1", type = "cve"}}})
+      serve(http, {software = {[CPE] = {bulletin({id = "CVE-2021-1",
+        cvss = 9.8})}},
+                   docs = {["CVE-2021-1"] = {id = "CVE-2021-1",
+                     type = "cve"}}})
       env.action(t.host(), port_with_cpe())
 
       local seen = false
       for _, req in ipairs(http.matching(SEARCH_ID)) do
         seen = seen or (req.options.header["X-Api-Key"] == KEY)
       end
-      t.is_true(seen, "the token must reach the keyed endpoint over " .. case.why)
+      t.is_true(seen,
+        "the token must reach the keyed endpoint over " .. case.why)
     end
   end,
 }
 
 suite[#suite + 1] = {
-  name = "an enrichment id whose owner never answered is taken over, not abandoned",
+  name = "an enrichment id whose owner never answered is taken over, not " ..
+    "abandoned",
   fn = function()
     local env, http, clock = keyed_with_clock()
-    serve(http, {docs = {["CVE-2012-1667"] = {id = "CVE-2012-1667", type = "cve",
+    serve(http, {docs = {["CVE-2012-1667"] = {id = "CVE-2012-1667",
+      type = "cve",
                                               title = "taken over"}}})
     env._TEST.config()
 
@@ -1303,8 +1372,8 @@ suite[#suite + 1] = {
       "after the bound the id is fetched rather than given up on")
     t.is_true(env._TEST.state().docs["CVE-2012-1667"] ~= nil,
       "and the document reaches the cache")
-    -- The dead owner's claim is released too, or every later port waits the same
-    -- bound for the same absent owner.
+    -- The dead owner's claim is released too, or every later port waits the
+    -- same bound for the same absent owner.
     t.is_nil(env._TEST.state().claimed["CVE-2012-1667"],
       "the stale claim is released")
   end,
@@ -1316,7 +1385,8 @@ suite[#suite + 1] = {
     local env, http, clock = keyed_with_clock()
     serve(http, {})
     env._TEST.config()
-    env._TEST.state().docs["CVE-2012-1667"] = {id = "CVE-2012-1667", type = "cve"}
+    env._TEST.state().docs["CVE-2012-1667"] = {id = "CVE-2012-1667",
+      type = "cve"}
 
     env._TEST.enrich({"CVE-2012-1667"})
 
@@ -1343,7 +1413,8 @@ suite[#suite + 1] = {
           })})
         end
         return t.response({status = 401, body = json.generate({
-          result = "error", data = {error = "Unknown api key", errorCode = 157},
+          result = "error", data = {error = "Unknown api key",
+            errorCode = 157},
         })})
       end
     end
@@ -1354,7 +1425,8 @@ suite[#suite + 1] = {
     local first, first_http = keyed()
     serve_dead_key(first_http)
     first.action(t.host(), port)
-    t.equals(first._TEST.state().mode, "free", "the rejected key degrades the scan")
+    t.equals(first._TEST.state().mode, "free",
+      "the rejected key degrades the scan")
 
     local second, second_http = keyed()
     serve_dead_key(second_http)
@@ -1364,7 +1436,8 @@ suite[#suite + 1] = {
       "and the degrade is still in force on the next port")
     t.is_true(result ~= nil,
       "a port after the degrade still reports what the free path found - " ..
-      "without this it reported nothing at all, which is strictly less than " ..
+      "without this it reported nothing at all, which is strictly less " ..
+        "than " ..
       "a user with no key at all would have got")
     t.is_true(#second_http.matching(BURP) > 0,
       "because the free lookup runs again")
@@ -1440,7 +1513,8 @@ suite[#suite + 1] = {
     end
     t.is_true(env._TEST.state().billing_off, "the ceiling stops the spending")
     t.equals(env._TEST.state().mode, "keyed",
-      "but the token is still in use: the ceiling is a budget, not a rejection")
+      "but the token is still in use: the ceiling is a budget, not a " ..
+        "rejection")
 
     local plain = t.collect_output(env.action(t.host(), port_with_cpe()))
     local rows = plain and plain[CPE]
@@ -1455,10 +1529,10 @@ suite[#suite + 1] = {
 --
 -- The balance is only ever learnable from a previous billed call's header, so
 -- every guard that reads it is unreachable until the SECOND billed call of a
--- scan. Until these cases existed no test made two, and no test sent the wallet
--- headers at all - so the entire ladder ran only in production.
+-- scan. Until these cases existed no test made two, and no test sent the
+-- wallet headers at all - so the entire ladder ran only in production.
 
---- A smart handler that answers with the wallet headers the service sends.
+--; A smart handler that answers with the wallet headers the service sends.
 local function billing(opts)
   opts = opts or {}
   local answers = opts.answers or {}
@@ -1488,7 +1562,7 @@ local function billing(opts)
   end
 end
 
---- A port carrying a product and version but no CPE, which is what reaches the
+--; A port carrying a product and version but no CPE, which is what reaches the
 -- billed endpoint. Named and numbered off the web ports so nothing is swept.
 local function unnamed_port(product, version, number)
   return t.port({product = product, version = version, cpe = {},
@@ -1565,7 +1639,8 @@ suite[#suite + 1] = {
         if type(req.host) ~= "table" and req.path:find(BURP, 1, true) then
           return t.response({status = 200, body = json.generate({
             result = "warning",
-            data = {search_explain = {search_cpe = query_args(req.path).software,
+            data = {search_explain = {
+              search_cpe = query_args(req.path).software,
                                       matched_cpe = "cpe:/a:other:other:1.0"}},
           })})
         end
@@ -1604,10 +1679,11 @@ local NGINX = "cpe:/a:f5:nginx:1.13.4"
 local SPELLINGS = {"cpe:/a:f5:nginx:1.13.4", "cpe:/a:nginx:nginx:1.13.4",
                    "cpe:/a:igor_sysoev:nginx:1.13.4"}
 
---- Answer each nginx spelling however the case says, and count what smart got.
+--; Answer each nginx spelling however the case says, and count what smart got.
 --
--- @param explains  spelling -> the search_explain to answer with, or the string
---                  "error" for a 200 whose envelope is not a clean answer
+-- @param explains  spelling -> the search_explain to answer
+--                  with, or the string "error" for a 200 whose envelope is not
+--                  a clean answer
 local function burp_explaining(http, explains, bought)
   http.handler = function(req)
     if type(req.host) == "table" then
@@ -1664,7 +1740,8 @@ suite[#suite + 1] = {
     env.action(t.host(), nginx_port())
 
     t.contains(bought, NGINX,
-      "two spellings said they could not resolve it; the third failing must " ..
+      "two spellings said they could not resolve it; the third failing " ..
+        "must " ..
       "not turn that into silence")
   end,
 }
@@ -1673,8 +1750,8 @@ suite[#suite + 1] = {
   name = "an answer with no search_explain never costs a credit",
   fn = function()
     -- Spend only on POSITIVE evidence that the identity failed to resolve. An
-    -- answer that says nothing either way is not evidence, and the safe reading
-    -- of "nothing either way" is not to bill for it.
+    -- answer that says nothing either way is not evidence, and the safe
+    -- reading of "nothing either way" is not to bill for it.
     local env, http = keyed()
     local bought = {}
     burp_explaining(http, {}, bought)
@@ -1707,12 +1784,14 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "a spelling that resolved is not overruled by a later one that did not",
+  name = "a spelling that resolved is not overruled by a later one that " ..
+    "did not",
   fn = function()
-    -- The three nginx spellings are asked precisely BECAUSE the service answers
-    -- them differently, so "one of them resolved" and "a later one did not" is
-    -- the ordinary case rather than a contrived one. A verdict that simply took
-    -- the last answer would buy a credit for a product already named.
+    -- The three nginx spellings are asked precisely BECAUSE the service
+    -- answers them differently, so "one of them resolved" and "a later one did
+    -- not" is the ordinary case rather than a contrived one. A verdict that
+    -- simply took the last answer would buy a credit for a product already
+    -- named.
     local env, http = keyed()
     local bought = {}
     burp_explaining(http, {
@@ -1732,8 +1811,8 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "an id the service holds nothing for is not asked about twice",
   fn = function()
-    -- "The answer did not carry this id" is an answer. Leaving it unmarked made
-    -- every later port re-ask for the whole scan: a /24 spent 254 POSTs
+    -- "The answer did not carry this id" is an answer. Leaving it unmarked
+    -- made every later port re-ask for the whole scan: a /24 spent 254 POSTs
     -- re-learning one negative.
     local env, http = keyed()
     serve(http, {
@@ -1759,9 +1838,9 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "an enrichment request that failed is asked again, not cached",
   fn = function()
-    -- The other half of the same rule. "The request failed" and "this id has no
-    -- document" are different facts, and remembering the first as the second
-    -- costs every later port its enrichment for the rest of the scan.
+    -- The other half of the same rule. "The request failed" and "this id has
+    -- no document" are different facts, and remembering the first as the
+    -- second costs every later port its enrichment for the rest of the scan.
     local env, http = keyed()
     local calls = 0
     serve(http, {
@@ -1837,10 +1916,10 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "an unreadable cost header is treated exactly like no header",
   fn = function()
-    -- The charge was gated on the header being VALID and the refund on it being
-    -- PRESENT, so "x-vulners-wallet-cost: abc" charged nothing and refunded
-    -- everything - shared.spent never advanced and vulners.max_items became a
-    -- ceiling the service itself could disarm.
+    -- The charge was gated on the header being VALID and the refund on it
+    -- being PRESENT, so "x-vulners-wallet-cost: abc" charged nothing and
+    -- refunded everything - shared.spent never advanced and vulners.max_items
+    -- became a ceiling the service itself could disarm.
     local env, http = keyed()
     serve(http, {smart = billing({amount = 100, cost = "abc",
       answers = {["OpenSSH 7.4"] = {"CVE-2023-38408"}}}),
@@ -1856,11 +1935,11 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "402 from the billed endpoint stops spending, not the token",
   fn = function()
-    -- 401 and 403 are verdicts on the TOKEN; 402 is a verdict on the WALLET and
-    -- only the billed endpoint can give one. Taking the keyed leg down for it
-    -- switched off search/id - which needs the token and costs nothing - for
-    -- every later host: the exact regression stop_billing exists to prevent,
-    -- arriving through the other door.
+    -- 401 and 403 are verdicts on the TOKEN; 402 is a verdict on the WALLET
+    -- and only the billed endpoint can give one. Taking the keyed leg down for
+    -- it switched off search/id - which needs the token and costs nothing -
+    -- for every later host: the exact regression stop_billing exists to
+    -- prevent, arriving through the other door.
     local env, http = keyed()
     serve(http, {
       software = {[CPE] = {bulletin({id = "CVE-2012-1667", cvss = 8.5})}},
@@ -1906,7 +1985,8 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "a wallet header carrying a float does not kill the end-of-scan notice",
+  name = "a wallet header carrying a float does not kill the end-of-scan " ..
+    "notice",
   fn = function()
     -- The service controls these headers. string.format("%d", x) RAISES in Lua
     -- 5.3+ when x has no integer representation, and post_action formats both
@@ -1922,7 +2002,8 @@ suite[#suite + 1] = {
     env.action(t.host(), unnamed_port("OpenSSH", "7.4", 22))
 
     env.SCRIPT_TYPE = "postrule"
-    t.no_error(env.action, "the notice must survive a fractional wallet header")
+    t.no_error(env.action,
+      "the notice must survive a fractional wallet header")
   end,
 }
 return suite

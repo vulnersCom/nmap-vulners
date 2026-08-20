@@ -2,13 +2,13 @@
 --
 -- The table is the release's headline feature and the part with the most edge
 -- cases, because its width arithmetic has to hold for a 36-character exploit
--- UUID, a long title, several optional columns at once, and the narrowest width
--- the arguments allow - all while every byte stays inside what nmap's own
--- escape_for_screen() passes through.
+-- UUID, a long title, several optional columns at once, and the narrowest
+-- width the arguments allow - all while every byte stays inside what nmap's
+-- own escape_for_screen() passes through.
 --
--- These reach the renderer directly through _TEST rather than through action(),
--- because what is under test is the arithmetic, and driving it through a whole
--- scan would only make a failure harder to read.
+-- These reach the renderer directly through _TEST rather than through
+-- action(), because what is under test is the arithmetic, and driving it
+-- through a whole scan would only make a failure harder to read.
 
 local t, testdir, root = ...
 
@@ -26,7 +26,7 @@ local function load()
   return t.load_vulners({root = root})._TEST
 end
 
---- One finding, with only the fields a case cares about.
+--; One finding, with only the fields a case cares about.
 local function finding(T, opts)
   return {
     id = opts.id or "CVE-2021-41773",
@@ -43,7 +43,7 @@ local function finding(T, opts)
   }
 end
 
---- The widest line the terminal would actually show.
+--; The widest line the terminal would actually show.
 local function widest(text)
   local worst = 0
   for line in (text .. "\n"):gmatch("([^\n]*)\n") do
@@ -52,7 +52,7 @@ local function widest(text)
   return worst
 end
 
---- The same, ignoring the last column.
+--; The same, ignoring the last column.
 --
 -- The last column is the link, and a link is the one cell the layout may not
 -- shorten: half a URL is not a URL. Every other column still has to fit the
@@ -112,22 +112,26 @@ suite[#suite + 1] = {
   fn = function()
     local T = load()
     -- What the enrich endpoint really answers: href is the SOURCE, measured as
-    -- web.nvd.nist.gov for a cve and www.exploit-db.com for an exploitdb entry.
-    -- The table is a Vulners report and links to Vulners; the upstream address
-    -- travels in the XML instead, under a name that says which it is.
+    -- web.nvd.nist.gov for a cve and www.exploit-db.com for an exploitdb
+    -- entry. The table is a Vulners report and links to Vulners; the upstream
+    -- address travels in the XML instead, under a name that says which it is.
     local rows = {
       finding(T, {id = "CVE-2021-40438", cvss = 9.8,
-                  href = "https://web.nvd.nist.gov/view/vuln/detail?vulnId=CVE-2021-40438"}),
+                  href = "https://web.nvd.nist.gov/view/vuln/detail" ..
+                         "?vulnId=CVE-2021-40438"}),
       finding(T, {id = "EDB-ID:45233", type = "exploitdb", cvss = 7.5,
                   href = "https://www.exploit-db.com/exploits/45233"}),
     }
 
     local text = T.render_rows(rows, 100, 1)
-    t.is_true(text:find("https://vulners.com/cve/CVE-2021-40438", 1, true) ~= nil,
+    t.is_true(text:find("https://vulners.com/cve/CVE-2021-40438", 1,
+      true) ~= nil,
       "the cve row must link to its vulners page")
-    t.is_true(text:find("https://vulners.com/exploitdb/EDB-ID:45233", 1, true) ~= nil,
+    t.is_true(text:find("https://vulners.com/exploitdb/EDB-ID:45233", 1,
+      true) ~= nil,
       "the type is the path segment, so an exploit links to the exploit page")
-    t.is_nil(text:match("nvd%.nist%.gov"), "the upstream link is not the report's")
+    t.is_nil(text:match("nvd%.nist%.gov"),
+      "the upstream link is not the report's")
     t.is_nil(text:match("exploit%-db%.com"), "nor is the exploit's own")
     t.matches(text, "LINK", "the column says what it holds")
     t.is_nil(text:match("  ID%f[%W]"), "and the bare id column is gone")
@@ -152,21 +156,23 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "-vv adds where an identity was found, and no second copy of the link",
+  name = "-vv adds where an identity was found, and no second copy of the " ..
+    "link",
   fn = function()
     local T = load()
     local rows = {finding(T, {id = "CVE-2021-41773", cvss = 9.8})}
     rows[1].found_on = "http://10.0.0.1:8080/CHANGELOG.txt"
 
     local quiet = T.render_rows(rows, 100, 1)
-    t.is_nil(quiet:match("found on"), "provenance is a -vv detail, not a default")
+    t.is_nil(quiet:match("found on"),
+      "provenance is a -vv detail, not a default")
 
     local loud = T.render_rows(rows, 100, 3)
     t.matches(loud, "found on http://10%.0%.0%.1:8080/CHANGELOG%.txt",
       "-vv says which request produced the identity")
 
-    -- The link used to be printed here as well. It is a column now, so a second
-    -- copy would be one line of noise per finding.
+    -- The link used to be printed here as well. It is a column now, so a
+    -- second copy would be one line of noise per finding.
     local _, links = loud:gsub("https://vulners%.com/cve/CVE%-2021%-41773", "")
     t.equals(links, 1, "the link appears once, in its column")
 
@@ -242,11 +248,12 @@ suite[#suite + 1] = {
   fn = function()
     local T = load()
     -- nmap's escape_for_screen() rewrites every other byte as the literal text
-    -- \xHH, in the terminal, in -oN and in -oX alike - so a title arriving with
-    -- a typographic quote would be displayed as \xE2\x80\x9C.
+    -- \xHH, in the terminal, in -oN and in -oX alike - so a title arriving
+    -- with a typographic quote would be displayed as \xE2\x80\x9C.
     local rows = {finding(T, {
       id = "CVE-2021-1", cvss = 9.8, epss = 0.5,
-      title = "line\nbreak\ttab \226\128\156quoted\226\128\157 \1\2\3 caf\195\169",
+      title = "line\nbreak\ttab \226\128\156quoted\226\128\157 \1\2\3 " ..
+        "caf\195\169",
     })}
     local text = T.render_rows(rows, 120, 3)
 
@@ -258,7 +265,8 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "a format specifier in somebody else's data is not a format specifier",
+  name = "a format specifier in somebody else's data is not a format " ..
+    "specifier",
   fn = function()
     local T = load()
     -- Every string here came from an HTTP response. If any of it reached a
@@ -286,11 +294,13 @@ suite[#suite + 1] = {
     end
 
     -- A severity filter is not enough: one real Apache 2.4.7 answers with 272
-    -- findings of which 24 are CRITICAL, so "HIGH and above" is still dozens of
-    -- rows. The bound is what makes the ranking useful.
+    -- findings of which 24 are CRITICAL, so "HIGH and above" is still dozens
+    -- of rows. The bound is what makes the ranking useful.
     local default_text = T.render_rows(rows, 80, 1)
     local shown = 0
-    for _ in default_text:gmatch("CVE%-2021%-%d%d%d%d") do shown = shown + 1 end
+    for _ in default_text:gmatch("CVE%-2021%-%d%d%d%d") do
+      shown = shown + 1
+    end
     t.is_true(shown > 0 and shown <= 10,
       string.format("default verbosity showed %d rows", shown))
     t.is_true(default_text:find("more not shown", 1, true) ~= nil,
@@ -330,9 +340,9 @@ suite[#suite + 1] = {
     local T = load()
     local rows = {}
     -- Twenty exploits, which rank above every CVE, and five CVEs below them.
-    -- This is the live shape: without a token there is no cvelist, so an exploit
-    -- can never be attributed to the CVE it exploits - every exploit sits in
-    -- band 3 and every CVE in band 5.
+    -- This is the live shape: without a token there is no cvelist, so an
+    -- exploit can never be attributed to the CVE it exploits - every exploit
+    -- sits in band 3 and every CVE in band 5.
     for index = 1, 20 do
       rows[#rows + 1] = finding(T, {id = string.format("EDB-ID:%d", index),
                                     cvss = 9.8, bucket = 3})
@@ -349,13 +359,14 @@ suite[#suite + 1] = {
     for _ in text:gmatch("CVE%-2021%-%d%d%d%d") do cves = cves + 1 end
 
     t.is_true(cves > 0,
-      "a summary of nothing but exploit ids names no problem a reader can act " ..
+      "a summary of nothing but exploit ids names no problem a reader can " ..
+        "act " ..
       "on: " .. text)
     t.is_true(exploits > 0, "and the exploits are still what leads: " .. text)
     t.is_true(exploits + cves <= 10, "the summary is still bounded: " .. text)
 
-    -- The cap decides which rows are worth the summary, not what order they are
-    -- read in: the exploits still come first.
+    -- The cap decides which rows are worth the summary, not what order they
+    -- are read in: the exploits still come first.
     local first_cve = text:find("CVE%-2021")
     local last_exploit = 0
     for position in text:gmatch("()EDB%-ID:%d+") do last_exploit = position end
@@ -377,7 +388,8 @@ suite[#suite + 1] = {
     t.equals(T.severity_of(9.0), "CRITICAL", "9.0 is the bottom of CRITICAL")
     t.equals(T.severity_of(7.0), "HIGH", "7.0 is the bottom of HIGH")
     t.equals(T.severity_of(4.0), "MEDIUM", "4.0 is the bottom of MEDIUM")
-    t.equals(T.severity_of(0.1), "LOW", "and anything scored above zero is LOW")
+    t.equals(T.severity_of(0.1), "LOW",
+      "and anything scored above zero is LOW")
 
     -- The value just below each boundary must fall to the band underneath, or
     -- the assertions above would also hold for a comparison that is too loose.

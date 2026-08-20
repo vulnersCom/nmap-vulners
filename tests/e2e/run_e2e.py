@@ -63,8 +63,8 @@ AUDIT_FIELDS = {
 }
 
 # What POST /api/v3/search/id/ accepts in "fields". Verified against the live
-# endpoint on 2026-08-18: it answers 200 to exactly this list, and its documents
-# carry every one of them.
+# endpoint on 2026-08-18: it answers 200 to exactly this list, and its
+# documents carry every one of them.
 SEARCH_ID_FIELDS = {
     "id", "type", "bulletinFamily", "title", "href", "published", "cvss",
     "epss", "cvelist", "metrics", "enchantments", "ai_score", "modified",
@@ -121,8 +121,8 @@ class Recorder:
     Per server, not per handler class, which is what lets the checks run at the
     same time: each check gets its own target and its own API, so a counter can
     only ever hold that check's traffic. While these lived on the classes the
-    checks had to run one at a time, and the file spent 93 seconds doing 16 nmap
-    runs that have no reason to wait for each other.
+    checks had to run one at a time, and the file spent 93 seconds doing 16
+    nmap runs that have no reason to wait for each other.
 
     Locked because ThreadingHTTPServer answers each connection in its own
     thread, and nmap opens several: `count += 1` is a load, an add and a store,
@@ -216,8 +216,8 @@ class ApacheTargetHandler(Recording):
 class BannerTarget(socketserver.BaseRequestHandler):
     """A TCP service that greets, and that nmap cannot name.
 
-    Not HTTP, and deliberately nothing nmap's own probe database recognises: the
-    banner channel exists for exactly this port. nmap records a service
+    Not HTTP, and deliberately nothing nmap's own probe database recognises:
+    the banner channel exists for exactly this port. nmap records a service
     fingerprint when its probes did NOT settle the service, and the shipped
     catalogue carries a recog rule that reads this greeting.
     """
@@ -296,7 +296,8 @@ class CatalogHandler(Recording):
 
 
 def audit_vulnerabilities():
-    """Two vulnerabilities as the v4 audit returns them, one with an exploit."""
+    """Two vulnerabilities as the v4 audit returns them, one with an
+    exploit."""
     return [
         {
             "id": CANNED_VULN_ID,
@@ -338,7 +339,8 @@ def enriched_document(vuln_id):
         "title": ("nginx 1.13.4 - Remote Code Execution" if exploit
                   else f"{vuln_id} in nginx"),
         "href": (f"https://www.exploit-db.com/exploits/{vuln_id}" if exploit
-                 else f"https://web.nvd.nist.gov/view/vuln/detail?vulnId={vuln_id}"),
+                 else "https://web.nvd.nist.gov/view/vuln/detail"
+                      f"?vulnId={vuln_id}"),
         "published": "2018-11-07T00:00:00",
         "cvss": {"score": score, "version": "3.1", "severity": "HIGH"},
         "epss": [{"cve": CANNED_VULN_ID, "epss": 0.97321,
@@ -349,7 +351,8 @@ def enriched_document(vuln_id):
     if kev:
         document["metrics"]["adp"] = {
             "kev": {"dateAdded": "2021-11-03",
-                    "reference": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"},
+                    "reference": "https://www.cisa.gov/"
+                                 "known-exploited-vulnerabilities-catalog"},
             "ssvc": {"role": "CISA Coordinator",
                      "options": [{"Exploitation": "active"},
                                  {"Automatable": "yes"},
@@ -435,7 +438,8 @@ class ApiHandler(Recording):
             "data": {"search": [
                 {"_source": {"id": CANNED_VULN_ID, "type": "cve",
                              "bulletinFamily": "NVD",
-                             "cvss": {"score": CANNED_CVSS, "version": "3.1"}}},
+                             "cvss": {"score": CANNED_CVSS,
+                                      "version": "3.1"}}},
                 {"_source": {"id": CANNED_EXPLOIT_ID, "type": "exploitdb",
                              "bulletinFamily": "exploit",
                              "cvss": {"score": 0, "version": "2.0"}}},
@@ -455,7 +459,8 @@ class ApiHandler(Recording):
         body = json.dumps({"errors": [{
             "type": "literal_error",
             "loc": ["body", "input_dto", "fields", 0],
-            "msg": f"Input should be one of the documented fields, not {unknown[0]!r}",
+            "msg": "Input should be one of the documented fields, "
+                   f"not {unknown[0]!r}",
         }]}).encode()
         self.send_response(422)
         self.send_header("Content-Type", "application/json")
@@ -482,7 +487,8 @@ class ApiHandler(Recording):
 
         # The whitelist belongs to the v4 audit endpoints only. Applying it to
         # /api/v3/search/id/ as well used to reject "id" and "cvss", which the
-        # live v3 endpoint accepts - verified against vulners.com on 2026-08-18.
+        # live v3 endpoint accepts - verified against vulners.com on
+        # 2026-08-18.
         if self.path.startswith("/api/v4/audit/"):
             if self._reject_unknown_fields(body, AUDIT_FIELDS):
                 return
@@ -554,10 +560,24 @@ def serve(handler, port=None):
     raise AssertionError("unreachable")
 
 
-# A scratch HOME shared by every check. Read-only in practice: the point of
-# pinning it is that nothing here reads the developer's key file, and one check
-# asserts that nothing writes into it either.
+# A scratch HOME shared by every check, and a scratch NMAPDIR beside it. The
+# point of pinning both is that nothing here reads the developer's key file,
+# and one check asserts that nothing writes into HOME either.
+#
+# HOME alone does not do it, and the comment that said it did had it backwards.
+# nmap resolves ~/.nmap through getpwuid(getuid()) and not through $HOME:
+# measured, a run with HOME pointed at a scratch directory still fetched
+# /Users/<me>/.nmap/vulners.key. So on any machine where somebody had stored a
+# key at the documented location - which is what the installer offers to do -
+# every "keyless" check here was quietly running the keyed path, and four of
+# them failed the day it happened.
+#
+# NMAPDIR is searched ahead of ~/.nmap and holds an empty vulners.key.
+# fetchfile stops there, the empty file yields no token, and the implicit
+# lookup falls through quietly, which is exactly what it does on a machine
+# with no key at all.
 SCRATCH_HOME = None
+SCRATCH_NMAPDIR = None
 
 
 def clean_env(**overrides):
@@ -569,10 +589,13 @@ def clean_env(**overrides):
     points at. Every check therefore states which it wants; nothing inherits.
     """
     env = {k: v for k, v in os.environ.items() if k != "VULNERS_API_KEY"}
-    # HOME is pinned too: the script reads a token from ~/.nmap/vulners.key, and
-    # a run that inherited the developer's HOME would pick theirs up.
+    # HOME and NMAPDIR are pinned too: the script reads a token from
+    # ~/.nmap/vulners.key, and a run that inherited either would pick up the
+    # developer's. See the note on SCRATCH_NMAPDIR for why HOME is not enough.
     if SCRATCH_HOME is not None:
         env["HOME"] = str(SCRATCH_HOME)
+    if SCRATCH_NMAPDIR is not None:
+        env["NMAPDIR"] = str(SCRATCH_NMAPDIR)
     env.update({k: v for k, v in overrides.items() if v is not None})
     return env
 
@@ -615,8 +638,8 @@ def run_nmap(args, timeout=300, env=None):
 class Checks:
     """Minimal PASS/FAIL bookkeeping.
 
-    Lines are collected rather than printed. The checks run at the same time, so
-    printing as they go would interleave one check's failure context into
+    Lines are collected rather than printed. The checks run at the same time,
+    so printing as they go would interleave one check's failure context into
     another's results and shuffle the order between runs; absorb() puts them
     back in declaration order at the end.
     """
@@ -659,7 +682,8 @@ class Checks:
         # exited 0 - the same scar the unit runner carried, where a typo in
         # `only=` reported SUITE OK for a suite that never ran a case.
         if expected_at_least is not None and self.passed < expected_at_least:
-            print(f"\nFAILED: only {self.passed} assertions ran, and this gate "
+            print(f"\nFAILED: only {self.passed} assertions ran, and this "
+                  "gate "
                   f"is expected to make at least {expected_at_least}. A gate "
                   f"that measures nothing reports success.")
             return 1
@@ -688,8 +712,8 @@ def vulners_args(api_port, extra=None):
     API of its own, which is why its checks used to omit them.
 
     catalog_url is not optional for the same reason, and for one more: without
-    it the script fetches its dictionaries from GitHub, so a check would pass or
-    fail on what is published rather than on what is in this tree.
+    it the script fetches its dictionaries from GitHub, so a check would pass
+    or fail on what is published rather than on what is in this tree.
     """
     args = ["vulners.api_host=127.0.0.1", f"vulners.api_port={api_port}"]
     if CATALOG_PORT is not None:
@@ -733,8 +757,8 @@ class World:
 
     A check used to reset counters that lived on the handler classes, run nmap,
     and read them back - which is only correct while exactly one check is in
-    flight. Giving each check its servers is what lets them all run at once, and
-    the file went from 93 seconds to a fraction of that without dropping a
+    flight. Giving each check its servers is what lets them all run at once,
+    and the file went from 93 seconds to a fraction of that without dropping a
     single assertion.
     """
 
@@ -776,8 +800,9 @@ class World:
         started = getattr(self, "_scan_started", None)
         if started is not None and self.xml.stat().st_mtime < started:
             raise AssertionError(
-                "the report at %s predates the scan that was supposed to write "
-                "it; reading it would assert against stale output" % self.xml)
+                "the report at %s predates the scan that was supposed to "
+                "write it; reading it would assert against stale output"
+                % self.xml)
         return self.xml.read_text()
 
     def close(self):
@@ -794,7 +819,8 @@ def concurrently(*thunks):
     So a check that runs three scans one after another is the slowest thing in
     the file, and it decides when the whole run ends.
     """
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(thunks)) as pool:
+    workers = len(thunks)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         return [future.result() for future in [pool.submit(t) for t in thunks]]
 
 
@@ -819,7 +845,8 @@ def check_fingerprint(world):
     # only ever matched a compile failure.
 
     world.check(world.target.compressed_replies > 0,
-                "the path sweep asks the server to compress, and still matches",
+                "the path sweep asks the server to compress, and still "
+                    "matches",
                 f"compressed replies: {world.target.compressed_replies}")
     # Pipelining: a hundred-odd paths must not mean a hundred-odd connections.
     target = world.target
@@ -840,7 +867,8 @@ def check_sweep_can_be_disabled(world):
     Four scans against four servers rather than four against one, so they can
     run at the same time and each still counts only its own traffic.
     """
-    (control_port, control), (off_port, off), (on_port, on), (quiet_port, quiet) = \
+    (control_port, control), (off_port, off), (on_port, on), (quiet_port,
+                                                              quiet) = \
         [serve(TargetHandler) for _ in range(4)]
 
     concurrently(
@@ -855,24 +883,27 @@ def check_sweep_can_be_disabled(world):
     baseline, disabled = control.requests, off.requests
     swept, polite = on.requests, quiet.requests
 
-    published = len(json.loads((REPO / "catalog" / "paths.json").read_text())["paths"])
+    catalogue = json.loads((REPO / "catalog" / "paths.json").read_text())
+    published = len(catalogue["paths"])
 
     world.check(disabled <= baseline,
                 "vulners.paths=none adds no requests of its own to the target",
                 f"baseline {baseline}, with paths=none {disabled}")
 
-    # Every published path, always. -T changes the rate and never the list, so a
-    # polite scan has to ask exactly the same questions as an ordinary one.
+    # Every published path, always. -T changes the rate and never the list, so
+    # a polite scan has to ask exactly the same questions as an ordinary one.
     world.check(swept >= baseline + published,
                 "every path the catalogue publishes is actually requested",
-                f"baseline {baseline}, swept {swept}, catalogue has {published}")
-    # -T4 rather than -T2: the rate ladder itself is pinned by unit cases against
+                f"baseline {baseline}, swept {swept}, "
+                f"catalogue has {published}")
+    # -T4 rather than -T2: the rate ladder itself is pinned by unit cases
     # a counted clock, precisely and instantly, where a real -T2 run would sit
     # here sleeping 19 seconds to prove something already proved. What only the
     # real nmap can show is that a different -T still asks the whole list.
     world.check(polite >= baseline + published,
                 "and a different timing template still asks all of them",
-                f"baseline {baseline}, at -T4 {polite}, catalogue has {published}")
+                f"baseline {baseline}, at -T4 {polite}, "
+                f"catalogue has {published}")
 
 
 def check_works_without_sv(world):
@@ -894,7 +925,8 @@ def check_works_without_sv(world):
         "127.0.0.1",
     ])
     world.check(CANNED_VULN_ID in output,
-                "the sweep works without -sV on a well known http port", output)
+                "the sweep works without -sV on a well known http port",
+                    output)
 
 
 def check_free_path(world):
@@ -904,7 +936,8 @@ def check_free_path(world):
     xml = world.report()
 
     world.check(CANNED_VULN_ID in output,
-                "the free path reports the vulnerability the API returned", output)
+                "the free path reports the vulnerability the API returned",
+                    output)
     world.check(re.search(r"^\|\s+HIGH\s+7\.5\b", output, re.M) is not None,
                 "findings are laid out as an aligned table with a severity",
                 output)
@@ -945,15 +978,17 @@ def check_free_notice(world):
                 "a keyless run says so, on every scan", output[-1200:])
     world.check("https://vulners.com/userinfo" in output,
                 "and says where to get a key", output[-1200:])
-    # Deliberately vague about which fields: what a token returns depends on the
-    # licence behind it, so naming EPSS would be a promise the script cannot keep.
+    # Deliberately vague about which fields: what a token returns depends on
+    # the licence behind it, so naming EPSS would be a promise the script
+    # cannot keep.
     world.check("EPSS" not in output.split("Post-scan")[-1],
                 "the notice does not promise fields a licence may withhold",
                 output[-1200:])
 
 
 def check_keyed_path(world):
-    """A token adds enrichment, and never travels to the cached free endpoint."""
+    """A token adds enrichment, and never travels to the cached free
+    endpoint."""
     api = world.api
     output = world.scan(token=FAKE_KEY, xml=world.xml)
 
@@ -972,7 +1007,8 @@ def check_keyed_path(world):
     # without a key. Sending one would take every user of this script off the
     # shared cache and onto the origin, for an answer that does not improve.
     world.check(all(key is None for key in api.burp_api_keys),
-                "the burp request carries no token, even when one is configured",
+                "the burp request carries no token, even when one is "
+                    "configured",
                 f"keys seen on burp: {api.burp_api_keys}")
 
     xml = world.report()
@@ -1002,7 +1038,8 @@ def check_keyless_is_not_silent(world):
 
 
 def check_rejected_key_degrades(world):
-    """A rejected token drops to the free path instead of silencing the scan."""
+    """A rejected token drops to the free path instead of silencing the
+    scan."""
     world.api.reject_keys = True
     output = world.scan(token=FAKE_KEY)
 
@@ -1014,15 +1051,18 @@ def check_rejected_key_degrades(world):
 
 
 def check_xml_output(world):
-    """Structured output must survive into -oX, not only into the text report."""
+    """Structured output must survive into -oX, not only into the text
+    report."""
     world.scan(token=FAKE_KEY, xml=world.xml)
 
     xml = world.report()
     world.check('<script id="vulners"' in xml,
-                "the result reaches the XML output under the id importers read",
+                "the result reaches the XML output under the id importers "
+                    "read",
                 xml[:1500])
     world.check(f'key="id">{CANNED_VULN_ID}<' in xml,
-                "XML output carries the vulnerability id as a structured element",
+                "XML output carries the vulnerability id as a structured "
+                    "element",
                 xml[:1500])
     world.check('key="cvss_type">cvss3.1<' in xml,
                 "XML output carries the cvss version as a structured element",
@@ -1036,14 +1076,17 @@ def check_xml_output(world):
     # nmap copies its own command line into the report, so a token passed with
     # --script-args lands there whatever the script does. What the script
     # controls is its own output, and that must stay clean.
-    script_elements = re.findall(r"<script id=\"vulners[^>]*>.*?</script>", xml, re.S)
-    world.check(script_elements and all(FAKE_KEY not in el for el in script_elements),
+    script_elements = re.findall(r"<script id=\"vulners[^>]*>.*?</script>",
+                                                        xml, re.S)
+    world.check(script_elements
+                and all(FAKE_KEY not in el for el in script_elements),
                 "the API token never appears in the script's own XML output",
                 "\n".join(script_elements)[:800])
 
 
 def check_service_cpe_enrichment(world):
-    """Fingerprinted CPEs must reach the <service> element, not only the script.
+    """Fingerprinted CPEs must reach the <service> element, not only the
+    script.
 
     nmap's own probe of this target reports nginx and produces
     cpe:/a:igor_sysoev:nginx. The PHP CPE exists only because the script reads
@@ -1131,10 +1174,12 @@ def check_key_from_env_stays_out_of_reports(world):
                 "VULNERS_API_KEY is picked up by the script",
                 f"keys seen: {world.api.seen_api_keys}")
     world.check(FAKE_KEY not in xml,
-                "a token taken from the environment stays out of the XML report entirely",
+                "a token taken from the environment stays out of the XML "
+                    "report entirely",
                 xml[:800])
     world.check(FAKE_KEY not in output,
-                "a token taken from the environment stays out of the text report")
+                "a token taken from the environment stays out of the text "
+                    "report")
 
 
 def check_scan_cache(world):
@@ -1158,13 +1203,16 @@ def check_scan_cache(world):
     single = dict(solo_api.requests_by_path)
 
     world.check(sum(first.values()) == sum(single.values()),
-                "a second host running the same software costs no extra request",
+                "a second host running the same software costs no extra "
+                    "request",
                 f"two hosts: {first}\none host: {single}")
 
     per_host = []
     for report in output.split("Nmap scan report for")[1:]:
-        per_host.append(sorted(set(re.findall(r"(cpe:/\S+?)\s+\d+ finding", report))))
-    world.check(len(per_host) == 2 and per_host[0] == per_host[1] and per_host[0],
+        per_host.append(sorted(set(re.findall(r"(cpe:/\S+?)\s+\d+ finding",
+                                                 report))))
+    world.check(len(per_host) == 2 and per_host[0] == per_host[1]
+                and per_host[0],
                 "both hosts report the same result, not just the first one",
                 f"{per_host}\n{output[-1200:]}")
 
@@ -1225,7 +1273,8 @@ def check_banner_port(world):
                 "a service nmap cannot name is identified from its banner",
                 output[-1500:])
     world.check(CANNED_VULN_ID in output,
-                "and that identity is looked up like any other", output[-1500:])
+                "and that identity is looked up like any other",
+                    output[-1500:])
 
     asked = [q.get("software", "") for q in world.api.burp_queries]
     world.check(any("powerdns" in q for q in asked),
@@ -1237,13 +1286,13 @@ def check_catalogue_is_fetched_once(world):
     """However many ports answer, the catalogue is downloaded once.
 
     The reason the fetch lives in a prerule at all. The chunk re-executes once
-    per OPEN port - measured at 7 executions for 7 open ports - so a fetch on the
-    port path would mean one download per port, all racing each other. The unit
-    suite pins the guard; only the real nmap running a real multi-port scan pins
-    that the phase it lives in behaves the way that argument assumes.
+    per OPEN port - measured at 7 executions for 7 open ports - so a fetch on
+    the port path would mean one download per port, all racing each other. The
+    unit suite pins the guard; only the real nmap running a real multi-port
+    scan pins that the phase it lives in behaves the way that argument assumes.
 
-    Counted on its own catalogue server: the shared one is answering every other
-    check at the same time.
+    Counted on its own catalogue server: the shared one is answering every
+    other check at the same time.
     """
     catalog_port, catalog = serve(CatalogHandler)
     second_port, _ = serve(TargetHandler)
@@ -1258,7 +1307,8 @@ def check_catalogue_is_fetched_once(world):
 
     world.check(catalog.requests == 4,
                 "two open ports cost one catalogue download, not two",
-                f"the index and three dictionaries is 4; got {catalog.requests}")
+                f"the index and three dictionaries is 4; "
+                f"got {catalog.requests}")
 
 
 def check_catalogue_can_be_refused(world):
@@ -1274,7 +1324,8 @@ def check_catalogue_can_be_refused(world):
     baseline, swept = control.requests, world.target.requests
 
     world.check(swept <= baseline,
-                "with no catalogue there is nothing to sweep, so nothing is asked",
+                "with no catalogue there is nothing to sweep, so nothing is "
+                    "asked",
                 f"baseline {baseline}, with catalog=none {swept}")
     world.check(CANNED_VULN_ID in output,
                 "what nmap itself named is still looked up", output[-1500:])
@@ -1292,7 +1343,8 @@ def check_unreachable_catalogue(world):
     output = world.scan(extra=f"vulners.catalog_url=http://127.0.0.1:{dead}/")
 
     world.check(CANNED_VULN_ID in output,
-                "the lookups that need no dictionary still run", output[-1500:])
+                "the lookups that need no dictionary still run",
+                    output[-1500:])
     world.check("could not be downloaded" in output,
                 "and the operator is told which capability was missing",
                 output[-1500:])
@@ -1337,14 +1389,16 @@ def check_live(world):
                 free_output[-2000:])
     # Not "a CVE appears": the default view is bounded and ranked, and on the
     # free path a real Apache 2.4.7 answers with 56 exploit bulletins that all
-    # outrank every CVE - which is what caught the summary being fillable by one
-    # band. What this asserts is that real bulletins came back at all, of either
-    # kind, and that the band cap left room for a named vulnerability.
-    world.check(re.search(r"^\|\s+\w+\s+\d+\.\d.*\S", free_output, re.M) is not None,
+    # outrank every CVE - which is what caught the summary being fillable by
+    # one band. What this asserts is that real bulletins came back at all, of
+    # either kind, and that the band cap left room for a named vulnerability.
+    world.check(re.search(r"^\|\s+\w+\s+\d+\.\d.*\S", free_output,
+                          re.M) is not None,
                 "the live free lookup returns real bulletins",
                 free_output[-2000:])
     world.check(re.search(r"CVE-\d{4}-\d+", free_output) is not None,
-                "and the bounded summary still names a vulnerability, not only exploits",
+                "and the bounded summary still names a vulnerability, not "
+                    "only exploits",
                 free_output[-2000:])
     world.check("Ran without an API key" in free_output,
                 "a keyless live run says so", free_output[-2000:])
@@ -1355,7 +1409,45 @@ def check_live(world):
 # Declared once, in the order their results are printed. Slowest first, because
 # the pool takes them in this order and a long check started last decides when
 # the whole run ends.
+def check_key_isolation(world):
+    """The keyless checks cannot see a key stored where nmap looks for one.
+
+    Pinning HOME does not isolate the lookup: nmap resolves ~/.nmap through
+    getpwuid(getuid()), so a key at the documented location turned every
+    "keyless" check on a developer's machine into a keyed one. NMAPDIR is
+    searched first, and an empty vulners.key there is what stops it.
+
+    A runner has no key to find, so the four checks that failed the day this
+    was discovered cannot notice the pin going away. This one can.
+    """
+    world.check(clean_env().get("NMAPDIR") == str(SCRATCH_NMAPDIR),
+                "every run is pinned to the scratch NMAPDIR",
+                str(clean_env().get("NMAPDIR")))
+    decoy = SCRATCH_NMAPDIR / "vulners.key"
+    world.check(decoy.is_file() and decoy.read_text() == "",
+                "the decoy key there is empty, so it yields no token",
+                repr(decoy.read_text()) if decoy.is_file() else "absent")
+    world.check("VULNERS_API_KEY" not in clean_env(),
+                "and the developer's environment token is stripped")
+
+    # The fact the pin rests on: nmap.fetchfile honours NMAPDIR, so a key
+    # placed there IS found. If this stopped being true the pin would be
+    # decoration and the decoy would stop shadowing ~/.nmap.
+    with tempfile.TemporaryDirectory() as scratch:
+        planted = Path(scratch)
+        (planted / "vulners.key").write_text(FAKE_KEY + "\n")
+        run_nmap(["-Pn", "-sV", "-p", str(world.target_port),
+                  "--script", script("vulners.nse"),
+                  "--script-args", vulners_args(world.api_port), "127.0.0.1"],
+                 env=clean_env(NMAPDIR=str(planted)))
+
+    world.check(FAKE_KEY in world.api.seen_api_keys,
+                "a key in NMAPDIR is the one the scan uses",
+                f"keys seen: {world.api.seen_api_keys}")
+
+
 OFFLINE_CHECKS = [
+    check_key_isolation,           # a planted key, and the pin that hides one
     check_sweep_can_be_disabled,   # four nmap runs
     check_scan_cache,              # two, one of them over two hosts
     check_fingerprint,
@@ -1382,7 +1474,7 @@ def run_check(fn):
     world = World(fn.__name__.replace("check_", ""))
     try:
         fn(world)
-    except Exception as failure:              # noqa: BLE001 - a check may raise
+    except Exception as failure:      # noqa: BLE001 - a check may raise
         world.check(False, f"{fn.__name__} completed",
                     f"{type(failure).__name__}: {failure}")
     finally:
@@ -1402,11 +1494,14 @@ def main():
                         help="checks to run at once (1 to serialise)")
     args = parser.parse_args()
 
-    global CATALOG_PORT, SCRATCH_HOME
+    global CATALOG_PORT, SCRATCH_HOME, SCRATCH_NMAPDIR
     CATALOG_PORT, _ = serve(CatalogHandler)
     scratch = tempfile.TemporaryDirectory()
     SCRATCH_HOME = Path(scratch.name)
     (SCRATCH_HOME / ".nmap").mkdir()
+    SCRATCH_NMAPDIR = SCRATCH_HOME / "nmapdir"
+    SCRATCH_NMAPDIR.mkdir()
+    (SCRATCH_NMAPDIR / "vulners.key").write_text("")
 
     # Collected per check and printed in declaration order, so a parallel run
     # reads exactly like a serial one and two runs can be diffed.

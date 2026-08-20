@@ -52,7 +52,8 @@ SECRET_PATTERNS = [
     ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
     ("Stripe key", re.compile(r"\b[sr]k_(?:live|test)_[A-Za-z0-9]{20,}\b")),
     ("private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
-    ("JWT", re.compile(r"\beyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}")),
+    ("JWT", re.compile(r"\beyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}"
+                       r"\.[A-Za-z0-9_-]{10,}")),
     ("Vulners API key assignment",
      re.compile(r"""api_key\s*=\s*["'][A-Za-z0-9]{20,}["']""")),
     # A Vulners token is 64 characters of mixed-case alphanumerics and carries
@@ -61,7 +62,8 @@ SECRET_PATTERNS = [
     # way a key file holds it. These two patterns used to demand [0-9a-f],
     # which no real token satisfies - a committed key file passed the gate.
     ("credential-shaped token",
-     re.compile(r"(?i)(?:api[_-]?key|token|secret|bearer)\W{0,4}\b[A-Za-z0-9]{40,}\b")),
+     re.compile(r"(?i)(?:api[_-]?key|token|secret|bearer)\W{0,4}"
+                r"\b[A-Za-z0-9]{40,}\b")),
     ("bare 64-character token", re.compile(r"^\s*[A-Za-z0-9]{64}\s*$")),
     # The two patterns above between them need either a credential-shaped WORD
     # beside the token or the token ALONE on its line, so a quote or a comma
@@ -90,7 +92,8 @@ MUST_MATCH = [
     ("key file line with surrounding whitespace", "  " + _KEY_BODY + "  "),
     ("token of the shape the live service issues", "A1B2C3D4" * 8),
     ("token written as lowercase hex", "abcdef01" * 8),
-    ("token assigned to a credential-shaped name", "VULNERS_API_KEY=" + _KEY_BODY),
+    ("token assigned to a credential-shaped name",
+        "VULNERS_API_KEY=" + _KEY_BODY),
     ("bearer header", "Authorization: Bearer " + _KEY_BODY),
     # The placements that used to slip through. They are here rather than in a
     # comment because this list is what keeps the patterns honest: the scanner
@@ -98,7 +101,8 @@ MUST_MATCH = [
     ("token as a JSON value", '  "value": "' + _KEY_BODY + '",'),
     ("token in a dict literal", 'CONFIG = {"vulners": "' + _KEY_BODY + '"}'),
     ("token as a YAML value", "  credential: " + _KEY_BODY),
-    ("token in a quoted shell export", 'export VULNERS_KEY="' + _KEY_BODY + '"'),
+    ("token in a quoted shell export",
+        'export VULNERS_KEY="' + _KEY_BODY + '"'),
     ("token in a CSV cell", "prod," + _KEY_BODY + ",active"),
 ]
 
@@ -111,18 +115,24 @@ MUST_NOT_MATCH = [
 # Paths that must never be tracked in this repository.
 FORBIDDEN_PATTERNS = [
     ("AI assistant artifact",
-     re.compile(r"(^|/)(CLAUDE(\.local)?\.md|AGENTS\.md|GEMINI\.md|PROBLEMS\.md"
+     re.compile(r"(^|/)(CLAUDE(\.local)?\.md|AGENTS\.md|GEMINI\.md"
+                r"|PROBLEMS\.md"
                 r"|\.cursorrules|\.windsurfrules|\.aider[^/]*|\.mcp\.json)$")),
     ("AI assistant directory",
-     re.compile(r"(^|/)\.(claude|codex|cursor|continue|windsurf|codeium|specstory)/")),
+     re.compile(r"(^|/)\.(claude|codex|cursor|continue|windsurf|codeium"
+                r"|specstory)/")),
     ("AI working notes", re.compile(r"(^|/)dev_docs/")),
-    ("OS clutter", re.compile(r"(^|/)(\.DS_Store|Thumbs\.db|Desktop\.ini|\._[^/]+)$")),
-    ("editor clutter", re.compile(r"(^|/)(\.idea/|\.vscode/|[^/]+\.sw[op]$|[^/]+~$)")),
+    ("OS clutter",
+        re.compile(r"(^|/)(\.DS_Store|Thumbs\.db|Desktop\.ini|\._[^/]+)$")),
+    ("editor clutter",
+        re.compile(r"(^|/)(\.idea/|\.vscode/|[^/]+\.sw[op]$|[^/]+~$)")),
     ("nmap scan output", re.compile(r"\.(nmap|gnmap)$")),
-    ("nmap XML scan output", re.compile(r"(^|/)(scan|output|results?)[^/]*\.xml$")),
+    ("nmap XML scan output",
+        re.compile(r"(^|/)(scan|output|results?)[^/]*\.xml$")),
     ("session notes", re.compile(r"(^|/)(handoff|handoffs|plans?|notes)/")),
     ("environment file", re.compile(r"(^|/)\.env(\.|$)")),
-    ("key material", re.compile(r"\.(pem|p12|pfx|keystore)$|(^|/)id_(rsa|ed25519)")),
+    ("key material",
+        re.compile(r"\.(pem|p12|pfx|keystore)$|(^|/)id_(rsa|ed25519)")),
 ]
 
 # Every shipped script carries the same author and the same licence line; the
@@ -130,7 +140,8 @@ FORBIDDEN_PATTERNS = [
 # LICENSE file in this repository is Nmap's own text.
 REQUIRED_SCRIPT_FIELDS = {
     "author": 'author = "Vulners Team (info@vulners.com)"',
-    "license": 'license = "Same as Nmap--See https://nmap.org/book/man-legal.html"',
+    "license": 'license = "Same as Nmap--See '
+               'https://nmap.org/book/man-legal.html"',
 }
 
 # .xml is here for tests/fixtures/golden_1x.xml, the calibration capture the
@@ -141,7 +152,8 @@ REQUIRED_SCRIPT_FIELDS = {
 # LICENSE is deliberately absent: it is nmap's own text, held verbatim, and it
 # carries a line with trailing whitespace. Reformatting somebody else's licence
 # to satisfy this repository's linter is not a trade worth making.
-TEXT_SUFFIXES = {".nse", ".lua", ".json", ".txt", ".md", ".py", ".yml", ".yaml",
+TEXT_SUFFIXES = {".nse", ".lua", ".json", ".txt", ".md", ".py", ".yml",
+                 ".yaml",
                  ".sh", ".ps1", ".xml"}
 TEXT_NAMES = {".gitignore", ".gitattributes", ".editorconfig"}
 
@@ -198,7 +210,8 @@ def check_secrets(report, paths):
             for label, pattern in SECRET_PATTERNS:
                 if pattern.search(line):
                     # Never echo the value itself.
-                    report.problem(path, f"looks like a {label} on line {number}")
+                    report.problem(path,
+                                   f"looks like a {label} on line {number}")
 
 
 def check_script_metadata(report, paths):
@@ -274,9 +287,10 @@ def check_secret_patterns(report):
 # Every name an .nse file in this repository may legitimately reach through
 # _ENV. Anything else is either a typo or a local read above its own `local`
 # line - and in Lua that is not a warning, it is a global read. NSE runs its
-# scripts in a strict environment, so the read raises, and nmap answers a script
-# that raised by replacing the port's ENTIRE result with "Script execution
-# failed": every finding on that port lost, in the text output and in the XML.
+# scripts in a strict environment, so the read raises, and nmap answers a
+# script that raised by replacing the port's ENTIRE result with "Script
+# execution failed": every finding on that port lost, in the text output and in
+# the XML.
 #
 # Not hypothetical. A guard in audit_smart read `#fresh` eleven lines above
 # `local fresh`, so every scan that made a SECOND billed call lost the port it
@@ -329,8 +343,10 @@ def lua_compiler():
 DOCUMENTED_COUNTS = [
     (re.compile(r"(\d[\d ]*) product and version rules"),
      "fingerprints.json", "rules"),
-    (re.compile(r"(\d[\d ]*) paths the sweep requests"), "paths.json", "paths"),
-    (re.compile(r"(\d[\d ]*) targeted version probes"), "probes.json", "probes"),
+    (re.compile(r"(\d[\d ]*) paths the sweep requests"), "paths.json",
+                      "paths"),
+    (re.compile(r"(\d[\d ]*) targeted version probes"), "probes.json",
+                      "probes"),
     # The phrasings the prose actually reaches for. Five of the eleven places
     # these numbers appear used to be gated, and the catalogue rebuilds on a
     # schedule while prose does not - so the ungated six were guaranteed to go
@@ -347,10 +363,12 @@ COUNTED_DOCS = ("README.md", "CONTRIBUTING.md")
 def catalogue_sizes():
     """How big each dictionary actually is, or None when one cannot be read."""
     sizes = {}
-    for name, field in (("fingerprints.json", "rules"), ("paths.json", "paths"),
+    for name, field in (("fingerprints.json", "rules"), ("paths.json",
+                                                         "paths"),
                         ("probes.json", "probes")):
         try:
-            loaded = json.loads((REPO / "catalog" / name).read_text(encoding="utf-8"))
+            loaded = json.loads(
+                (REPO / "catalog" / name).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
         sizes[(name, field)] = len(loaded.get(field) or ())

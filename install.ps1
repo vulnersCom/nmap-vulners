@@ -36,7 +36,8 @@
     Installs system-wide. Run PowerShell as Administrator.
 
 .EXAMPLE
-    irm https://raw.githubusercontent.com/vulnersCom/nmap-vulners/master/install.ps1 | iex
+    irm https://raw.githubusercontent.com/vulnersCom/nmap-vulners/master/`
+        install.ps1 | iex
     Installs without a checkout.
 
 .EXAMPLE
@@ -66,11 +67,17 @@ function Remove-LegacyFiles {
     $removed = @()
     foreach ($name in $LegacyScripts) {
         $path = Join-Path $ScriptDir $name
-        if (Test-Path $path) { Remove-Item $path -Force; $removed += "  scripts\$name" }
+        if (Test-Path $path) {
+            Remove-Item $path -Force
+            $removed += "  scripts\$name"
+        }
     }
     foreach ($name in $LegacyData) {
         $path = Join-Path $DataSubDir $name
-        if (Test-Path $path) { Remove-Item $path -Force; $removed += "  nselib\data\$name" }
+        if (Test-Path $path) {
+            Remove-Item $path -Force
+            $removed += "  nselib\data\$name"
+        }
     }
     return $removed
 }
@@ -84,7 +91,8 @@ function Remove-LegacyFiles {
 function Test-VulnersKey {
     param([string]$Token)
     try {
-        $response = Invoke-WebRequest -Uri "https://vulners.com/api/v3/audit/getSupportedOS/" `
+        $probe = "https://vulners.com/api/v3/audit/getSupportedOS/"
+        $response = Invoke-WebRequest -Uri $probe `
             -Headers @{ "X-Api-Key" = $Token
                         "User-Agent" = "Vulners NMAP Plugin installer" } `
             -UseBasicParsing -TimeoutSec 20
@@ -92,7 +100,9 @@ function Test-VulnersKey {
         return "unknown"
     } catch {
         $code = $null
-        if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
+        if ($_.Exception.Response) {
+            $code = [int]$_.Exception.Response.StatusCode
+        }
         switch ($code) {
             401 { return "bad" }
             403 { return "bad" }
@@ -121,7 +131,8 @@ function Save-VulnersKey {
     $acl.SetAccessRuleProtection($true, $false)
     $acl.Access | ForEach-Object { $acl.RemoveAccessRule($_) | Out-Null }
     $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+    $acl.AddAccessRule((New-Object `
+        System.Security.AccessControl.FileSystemAccessRule(
         $me, "FullControl", "Allow")))
     Set-Acl -Path $temp -AclObject $acl
 
@@ -134,7 +145,7 @@ function Invoke-KeyEntry {
 
     if ($env:VULNERS_API_KEY) {
         Write-Host ""
-        Write-Host "VULNERS_API_KEY is already set in the environment; leaving it alone."
+        Write-Host "VULNERS_API_KEY is already set; leaving it alone."
         return
     }
     $existing = Join-Path (Join-Path $env:APPDATA "nmap") "vulners.key"
@@ -146,22 +157,27 @@ function Invoke-KeyEntry {
     # Piped through iex, or run by CI, there is nobody to answer.
     if ([Console]::IsInputRedirected) {
         Write-Host ""
-        Write-Host "No API key configured. It works without one; to add a key later,"
+        Write-Host "No API key configured. It works without one; to add"
+        Write-Host "one later,"
         Write-Host "put it in $existing or set VULNERS_API_KEY."
         return
     }
 
     Write-Host ""
-    Write-Host "An API key is optional. Without one the scan uses the free lookup."
-    Write-Host "A free key adds detail per finding and can identify software the free"
+    Write-Host "An API key is optional. Without one the scan uses the"
+    Write-Host "free lookup."
+    Write-Host "A free key adds detail per finding and can identify"
+    Write-Host "software the free"
     Write-Host "lookup cannot name. Get one at https://vulners.com/userinfo"
     Write-Host ""
-    Write-Host "Anything you enter is sent to vulners.com once, to check it works,"
+    Write-Host "Anything you enter is sent to vulners.com once, to check"
+    Write-Host "it works,"
     Write-Host "and then stored in $existing."
 
-    # Read without echoing: a token pasted into a console otherwise stays in the
+    # Read without echoing: a token pasted into a console otherwise stays
     # scrollback and in any recording of the session.
-    $secure = Read-Host -Prompt "Paste a key, or press Enter to skip" -AsSecureString
+    $secure = Read-Host -Prompt "Paste a key, or press Enter to skip" `
+        -AsSecureString
     $token = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
         [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
     if (-not $token) { $token = "" }
@@ -179,19 +195,20 @@ function Invoke-KeyEntry {
             Save-VulnersKey $token
         }
         "bad" {
-            Write-Host "  vulners.com does not recognise that key; it was NOT saved."
+            Write-Host "  vulners.com does not know that key; NOT saved."
             Write-Host "  Check it at https://vulners.com/userinfo"
         }
         "unlicensed" {
-            Write-Host "  that key is recognised but has no active licence; it was NOT saved."
+            Write-Host "  that key has no active licence; it was NOT saved."
         }
         "ratelimited" {
-            Write-Host "  vulners.com is rate limiting right now, so the key could not be"
+            Write-Host "  vulners.com is rate limiting, so the key could"
+            Write-Host "  not be"
             Write-Host "  checked. Saving it anyway - it is probably fine."
             Save-VulnersKey $token
         }
         default {
-            Write-Host "  could not reach vulners.com to check it. Saving it unchecked."
+            Write-Host "  could not reach vulners.com. Saving it unchecked."
             Save-VulnersKey $token
         }
     }
@@ -208,7 +225,8 @@ function Get-NmapExe {
         if ($candidate -and (Test-Path $candidate)) { return $candidate }
     }
 
-    throw "nmap is not installed, or not in PATH. Get it from https://nmap.org/download.html"
+    throw ("nmap is not installed, or not in PATH. Get it from " +
+           "https://nmap.org/download.html")
 }
 
 function Get-NmapDataDir {
@@ -227,13 +245,15 @@ function Get-NmapDataDir {
     $fallback = Split-Path -Parent $NmapExe
     if (Test-Path (Join-Path $fallback "nselib")) { return $fallback }
 
-    throw "Cannot find nmap's data directory. Pass -Prefix 'C:\Program Files (x86)\Nmap'."
+    throw ("Cannot find nmap's data directory. Pass -Prefix " +
+           "'C:\Program Files (x86)\Nmap'.")
 }
 
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($identity)
-    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    $admin = [Security.Principal.WindowsBuiltInRole]::Administrator
+    return $principal.IsInRole($admin)
 }
 
 $nmapExe = Get-NmapExe
@@ -251,16 +271,22 @@ $dataSubDir = Join-Path $dataDir "nselib\data"
 
 if (-not $User -and -not (Test-Administrator)) {
     Write-Warning "Writing into $dataDir usually needs administrator rights."
-    Write-Warning "Either start PowerShell as Administrator, or run: .\install.ps1 -User"
+    Write-Warning ("Start PowerShell as Administrator, or run: " +
+                   ".\install.ps1 -User")
 }
 
 if ($Uninstall) {
     Write-Host "Removing nmap-vulners from $dataDir"
     foreach ($name in $Scripts) {
         $path = Join-Path $scriptDir $name
-        if (Test-Path $path) { Remove-Item $path -Force; Write-Host "  scripts\$name" }
+        if (Test-Path $path) {
+            Remove-Item $path -Force
+            Write-Host "  scripts\$name"
+        }
     }
-    foreach ($line in (Remove-LegacyFiles $scriptDir $dataSubDir)) { Write-Host $line }
+    foreach ($line in (Remove-LegacyFiles $scriptDir $dataSubDir)) {
+        Write-Host $line
+    }
     if ($User) { $env:NMAPDIR = $dataDir }
     & $nmapExe --script-updatedb | Out-Null
     Write-Host "Done."
@@ -275,11 +301,13 @@ $source = $here
 $temp = $null
 
 if (-not $here -or -not (Test-Path (Join-Path $here "vulners.nse"))) {
-    $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("nmap-vulners-" + [guid]::NewGuid())
+    $temp = Join-Path ([System.IO.Path]::GetTempPath()) `
+        ("nmap-vulners-" + [guid]::NewGuid())
     New-Item -ItemType Directory -Force -Path $temp | Out-Null
     Write-Host "Downloading nmap-vulners ($Ref)"
     foreach ($name in ($Scripts + $DataFiles)) {
-        Invoke-WebRequest -Uri "$RepoRaw/$Ref/$name" -OutFile (Join-Path $temp $name) -UseBasicParsing
+        Invoke-WebRequest -Uri "$RepoRaw/$Ref/$name" `
+            -OutFile (Join-Path $temp $name) -UseBasicParsing
     }
     # A ref that still carries 1.x answers with a 1.x vulners.nse, which this
     # installer would then put in place while deleting the two data files that
@@ -287,7 +315,8 @@ if (-not $here -or -not (Test-Path (Join-Path $here "vulners.nse"))) {
     # 2.0 fetches its dictionaries at scan time, and the line naming where from
     # is what tells the two apart.
     $fetched = Join-Path $temp "vulners.nse"
-    if (-not (Select-String -Path $fetched -Pattern '^local CATALOG_BASE' -Quiet)) {
+    if (-not (Select-String -Path $fetched `
+                            -Pattern '^local CATALOG_BASE' -Quiet)) {
         throw "$Ref does not carry the 2.x script; nothing was installed"
     }
     $source = $temp
@@ -299,7 +328,9 @@ try {
         $target = Join-Path $scriptDir $name
         # Replacing is the point: nmap ships its own vulners.nse, and the copy
         # left behind is the one nmap would keep running.
-        $note = if (Test-Path $target) { "  (replacing the existing copy)" } else { "" }
+        $note = if (Test-Path $target) {
+            "  (replacing the existing copy)"
+        } else { "" }
         Copy-Item (Join-Path $source $name) $target -Force
         Write-Host "  scripts\$name$note"
     }
@@ -321,7 +352,10 @@ if ($User) { $env:NMAPDIR = $dataDir }
 # a vulners.nse of its own.
 $resolved = $null
 foreach ($line in (& $nmapExe -d2 --script-help vulners 2>&1)) {
-    if ("$line" -match '^Fetchfile found (.*vulners\.nse)$') { $resolved = $Matches[1]; break }
+    if ("$line" -match '^Fetchfile found (.*vulners\.nse)$') {
+        $resolved = $Matches[1]
+        break
+    }
 }
 
 if (-not $resolved) {
@@ -332,12 +366,14 @@ $expected = Join-Path $scriptDir "vulners.nse"
 if ((Resolve-Path $resolved).Path -ne (Resolve-Path $expected).Path) {
     Write-Warning "nmap resolves 'vulners' to $resolved, not to $expected."
     if ($User) {
-        Write-Warning "Set NMAPDIR so this copy wins:  setx NMAPDIR `"$dataDir`""
+        Write-Warning ("Set NMAPDIR so this copy wins: " +
+                       "setx NMAPDIR `"$dataDir`"")
     }
 }
 
 Write-Host ""
-$installedVersion = (Select-String -Path $expected -Pattern '^local api_version = "(.*)"$' |
+$installedVersion = (Select-String -Path $expected `
+                                   -Pattern '^local api_version = "(.*)"$' |
                     Select-Object -First 1).Matches.Groups[1].Value
 Write-Host "Installed. vulners.nse $installedVersion is in place. Try it:"
 if ($User) {
@@ -348,6 +384,8 @@ Write-Host ""
 Invoke-KeyEntry
 
 Write-Host ""
-Write-Host "It works without an API key. A free key adds more detail per finding"
+Write-Host "It works without an API key. A free key adds more detail per"
+Write-Host "finding"
 Write-Host "and lets it identify software the free lookup cannot name:"
-Write-Host "  https://vulners.com/userinfo   (register at https://vulners.com/ first)"
+Write-Host "  https://vulners.com/userinfo"
+Write-Host "  (register at https://vulners.com/ first)"

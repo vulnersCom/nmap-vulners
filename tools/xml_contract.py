@@ -100,8 +100,8 @@ def check(xml_path, script_id="vulners"):
             elements or notices,
             f'a <script id="{script_id}"> element is present',
             "every downstream importer selects findings by this exact id; a "
-            "scan that identified no vulnerable software emits none, and there "
-            "is then nothing here to check"):
+            "scan that identified no vulnerable software emits none, and "
+            "there is then nothing here to check"):
         return contract
 
     # Nothing found, and the script said why. There is no shape to check, and
@@ -119,7 +119,8 @@ def check(xml_path, script_id="vulners"):
             for bulletin in group.findall("table"):
                 bulletins.append(bulletin)
                 for nested in bulletin.findall("table"):
-                    problems.append(f"a third table level under {group.get('key')!r}")
+                    problems.append(
+                        f"a third table level under {group.get('key')!r}")
                 keys = {}
                 for elem in bulletin.findall("elem"):
                     key = elem.get("key")
@@ -128,7 +129,8 @@ def check(xml_path, script_id="vulners"):
                 for required in REQUIRED_PER_BULLETIN:
                     if not keys.get(required):
                         problems.append(
-                            f"a bulletin under {group.get('key')!r} has no {required}")
+                            f"a bulletin under {group.get('key')!r} "
+                            f"has no {required}")
                 for key, value in keys.items():
                     if not value:
                         problems.append(f"an empty <elem key={key!r}>")
@@ -137,12 +139,13 @@ def check(xml_path, script_id="vulners"):
                      "no <table> under the script element")
     contract.require(all(g.get("key") for g in groups),
                      "every group carries a key attribute",
-                     "a group with no key cannot be attributed to any software")
-    # A group key is either a CPE, or a human software label that says so.
-    # 2.0 deliberately does not invent a CPE for a label the service could not
-    # resolve - inventing one would make an importer attach findings to software
-    # that does not exist - so it marks the group instead. Demanding a CPE
-    # outright rejected a report the design is supposed to produce.
+                     "a group with no key cannot be attributed to any "
+                         "software")
+    # A group key is either a CPE, or a human software label that says so. 2.0
+    # deliberately does not invent a CPE for a label the service could not
+    # resolve - inventing one would make an importer attach findings to
+    # software that does not exist - so it marks the group instead. Demanding a
+    # CPE outright rejected a report the design is supposed to produce.
     unlabelled = []
     for group in groups:
         key = group.get("key") or ""
@@ -166,7 +169,8 @@ def check(xml_path, script_id="vulners"):
                      "; ".join(sorted(set(nesting))[:3]))
     missing = [p for p in problems if " has no " in p]
     contract.require(not missing,
-                     f"every bulletin carries {' and '.join(REQUIRED_PER_BULLETIN)}",
+                     "every bulletin carries "
+                     f"{' and '.join(REQUIRED_PER_BULLETIN)}",
                      "; ".join(sorted(set(missing))[:3]))
     empty = [p for p in problems if p.startswith("an empty")]
     contract.require(not empty, "no element is emitted empty",
@@ -219,7 +223,8 @@ SELFTEST_BREAKAGES = {
         lambda x: x.replace('key="cpe:/a:apache:http_server:2.4.49"',
                             'key="Apache httpd 2.4.49"'),
     "bulletin tables gain keys":
-        lambda x: x.replace('<table>\n<elem key="id"', '<table key="0">\n<elem key="id"'),
+        lambda x: x.replace('<table>\n<elem key="id"',
+                            '<table key="0">\n<elem key="id"'),
     # The scan-level split above must not become a hole a port can hide in:
     # a port element that carries no findings is still a broken report.
     "a port element loses its findings":
@@ -264,13 +269,15 @@ def selftest(tmpdir):
         problems.append("the contract rejects a scan that found nothing")
     for description, break_it in SELFTEST_BREAKAGES.items():
         if not verdict(break_it(SELFTEST_REPORT)):
-            problems.append(f"the contract no longer notices when {description}")
+            problems.append(
+                f"the contract no longer notices when {description}")
     return problems
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+                                     formatter_class=argparse
+                                     .RawDescriptionHelpFormatter)
     parser.add_argument("reports", nargs="*", help="nmap -oX files to check")
     parser.add_argument("--script-id", default="vulners",
                         help="the script element to check (default: vulners)")

@@ -1,15 +1,16 @@
-"""Turn each source's idea of a product identity into the one CPE this asks for.
+"""Turn each source's idea of a product identity into the one CPE this asks
+for.
 
-The endpoint this script queries is addressed by a CPE 2.2 URI - `cpe:/a:f5:nginx`
-plus a version - and takes it verbatim, so the alias a rule carries is not a
-label. It is the request. A plausible-looking alias that the service does not
-recognise produces silence, and silence from a vulnerability scanner reads as
-"nothing wrong here".
+The endpoint this script queries is addressed by a CPE 2.2 URI -
+`cpe:/a:f5:nginx` plus a version - and takes it verbatim, so the alias a rule
+carries is not a label. It is the request. A plausible-looking alias that the
+service does not recognise produces silence, and silence from a vulnerability
+scanner reads as "nothing wrong here".
 
 That is why nothing in this file guesses. It converts the spellings the sources
 use into the one this script needs, applies the corrections the repository has
-already measured against the live service, and leaves the question of whether an
-identity is *answerable* to `validate.py`, which asks the service itself.
+already measured against the live service, and leaves the question of whether
+an identity is *answerable* to `validate.py`, which asks the service itself.
 """
 
 import re
@@ -17,9 +18,9 @@ import re
 CPE23 = re.compile(r"^cpe:2\.3:([aoh]):([^:]*):([^:]*)")
 CPE22 = re.compile(r"^cpe:/([aoh]):([^:]*):([^:]*)")
 
-# CPE components are percent-escaped in the 2.3 binding and backslash-escaped in
-# its formatted-string form. Both spellings have to come back to the plain text
-# the 2.2 URI carries, or the alias names a product that does not exist.
+# CPE components are percent-escaped in the 2.3 binding and backslash-escaped
+# in its formatted-string form. Both spellings have to come back to the plain
+# text the 2.2 URI carries, or the alias names a product that does not exist.
 UNESCAPE = re.compile(r"\\(.)")
 
 
@@ -33,10 +34,10 @@ def _component(text):
 def alias_of(template):
     """`cpe:/a:vendor:product` for any CPE spelling the sources use, or None.
 
-    Recog writes `cpe:/a:apache:tomcat:{service.version}`, Wappalyzer writes the
-    2.3 form padded with wildcards. Both mean the same identity, and the version
-    they carry is either a placeholder or a wildcard - never a real version, so
-    it is dropped rather than trusted.
+    Recog writes `cpe:/a:apache:tomcat:{service.version}`, Wappalyzer writes
+    the 2.3 form padded with wildcards. Both mean the same identity, and the
+    version they carry is either a placeholder or a wildcard - never a real
+    version, so it is dropped rather than trusted.
     """
     if not template:
         return None
@@ -48,12 +49,14 @@ def alias_of(template):
     if not match:
         return None
 
-    part, vendor, product = match.group(1), _component(match.group(2)), _component(match.group(3))
+    part = match.group(1)
+    vendor, product = _component(match.group(2)), _component(match.group(3))
     if not vendor or not product:
         return None
     if "{" in vendor or "{" in product:
-        # An unfilled recog template in the vendor or product position means the
-        # identity itself depends on the match, which this importer cannot know.
+        # An unfilled recog template in the vendor or product position means
+        # the identity itself depends on the match, which this importer cannot
+        # know.
         return None
     return "cpe:/%s:%s:%s" % (part, vendor, product)
 
@@ -70,16 +73,17 @@ def alias_of(template):
 # Measured 2026-08-18; see dev_docs/decisions.md. Anything added here needs the
 # same measurement next to it, not an opinion.
 CORRECTIONS = {
-    "cpe:/a:microsoft:internet_information_server": "cpe:/a:microsoft:internet_information_services",
+    "cpe:/a:microsoft:internet_information_server":
+        "cpe:/a:microsoft:internet_information_services",
     "cpe:/a:igor_sysoev:nginx": "cpe:/a:f5:nginx",
     "cpe:/a:nginx:nginx": "cpe:/a:f5:nginx",
     "cpe:/a:h2o_project:h2o": "cpe:/a:h2o:h2o",
 
-    # Added 2026-08-18, each from a CONTROLLED comparison - both spellings asked
-    # about the same versions, because asking each about its own tells you
-    # nothing. `cpe:/o:sun:solaris` looked dead by that weaker test and is not:
-    # it returns 285 at version 10, and its zero came from being asked about a
-    # version string scraped out of a banner.
+    # Added 2026-08-18, each from a CONTROLLED comparison - both spellings
+    # asked about the same versions, because asking each about its own tells
+    # you nothing. `cpe:/o:sun:solaris` looked dead by that weaker test and is
+    # not: it returns 285 at version 10, and its zero came from being asked
+    # about a version string scraped out of a banner.
     #
     #   oracle:sunos           5.10 -> 0    5.11 -> 0
     #   sun:sunos              5.10 -> 95   5.11 -> 159
@@ -112,13 +116,14 @@ def corrected(alias):
 
 # A version string that is not a version. Recog and Wappalyzer both have
 # patterns whose capture can come back as a word - "unknown", "development" -
-# and appending one to a CPE asks the service about a product release that never
-# existed, which is a lookup spent to learn nothing.
+# and appending one to a CPE asks the service about a product release that
+# never existed, which is a lookup spent to learn nothing.
 PLAUSIBLE_VERSION = re.compile(r"^\d+(\.\d+)*[A-Za-z0-9._+-]*$")
 
 
 def plausible(version):
-    return bool(version) and bool(PLAUSIBLE_VERSION.match(version)) and len(version) <= 64
+    return (bool(version) and bool(PLAUSIBLE_VERSION.match(version))
+            and len(version) <= 64)
 
 
 # The runtime key a rule is filed under - the part of a response the matcher

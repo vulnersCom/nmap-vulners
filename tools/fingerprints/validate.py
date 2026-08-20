@@ -15,9 +15,9 @@ only the service answers "will this plugin get anything back". A rule whose
 alias the service does not recognise is not a detection. It is a detection that
 reports nothing, which reads to an operator exactly like a clean host.
 
-The endpoint used here is the free, keyless one - the same one the script itself
-uses, and deliberately so: what is measured is what will happen at scan time. No
-API token is sent, in any mode.
+The endpoint used here is the free, keyless one - the same one the script
+itself uses, and deliberately so: what is measured is what will happen at scan
+time. No API token is sent, in any mode.
 """
 
 import argparse
@@ -35,8 +35,8 @@ ENDPOINT = "https://vulners.com/api/v3/burp/software/"
 
 # The endpoint refuses anything that does not name the plugin - measured, a
 # User-Agent of "nmap-vulners fingerprint import" gets 403 where this gets 200.
-# It says what it is in the parenthesis so the maintainer can tell an import run
-# from a real scan in the service's own logs.
+# It says what it is in the parenthesis so the maintainer can tell an import
+# run from a real scan in the service's own logs.
 USER_AGENT = "Vulners NMAP Plugin 2.0 (fingerprint import)"
 
 # The service is a shared resource and this is a maintenance tool, not a scan.
@@ -51,9 +51,11 @@ MAX_BACKOFF = 300
 MAX_RETRIES = 4
 
 # Python does not use the system trust store on macOS, so a plain urlopen fails
-# with CERTIFICATE_VERIFY_FAILED and every identity comes back "unknown" - which
-# looks exactly like the service having no opinion. Being explicit about the CA
-# bundle is what keeps a transport failure from being read as an answer.
+# with CERTIFICATE_VERIFY_FAILED and every identity comes back "unknown" -
+# which looks exactly like the service having no opinion. Being explicit about
+# the CA bundle is what keeps a transport failure from being read as an answer.
+
+
 def _context():
     try:
         import certifi
@@ -66,7 +68,8 @@ CONTEXT = _context()
 
 
 def ask(alias, version, timeout=20):
-    """Bulletins the service returns for one identity, or None when it errored."""
+    """Bulletins the service returns for one identity, or None when it
+    errored."""
     query = urllib.parse.urlencode({
         "software": "%s:%s" % (alias, version),
         "version": version,
@@ -79,7 +82,8 @@ def ask(alias, version, timeout=20):
         try:
             with urllib.request.urlopen(request, timeout=timeout,
                                         context=CONTEXT) as response:
-                payload = json.loads(response.read().decode("utf-8", "replace"))
+                payload = json.loads(response.read().decode("utf-8",
+                                                            "replace"))
             break
         except urllib.error.HTTPError as error:
             if error.code == 429:
@@ -155,7 +159,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--in", dest="source",
                         default="catalog/fingerprints.json")
-    parser.add_argument("--cache", default="tools/fingerprints/alias-bulletins.json",
+    parser.add_argument("--cache",
+                        default="tools/fingerprints/alias-bulletins.json",
                         help="measured counts, so a re-run costs no requests")
     parser.add_argument("--limit", type=int, default=0,
                         help="stop after this many new queries")
@@ -180,7 +185,8 @@ def main():
             continue
         candidates = versions.get(alias) or []
         if not candidates:
-            cache[alias] = {"count": None, "why": "no example version to ask with"}
+            cache[alias] = {"count": None,
+                            "why": "no example version to ask with"}
             continue
 
         best, tried, failures = 0, [], 0
@@ -224,7 +230,9 @@ def main():
     for alias in aliases:
         record = cache.get(alias) or {}
         count = record.get("count")
-        tally["unknown" if count is None else ("answers" if count else "empty")] += 1
+        verdict = "unknown" if count is None else (
+            "answers" if count else "empty")
+        tally[verdict] += 1
     print("\naliases: %d asked this run, %s" % (asked, dict(tally)))
     return 0
 

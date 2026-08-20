@@ -4,7 +4,8 @@
 -- matcher from 178 rules in 30 ms to 722 in 1 ms. The cost of that design is
 -- that a channel nothing builds is a channel whose rules can never fire, and
 -- nothing else in the suite would notice: the rules load, the catalogue
--- validates, the scan runs, and one whole class of identity is silently absent.
+-- validates, the scan runs, and one whole class of identity is silently
+-- absent.
 --
 -- Two of the eight were covered before this file - `hdr:` and `body`, through
 -- the sweep - so the rest are checked here against a single response that
@@ -46,7 +47,7 @@ local RAW = {
   "Set-Cookie: ci_session=abc1; path=/",
 }
 
---- One rule per channel, each with an alias of its own, so which channel fired
+--; One rule per channel, each with an alias of its own, so which channel fired
 -- is readable straight off the CPE.
 local CHANNELS = {
   {"hdr:server",      "cpe:/a:f5:nginx",               "nginx/([%d.]+)",
@@ -65,14 +66,15 @@ local CHANNELS = {
    "cpe:/a:grafana:grafana:8.5.3"},
 }
 
---- A catalogue holding exactly the rules a case asks for.
+--; A catalogue holding exactly the rules a case asks for.
 --
 -- A filler rule always ships: the readers refuse a dictionary with nothing
 -- usable in it, which is correct behaviour and would otherwise make a case
 -- about the banner fail as a broken catalogue.
 local function catalog_of(rules)
   local dictionary = {
-    ["Filler, server"] = {alias = "cpe:/a:example:filler", channel = "hdr:x-filler",
+    ["Filler, server"] = {alias = "cpe:/a:example:filler",
+      channel = "hdr:x-filler",
                           anchor = "", regex = "filler/([%d.]+)"},
   }
   for _, rule in ipairs(rules or {}) do
@@ -87,14 +89,14 @@ local function catalog_of(rules)
   }
 end
 
---- A loaded script whose catalogue holds those rules and nothing else.
+--; A loaded script whose catalogue holds those rules and nothing else.
 local function load(rules, opts)
   opts = opts or {}
   return t.load_vulners({root = root, catalog = catalog_of(rules),
                          paths = opts.paths})
 end
 
---- Every CPE those rules find in one response.
+--; Every CPE those rules find in one response.
 local function matched(env, response)
   local T = env._TEST
   local deadline = os.clock() + 5
@@ -104,7 +106,7 @@ local function matched(env, response)
   return found
 end
 
---- The response every channel case is matched against.
+--; The response every channel case is matched against.
 local function page(opts)
   opts = opts or {}
   return t.response({
@@ -148,8 +150,9 @@ suite[#suite + 1] = {
   name = "a channel is matched against its own subject and nothing else",
   fn = function()
     -- The precision half of the design, and the reason the channel is part of
-    -- the rule: the same pattern over the whole header block could match inside
-    -- a different header entirely, so an anchored `hdr:server` rule can mean it.
+    -- the rule: the same pattern over the whole header block could match
+    -- inside a different header entirely, so an anchored `hdr:server` rule can
+    -- mean it.
     local env = load({
       {"hdr:server", "cpe:/a:x:server_only", "^nginx/([%d.]+)"},
       {"hdr:x-powered-by", "cpe:/a:php:php", "PHP/([%d.]+)"},
@@ -196,8 +199,10 @@ suite[#suite + 1] = {
     })
     local found = matched(env, page())
 
-    t.is_true(has(found, "cpe:/a:x:by_cookie:abc1"), "the cookie subject exists")
-    t.is_true(has(found, "cpe:/a:x:by_header:abc1"), "and so does the header one")
+    t.is_true(has(found, "cpe:/a:x:by_cookie:abc1"),
+      "the cookie subject exists")
+    t.is_true(has(found, "cpe:/a:x:by_header:abc1"),
+      "and so does the header one")
   end,
 }
 
@@ -221,10 +226,14 @@ suite[#suite + 1] = {
 -- then one %r(Probe,length,"payload") record per probe that answered, wrapped
 -- across lines with SF: continuations and escaped throughout.
 local SERVICE_FP = table.concat({
-  'SF-Port8080-TCP:V=7.94%I=7%D=8/19%Time=68A3B1C2%P=x86_64-apple-darwin%r(Get',
-  'SF:Request,7B,"HTTP/1\\.1\\x20200\\x20OK\\r\\nServer:\\x20CouchDB/2\\.3\\.1\\x20\\',
-  'SF:(Erlang\\x20OTP/19\\)\\r\\n\\r\\n")%r(HTTPOptions,7B,"HTTP/1\\.1\\x20200\\x20OK',
-  'SF:\\r\\nServer:\\x20CouchDB/2\\.3\\.1\\x20\\(Erlang\\x20OTP/19\\)\\r\\n\\r\\n");',
+  'SF-Port8080-TCP:V=7.94%I=7%D=8/19%Time=68A3B1C2' ..
+    '%P=x86_64-apple-darwin%r(Get',
+  'SF:Request,7B,"HTTP/1\\.1\\x20200\\x20OK' ..
+    '\\r\\nServer:\\x20CouchDB/2\\.3\\.1\\x20\\',
+  'SF:(Erlang\\x20OTP/19\\)\\r\\n\\r\\n")%r(HTTPOptions,7B,' ..
+    '"HTTP/1\\.1\\x20200\\x20OK',
+  'SF:\\r\\nServer:\\x20CouchDB/2\\.3\\.1\\x20' ..
+    '\\(Erlang\\x20OTP/19\\)\\r\\n\\r\\n");',
 }, "\n")
 
 local COUCHDB = {{"banner", "cpe:/a:apache:couchdb", "CouchDB/([%d.]+)"}}
@@ -250,9 +259,9 @@ suite[#suite + 1] = {
   fn = function()
     -- Free in every sense: the text is already in hand, so a banner identity
     -- costs no request, no credit and no time on the wire. nmap records a
-    -- fingerprint exactly when its own probes did NOT settle the service, which
-    -- is the case worth trying - a port with no CPE is one that would otherwise
-    -- spend a credit at audit/smart or go unreported.
+    -- fingerprint exactly when its own probes did NOT settle the service,
+    -- which is the case worth trying - a port with no CPE is one that would
+    -- otherwise spend a credit at audit/smart or go unreported.
     local env = load(COUCHDB)
     local port = t.port({service_fp = SERVICE_FP})
 
@@ -284,9 +293,10 @@ suite[#suite + 1] = {
     -- The whole point of the channel, and it was unreachable: nmap records a
     -- service fingerprint exactly when its own probes did NOT settle the
     -- service, and then leaves name, product, version and cpe empty. Measured
-    -- against a real listener greeting with an unrecognised banner: a 2 209-byte
-    -- service_fp and nothing else, so every other clause of the portrule was
-    -- false on precisely the ports the 163 banner rules were imported for.
+    -- against a real listener greeting with an unrecognised banner: a 2
+    -- 209-byte service_fp and nothing else, so every other clause of the
+    -- portrule was false on precisely the ports the 163 banner rules were
+    -- imported for.
     local env = load(COUCHDB)
     local host = t.host()
     local unnamed = t.port({number = 4200, service = "unknown", name = nil,
@@ -307,12 +317,12 @@ suite[#suite + 1] = {
   name = "a banner port is read, not swept",
   fn = function()
     -- Being in scope must not turn into 125 HTTP requests at something that is
-    -- not a web server. The banner costs no request at all: the text is already
-    -- in hand.
-    -- The sweep is given a real path to request, so "not swept" is something
-    -- this case can actually witness. It used to bind `http` to nil and load
-    -- with the sweep switched off, which made the second half of its own name
-    -- unobservable: the gate could be deleted outright and this stayed green.
+    -- not a web server. The banner costs no request at all: the text is
+    -- already in hand. The sweep is given a real path to request, so "not
+    -- swept" is something this case can actually witness. It used to bind
+    -- `http` to nil and load with the sweep switched off, which made the
+    -- second half of its own name unobservable: the gate could be deleted
+    -- outright and this stayed green.
     local env, http = load(COUCHDB, {paths = {"/never-swept"}})
     local host = t.host()
     local port = t.port({number = 4200, service = "unknown", name = nil,
@@ -365,20 +375,23 @@ suite[#suite + 1] = {
     -- Every budget in the script bounds work BETWEEN calls to string.find and
     -- none can pre-empt one, because pattern matching neither yields nor
     -- returns until it is done. Measured on the shipped "Bootstrap, body" rule
-    -- against a body of "<link href=bootstrap" repeated with no ">": 2 KB costs
-    -- 0.9 s, 4 KB 13.7 s, and the 128 KB the body cap admits is hours - with the
-    -- whole nmap scheduler stopped, in the default keyless configuration.
+    -- against a body of "<link href=bootstrap" repeated with no ">": 2 KB
+    -- costs 0.9 s, 4 KB 13.7 s, and the 128 KB the body cap admits is hours -
+    -- with the whole nmap scheduler stopped, in the default keyless
+    -- configuration.
     --
     -- So this case pins the bound from both ends: the rule still fires next to
-    -- its anchor, and it does NOT reach a version parked far beyond the window.
+    -- its anchor, and it does NOT reach a version parked far beyond the
+    -- window.
     local env = load({})
     local T = env._TEST
 
     local rules = {
       -- A lazy span, which is the shape the real corpus is full of: the
-      -- shipped Bootstrap rule is "<link[^>]* href=[^>]-bootstrap[^>]-(%d%d*)".
-      -- Such a pattern is exactly what backtracks catastrophically, and exactly
-      -- what the window has to stop from seeing the whole body.
+      -- shipped Bootstrap rule is "<link[^>]*
+      -- href=[^>]-bootstrap[^>]-(%d%d*)". Such a pattern is exactly what
+      -- backtracks catastrophically, and exactly what the window has to stop
+      -- from seeing the whole body.
       ["Widget, body"] = {alias = "cpe:/a:acme:widget", channel = "body",
                           anchor = "widget", regex = "widget[^!]-/([%d.]+)"},
     }
@@ -403,7 +416,8 @@ suite[#suite + 1] = {
     T.match_subjects(T.subjects_of(far, os.clock() + 3), found_far, seen_far,
       os.clock() + 3)
     t.length(found_far, 0,
-      "and must not reach a match parked beyond the window; without that bound " ..
+      "and must not reach a match parked beyond the window; without that " ..
+        "bound " ..
       "one hostile body freezes every script in the scan")
   end,
 }
@@ -412,17 +426,19 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a start-anchored rule matches only at the start",
   fn = function()
-    -- string.find(s, pat, init) re-anchors "^" AT init, so the every-occurrence
-    -- loop let an anchored rule fire at every offset: measured,
-    -- "^nginx/([%d.]+)" against "nginx/1.2.3nginx/9.9.9" matched twice. 373 of
-    -- the shipped rules start with "^", and each spurious match mints a CPE that
-    -- is reported, published onto the port and spent as an outbound lookup.
+    -- string.find(s, pat, init) re-anchors "^" AT init, so the
+    -- every-occurrence loop let an anchored rule fire at every offset:
+    -- measured, "^nginx/([%d.]+)" against "nginx/1.2.3nginx/9.9.9" matched
+    -- twice. 373 of the shipped rules start with "^", and each spurious match
+    -- mints a CPE that is reported, published onto the port and spent as an
+    -- outbound lookup.
     local env = load({})
     local T = env._TEST
     t.give_catalog(env, {
       fingerprints = {schema = 1, rules = {
         ["Anchored, hdr:server"] = {alias = "cpe:/a:f5:nginx",
-          channel = "hdr:server", anchor = "nginx/", regex = "^nginx/([%d.]+)"},
+          channel = "hdr:server", anchor = "nginx/",
+          regex = "^nginx/([%d.]+)"},
       }},
       paths = {schema = 1, paths = {"/"}},
       probes = {schema = 1, probes = {}},
@@ -444,9 +460,9 @@ suite[#suite + 1] = {
   fn = function()
     -- stdnse.string_or_blank(x, nil) returns the LITERAL "<blank>": the second
     -- argument is the substitute, and nil selects the default one rather than
-    -- disabling substitution. So every 204, 304 and body-less 302 ran the whole
-    -- body rule group and every probe detector against a string this script
-    -- invented, and the nil guard beside it was dead.
+    -- disabling substitution. So every 204, 304 and body-less 302 ran the
+    -- whole body rule group and every probe detector against a string this
+    -- script invented, and the nil guard beside it was dead.
     local env = load({})
     local subjects = env._TEST.subjects_of(
       t.response({status = 204, header = {["Server"] = "nginx/1.13.4"}}),
@@ -494,7 +510,8 @@ suite[#suite + 1] = {
       }},
     })
 
-    local subjects = T.subjects_of(t.response({status = 200, body = "zed here"}),
+    local subjects = T.subjects_of(t.response({status = 200,
+      body = "zed here"}),
       os.clock() + 3)
 
     local live = {}
@@ -512,11 +529,11 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "the banner pass honours the port's budget rather than its own",
   fn = function()
-    -- SWEEP_TIME_BUDGET says "how long the pattern set may run on ONE PORT", and
-    -- three passes each used to start their own clock - so a port that did the
-    -- banner, the sweep and the probes could spend three times the stated bound
-    -- in non-yielding matching. They share one budget now, which only works if
-    -- each pass actually reads the one it is handed.
+    -- SWEEP_TIME_BUDGET says "how long the pattern set may run on ONE PORT",
+    -- and three passes each used to start their own clock - so a port that did
+    -- the banner, the sweep and the probes could spend three times the stated
+    -- bound in non-yielding matching. They share one budget now, which only
+    -- works if each pass actually reads the one it is handed.
     local env = load(COUCHDB)
     local port = t.port({service_fp = SERVICE_FP})
 

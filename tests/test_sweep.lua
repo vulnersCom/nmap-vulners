@@ -2,17 +2,19 @@
 --
 -- The sweep is what http-vulners-regex.nse used to be: it fetches a list of
 -- paths, follows the redirects they answer with, matches headers and bodies
--- against the embedded patterns, and publishes what it recognised. What changed
--- in 2.0 is where the answer goes. There is no path-keyed listing of its own any
--- more (O5): a CPE the sweep finds reaches host.registry.vulners_cpe[number] and
--- port.version.cpe, and becomes a group key of the report, with the path that
--- produced it on the found_on element of every row in that group.
+-- against the embedded patterns, and publishes what it recognised. What
+-- changed in 2.0 is where the answer goes. There is no path-keyed listing of
+-- its own any more (O5): a CPE the sweep finds reaches
+-- host.registry.vulners_cpe[number] and port.version.cpe, and becomes a group
+-- key of the report, with the path that produced it on the found_on element of
+-- every row in that group.
 --
 -- Two things every case here declares, because the script is not three scripts
 -- any more:
 --
 --   * the sweep is OFF unless the case turns it on. The merged action sweeps
---     every port shortport.http accepts and t.port() is 80/http, so a case that
+--     every port shortport.http accepts and t.port() is 80/http, so a case
+--     that
 --     forgot would silently request every path the catalogue publishes.
 --   * free mode - no case here passes a token. The only other traffic is then
 --     the burp GET fired for each published CPE, and that is what the request
@@ -28,17 +30,17 @@ local table = require "table"
 local NGINX = "cpe:/a:f5:nginx:1.13.4"
 local BUGZILLA = "cpe:/a:mozilla:bugzilla:5.0.4"
 
---- A single-path sweep keeps the cases fast: the published list has 939 entries.
+--; A single-path sweep keeps the cases fast: the list has 939 entries.
 local ONE_PATH = {"/"}
 
 local API_ENDPOINT = "/api/v3/burp/"
 
---- One bulletin, in the shape the free endpoint answers with.
+--; One bulletin, in the shape the free endpoint answers with.
 --
--- Needed by every case that reads found_on: the provenance rides on the rows of
--- a finding, and a group is only opened for a CPE the API answered something
--- for. Publishing happens either way, which is why the registry assertions do
--- not depend on this body.
+-- Needed by every case that reads found_on: the provenance rides on the rows
+-- of a finding, and a group is only opened for a CPE the API answered
+-- something for. Publishing happens either way, which is why the registry
+-- assertions do not depend on this body.
 local API_BODY = json.generate({
   result = "OK",
   data = {
@@ -49,12 +51,12 @@ local API_BODY = json.generate({
   },
 })
 
---- Is this request the API leg rather than the sweep?
+--; Is this request the API leg rather than the sweep?
 local function is_api(request)
   return (request.path or ""):find(API_ENDPOINT, 1, true) ~= nil
 end
 
---- Only the requests the sweep sent to the scanned target.
+--; Only the requests the sweep sent to the scanned target.
 local function sweep_requests(http)
   local out = {}
   for _, request in ipairs(http.requests) do
@@ -65,10 +67,11 @@ local function sweep_requests(http)
   return out
 end
 
---- Answer the API, and let `reply` answer everything the sweep asks for.
+--; Answer the API, and let `reply` answer everything the sweep asks for.
 --
 -- The API has to be answered even where a case asserts nothing about it: an
--- unanswered request spends the whole retry budget, and the retry budget sleeps.
+-- unanswered request spends the whole retry budget, and the retry budget
+-- sleeps.
 local function serve(http, reply)
   http.handler = function(request, index)
     if is_api(request) then
@@ -78,16 +81,16 @@ local function serve(http, reply)
   end
 end
 
---- Answer every swept path with the same response.
+--; Answer every swept path with the same response.
 local function always(http, opts)
   serve(http, function() return t.response(opts) end)
 end
 
---- Load the merged script with the sweep turned on for this case.
+--; Load the merged script with the sweep turned on for this case.
 --
--- Hermetic by construction: t.load_vulners fakes os and io, so no case can pick
--- up the developer's API token from the environment or from the key file under
--- $HOME, and run keyed on one machine and free on another.
+-- Hermetic by construction: t.load_vulners fakes os and io, so no case can
+-- pick up the developer's API token from the environment or from the key file
+-- under $HOME, and run keyed on one machine and free on another.
 local function load(opts)
   opts = opts or {}
   return t.load_vulners({
@@ -99,7 +102,7 @@ local function load(opts)
   })
 end
 
---- The path a reported group says its CPE was found on.
+--; The path a reported group says its CPE was found on.
 local function found_on(plain, cpe)
   local group = plain and plain[cpe]
   t.is_true(group and group[1], "nothing was reported under " .. cpe)
@@ -124,9 +127,9 @@ suite[#suite + 1] = {
   name = "a service nmap named as something else is not swept",
   fn = function()
     -- The portrule is deliberately wider than the sweep: a versioned SSH or
-    -- MySQL port is worth a CPE lookup and must not be worth 939 HTTP requests -
-    -- measured at roughly 494 requests per port on the old 125-path list once
-    -- the retry rounds are counted.
+    -- MySQL port is worth a CPE lookup and must not be worth 939 HTTP requests
+    -- - measured at roughly 494 requests per port on the old 125-path list
+    -- once the retry rounds are counted.
     --
     -- Port 8000, not 22, and that is the whole case. shortport.http is "port
     -- number OR service name", and 8000 is one of the eleven numbers, so the
@@ -134,7 +137,8 @@ suite[#suite + 1] = {
     -- stop the sweep. Written against port 22 - as it was - shortport.http is
     -- false on its own and the case passes with the gate deleted.
     local env, http = load({paths = {"/never-swept"}})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     local queued = 0
     local pipeline_add = http.pipeline_add
@@ -172,7 +176,8 @@ suite[#suite + 1] = {
     -- refused both would be indistinguishable in the case above and would have
     -- switched the sweep off for the ports it exists for.
     local env, http = load({paths = ONE_PATH})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     local host = t.host()
     env.action(host, t.port({number = 8000, service = "http", name = "http"}))
@@ -186,11 +191,12 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a port with no service name at all is swept",
   fn = function()
-    -- The other edge of the same gate: nmap names nothing when -sV was not run,
-    -- and "nmap did not say" is not "nmap said it is not HTTP". Reading the two
-    -- alike would switch the sweep off for every scan without -sV.
+    -- The other edge of the same gate: nmap names nothing when -sV was not
+    -- run, and "nmap did not say" is not "nmap said it is not HTTP". Reading
+    -- the two alike would switch the sweep off for every scan without -sV.
     local env, http = load({paths = ONE_PATH})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     local host = t.host()
     env.action(host, t.port({number = 80, service = false, version = false}))
@@ -203,9 +209,11 @@ suite[#suite + 1] = {
   name = "finds a CPE in a response header",
   fn = function()
     local env, http = load({paths = ONE_PATH})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
-    local host, port = t.host(), t.port({product = "nginx", version = "1.13.4"})
+    local host, port = t.host(), t.port({product = "nginx",
+      version = "1.13.4"})
     local plain = t.collect_output(env.action(host, port))
 
     t.contains(host.registry.vulners_cpe[80], NGINX)
@@ -222,7 +230,8 @@ suite[#suite + 1] = {
     always(http, {
       status = 200,
       header = {["Server"] = "unknown"},
-      body = '<span id="information" class="header_addl_info">version 5.0.4</span>',
+      body = '<span id="information" class="header_addl_info">version ' ..
+        '5.0.4</span>',
     })
 
     local host, port = t.host(), t.port()
@@ -240,11 +249,12 @@ suite[#suite + 1] = {
   fn = function()
     -- nselib/http.lua treats an oversized body as an ERROR rather than a
     -- truncation: without truncated_ok it returns nil and drops the response
-    -- whole, headers included, so the path looks unanswered and is re-queued for
-    -- every round - four fetches of a large page and zero matches, which is
-    -- worse than not capping at all.
+    -- whole, headers included, so the path looks unanswered and is re-queued
+    -- for every round - four fetches of a large page and zero matches, which
+    -- is worse than not capping at all.
     local env, http = load({paths = ONE_PATH})
-    local marker = '<span id="information" class="header_addl_info">version 5.0.4</span>'
+    local marker = '<span id="information" ' ..
+      'class="header_addl_info">version 5.0.4</span>'
 
     serve(http, function()
       local body = marker .. string.rep("x", 131072 - #marker)
@@ -280,7 +290,8 @@ suite[#suite + 1] = {
   fn = function()
     local nmap = t.nmap_double()
     local env, http = load({paths = ONE_PATH, nmap = nmap})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     local host, port = t.host(), t.port()
     env.action(host, port)
@@ -290,8 +301,8 @@ suite[#suite + 1] = {
     t.contains(port.version.cpe, NGINX,
       "the CPE must also reach the port version table")
     -- The second write is the externally visible one: it is what puts a
-    -- header-only identity like cpe:/a:php:php:5.6.38 into the <service> element
-    -- of the report, which nmap's own probe cannot produce at all.
+    -- header-only identity like cpe:/a:php:php:5.6.38 into the <service>
+    -- element of the report, which nmap's own probe cannot produce at all.
     t.is_true(#nmap.set_port_version_calls > 0,
       "the port version must be published, or the <service> element loses it")
   end,
@@ -304,8 +315,8 @@ suite[#suite + 1] = {
     always(http, {status = 200, header = {["Server"] = "totally-unknown"},
       body = "<html>nothing to see</html>"})
 
-    -- The keyless notice belongs to the postrule, not to a port, so a port with
-    -- nothing to say still says nothing.
+    -- The keyless notice belongs to the postrule, not to a port, so a port
+    -- with nothing to say still says nothing.
     t.is_nil(env.action(t.host(), t.port()), "no match must produce no output")
   end,
 }
@@ -314,7 +325,8 @@ suite[#suite + 1] = {
   name = "does not repeat the same CPE found on several paths",
   fn = function()
     local env, http = load({paths = {"/", "/index.php"}})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     local host = t.host()
     env.action(host, t.port())
@@ -331,12 +343,15 @@ suite[#suite + 1] = {
   name = "requests every configured path",
   fn = function()
     local env, http = load({paths = {"/", "/index.php", "/about.html"}})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     env.action(t.host(), t.port())
 
     local seen = {}
-    for _, request in ipairs(sweep_requests(http)) do seen[request.path] = true end
+    for _, request in ipairs(sweep_requests(http)) do
+      seen[request.path] = true
+    end
     for _, path in ipairs({"/", "/index.php", "/about.html"}) do
       t.is_true(seen[path], "path " .. path .. " was never requested")
     end
@@ -369,18 +384,21 @@ suite[#suite + 1] = {
   name = "state is not carried over between hosts",
   fn = function()
     local env, http = load({paths = ONE_PATH})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     local first = t.host({ip = "10.0.0.1"})
     env.action(first, t.port())
 
-    -- nmap reuses a loaded script for every host it scans, and 2.0 additionally
-    -- caches API answers for the whole scan. The second host must get its own
-    -- findings rather than an empty result because the first one saw that CPE.
+    -- nmap reuses a loaded script for every host it scans, and 2.0
+    -- additionally caches API answers for the whole scan. The second host must
+    -- get its own findings rather than an empty result because the first one
+    -- saw that CPE.
     local second = t.host({ip = "10.0.0.2"})
     local plain = t.collect_output(env.action(second, t.port()))
 
-    t.equals(found_on(plain, NGINX), "/", "second host must get its own output")
+    t.equals(found_on(plain, NGINX), "/",
+      "second host must get its own output")
     t.contains(second.registry.vulners_cpe[80], NGINX,
       "second host must get its own registry entry")
   end,
@@ -396,7 +414,8 @@ suite[#suite + 1] = {
       paths = pathfile,
       files = {[pathfile] = "/fixture-one\n/fixture-two\n"},
     })
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     env.action(t.host(), t.port())
 
@@ -413,7 +432,8 @@ suite[#suite + 1] = {
   name = "falls back to the shipped path list when the argument is unusable",
   fn = function()
     local env, http = load({paths = 42})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     env.action(t.host(), t.port())
 
@@ -428,11 +448,12 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a port with no version table is swept without crashing",
   fn = function()
-    -- Under the union portrule shortport.http alone puts a port in scope, so the
-    -- sweep runs on a port nmap never versioned - and publishing has to build
-    -- the version table it is about to write into.
+    -- Under the union portrule shortport.http alone puts a port in scope, so
+    -- the sweep runs on a port nmap never versioned - and publishing has to
+    -- build the version table it is about to write into.
     local env, http = load({paths = ONE_PATH})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     local host, port = t.host(), t.port({version = false})
     t.no_error(function() return env.action(host, port) end,
@@ -448,12 +469,13 @@ suite[#suite + 1] = {
   name = "all paths travel in one pipeline",
   fn = function()
     local env, http = load({paths = {"/", "/index.php", "/about.html"}})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     env.action(t.host(), t.port())
 
-    -- Counted on the sweep alone: the CPE it finds costs one burp GET per nginx
-    -- vendor spelling, and those land in http.requests too.
+    -- Counted on the sweep alone: the CPE it finds costs one burp GET per
+    -- nginx vendor spelling, and those land in http.requests too.
     local swept = sweep_requests(http)
     t.length(swept, 3, "each path is requested exactly once")
     for _, request in ipairs(swept) do
@@ -495,7 +517,8 @@ suite[#suite + 1] = {
     -- the order carried - and made the budget keep an arbitrary slice.
     local given = {"/zeta", "/alpha", "/mid"}
     local env, http = load({paths = given})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     env.action(t.host(), t.port())
 
@@ -507,7 +530,7 @@ suite[#suite + 1] = {
   end,
 }
 
---- A catalogue whose path list is long enough to be cut by a budget.
+--; A catalogue whose path list is long enough to be cut by a budget.
 local function many_paths(count)
   local list = {}
   for index = 1, count do
@@ -516,7 +539,7 @@ local function many_paths(count)
   return list
 end
 
---- Sweep `count` catalogue paths at a faked -T level.
+--; Sweep `count` catalogue paths at a faked -T level.
 --
 -- @return how many requests went out, and the clock that counted the waiting
 local function with_timing(count, timing)
@@ -531,7 +554,8 @@ local function with_timing(count, timing)
       probes = {schema = 1, probes = {}},
     },
   })
-  always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+  always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+    body = ""})
   env.action(t.host(), t.port())
   return #sweep_requests(http), clock
 end
@@ -553,9 +577,9 @@ suite[#suite + 1] = {
   name = "how fast the sweep goes is what nmap's -T says",
   fn = function()
     -- Batches, with a wait between them. nmap's own templates delay between
-    -- PROBES - 15 s at -T1 - which applied per request to a thousand-path sweep
-    -- would take four hours, so the wait is per batch. The clock is counted,
-    -- not performed.
+    -- PROBES - 15 s at -T1 - which applied per request to a thousand-path
+    -- sweep would take four hours, so the wait is per batch. The clock is
+    -- counted, not performed.
     for _, case in ipairs({
       -- level, batch size, seconds between batches
       {0, 5, 2.0},
@@ -606,7 +630,8 @@ suite[#suite + 1] = {
       root = root, paths = mine,
       nmap = t.nmap_double({timing = 2}),
     })
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     env.action(t.host(), t.port())
 
@@ -620,9 +645,12 @@ suite[#suite + 1] = {
   name = "matches software listed in the shipped pattern set",
   fn = function()
     local cases = {
-      {header = {["X-Powered-By"] = "PHP/5.6.38"}, cpe = "cpe:/a:php:php:5.6.38"},
-      {header = {["X-Jenkins"] = "2.121.1"}, cpe = "cpe:/a:jenkins:jenkins:2.121.1"},
-      {header = {["Server"] = "lighttpd/1.4.45"}, cpe = "cpe:/a:lighttpd:lighttpd:1.4.45"},
+      {header = {["X-Powered-By"] = "PHP/5.6.38"},
+        cpe = "cpe:/a:php:php:5.6.38"},
+      {header = {["X-Jenkins"] = "2.121.1"},
+        cpe = "cpe:/a:jenkins:jenkins:2.121.1"},
+      {header = {["Server"] = "lighttpd/1.4.45"},
+        cpe = "cpe:/a:lighttpd:lighttpd:1.4.45"},
       {header = {["Server"] = "Apache/2.4.7 (Ubuntu)"},
        cpe = "cpe:/a:apache:http_server:2.4.7"},
     }
@@ -670,7 +698,8 @@ suite[#suite + 1] = {
           -- pass simply because nothing matched at all.
           ["Bounded, raw"] = {alias = "cpe:/a:oracle:iplanet_web_server",
                               channel = "raw", anchor = "sun-java-system",
-                              regex = "Sun%-Java%-System%-Web%-Server/([%d.]+)"},
+                              regex =
+                                "Sun%-Java%-System%-Web%-Server/([%d.]+)"},
         }},
         paths = {schema = 1, paths = ONE_PATH},
         probes = {schema = 1, probes = {}},
@@ -690,9 +719,11 @@ suite[#suite + 1] = {
     local host = t.host()
     env.action(host, t.port())
 
-    t.is_true(#(host.registry.vulners_cpe[80] or {}) > 0, "the version is still found")
+    t.is_true(#(host.registry.vulners_cpe[80] or {}) > 0,
+      "the version is still found")
     for _, cpe in ipairs(host.registry.vulners_cpe[80] or {}) do
-      t.is_nil(cpe:find("JSESSIONID", 1, true), "no cookie may reach a CPE: " .. cpe)
+      t.is_nil(cpe:find("JSESSIONID", 1, true),
+        "no cookie may reach a CPE: " .. cpe)
       t.is_nil(cpe:find("[\r\n]"), "no CPE may span two lines: " .. cpe)
     end
   end,
@@ -701,8 +732,8 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a pattern is matched in every header line, not only the first",
   fn = function()
-    -- A reverse proxy names the same product twice; the version behind the proxy
-    -- and the one in front of it are different findings.
+    -- A reverse proxy names the same product twice; the version behind the
+    -- proxy and the one in front of it are different findings.
     local env, http = load({paths = ONE_PATH})
     serve(http, function()
       return t.response({
@@ -759,10 +790,11 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a pipeline that answers nothing at all does not loop forever",
   fn = function()
-    -- More paths than the round budget: a sweep that gave up one path per round
-    -- would take six rounds, so the assertion witnesses the cap rather than the
-    -- list running out.
-    local env, http = load({paths = {"/one", "/two", "/three", "/four", "/five",
+    -- More paths than the round budget: a sweep that gave up one path per
+    -- round would take six rounds, so the assertion witnesses the cap rather
+    -- than the list running out.
+    local env, http = load({paths = {"/one", "/two", "/three", "/four",
+      "/five",
       "/six"}})
     serve(http, function() end)
 
@@ -772,7 +804,8 @@ suite[#suite + 1] = {
       return nil
     end
 
-    t.is_nil(env.action(t.host(), t.port()), "nothing was found, nothing is reported")
+    t.is_nil(env.action(t.host(), t.port()),
+      "nothing was found, nothing is reported")
     t.is_true(rounds <= 4, "the retry is bounded, got " .. rounds .. " rounds")
   end,
 }
@@ -786,7 +819,8 @@ suite[#suite + 1] = {
         return t.response({status = 200, rawheader = {"Server: nginx/1.13.4"},
           body = ""})
       end
-      return t.response({status = 302, header = {location = "/real"}, body = ""})
+      return t.response({status = 302, header = {location = "/real"},
+        body = ""})
     end)
 
     local host = t.host()
@@ -808,7 +842,8 @@ suite[#suite + 1] = {
         return t.response({status = 200, rawheader = {"Server: nginx/1.13.4"},
           body = ""})
       end
-      return t.response({status = 301, header = {location = "/real"}, body = ""})
+      return t.response({status = 301, header = {location = "/real"},
+        body = ""})
     end)
 
     env.action(t.host(), t.port())
@@ -823,8 +858,8 @@ suite[#suite + 1] = {
     -- The host check alone lets "https://<same host>:8443/admin" through, and
     -- the target is then fetched from the port being swept - so /admin is read
     -- off port 80 and its identity attributed to a page that never served it.
-    -- nmap's own redirect policy refuses a cross-port redirect for exactly this
-    -- reason (nselib/http.lua redirect_ok_rules, rule 3).
+    -- nmap's own redirect policy refuses a cross-port redirect for exactly
+    -- this reason (nselib/http.lua redirect_ok_rules, rule 3).
     local env, http = load({paths = ONE_PATH})
     serve(http, function(request)
       if request.path == "/admin" then
@@ -871,7 +906,8 @@ suite[#suite + 1] = {
       paths = pathfile,
       files = {[pathfile] = "/one\r\n/two\r\n\r\nthree\r\n"},
     })
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     env.action(t.host(), t.port())
 
@@ -892,7 +928,8 @@ suite[#suite + 1] = {
     -- the catalogue's paths sends the scan where it was told not to go.
     local missing = testdir .. "/fixtures/no_such_paths_file.txt"
     local env, http = load({paths = missing, files = {}})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     env.action(t.host(), t.port())
 
@@ -910,7 +947,8 @@ suite[#suite + 1] = {
   name = "a CPE nmap already published is not added to the port a second time",
   fn = function()
     local env, http = load({paths = ONE_PATH})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     local host, port = t.host(), t.port({cpe = {NGINX}})
     env.action(host, port)
@@ -922,7 +960,8 @@ suite[#suite + 1] = {
     for _, cpe in ipairs(port.version.cpe) do
       if cpe == NGINX then count = count + 1 end
     end
-    t.equals(count, 1, "a duplicate <cpe> element makes every consumer count twice")
+    t.equals(count, 1,
+      "a duplicate <cpe> element makes every consumer count twice")
   end,
 }
 
@@ -930,16 +969,20 @@ suite[#suite + 1] = {
   name = "the site root is in the shipped path list",
   fn = function()
     -- Fifty of the shipped patterns fingerprint the HTML of a home page; the
-    -- list used to ask for everything except "/". "embedded" is how a case asks
-    -- for the shipped list, since the harness turns the sweep off by default -
-    -- an empty table now means what it says, which is "request nothing".
+    -- list used to ask for everything except "/". "embedded" is how a case
+    -- asks for the shipped list, since the harness turns the sweep off by
+    -- default - an empty table now means what it says, which is "request
+    -- nothing".
     local env, http = load({paths = "embedded"})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     env.action(t.host(), t.port())
 
     local asked = {}
-    for _, request in ipairs(sweep_requests(http)) do asked[request.path] = true end
+    for _, request in ipairs(sweep_requests(http)) do
+      asked[request.path] = true
+    end
     t.is_true(asked["/"], "the home page must be requested")
   end,
 }
@@ -951,12 +994,14 @@ suite[#suite + 1] = {
     -- again under every other open port of the host - nginx CVEs filed against
     -- the SSH service.
     local env, http = load({paths = ONE_PATH})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     local host = t.host()
     env.action(host, t.port({number = 80}))
 
-    t.is_true(host.registry.vulners_cpe[80] ~= nil, "the web port has its findings")
+    t.is_true(host.registry.vulners_cpe[80] ~= nil,
+      "the web port has its findings")
     t.is_nil(host.registry.vulners_cpe[22],
       "a port that was never fingerprinted must stay empty")
   end,
@@ -976,14 +1021,15 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "patterns are matched against the decoded body, not the compressed one",
+  name = "patterns are matched against the decoded body, not the " ..
+    "compressed one",
   fn = function()
-    -- nselib sets rawbody to the bytes that arrived and then replaces body with
-    -- the decoded ones, so on any server that compresses - the default for nginx
-    -- and Apache - reading rawbody means running 178 patterns over gzip. Every
-    -- body-derived fingerprint was dead there, silently, and the harness could
-    -- not show it because its response() left rawbody nil, a shape nselib never
-    -- produces.
+    -- nselib sets rawbody to the bytes that arrived and then replaces body
+    -- with the decoded ones, so on any server that compresses - the default
+    -- for nginx and Apache - reading rawbody means running 178 patterns over
+    -- gzip. Every body-derived fingerprint was dead there, silently, and the
+    -- harness could not show it because its response() left rawbody nil, a
+    -- shape nselib never produces.
     local page = [[<html><meta name="generator" content="WordPress 5.5.1"/></html>]]
     local env, http = t.load_vulners({root = root, paths = ONE_PATH})
     http.handler = function(req)
@@ -1006,7 +1052,8 @@ suite[#suite + 1] = {
     local host = t.host()
     env.action(host, t.port({product = "nginx", version = "1.13.4", cpe = {}}))
 
-    t.contains(host.registry.vulners_cpe[80], "cpe:/a:wordpress:wordpress:5.5.1",
+    t.contains(host.registry.vulners_cpe[80],
+      "cpe:/a:wordpress:wordpress:5.5.1",
       "the decoded body must be what the patterns see")
   end,
 }
@@ -1022,15 +1069,16 @@ suite[#suite + 1] = {
 -- page - but "send a request when in doubt" is how a safe script stops being
 -- one.
 
---- A body carrying Drupal's detector and no version anywhere.
+--; A body carrying Drupal's detector and no version anywhere.
 local DRUPAL_PAGE =
-  '<html><head><link rel="stylesheet" href="/sites/default/themes/x/style.css">' ..
+  '<html><head><link rel="stylesheet" ' ..
+    'href="/sites/default/themes/x/style.css">' ..
   "</head><body>hello</body></html>"
 
---- What /CHANGELOG.txt answers, with the version the probe is written to read.
+--; What /CHANGELOG.txt answers, with the version the probe is written to read.
 local DRUPAL_CHANGELOG = '<span class="site-version">9.4.5</span>'
 
---- Requests the sweep sent that are not one of the paths it was told to fetch.
+--; Requests the sweep sent that are not one of the paths it was told to fetch.
 local function probe_requests(http, swept)
   local out = {}
   for _, request in ipairs(sweep_requests(http)) do
@@ -1118,7 +1166,8 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "a page carrying every detector cannot make the scan knock on every door",
+  name = "a page carrying every detector cannot make the scan knock on " ..
+    "every door",
   fn = function()
     -- The count is the target's to choose otherwise: a page that carries the
     -- detector of every probe in the table would buy one request each, from a
@@ -1168,8 +1217,8 @@ suite[#suite + 1] = {
       if request.path == "/" then
         return t.response({status = 200, body = bait})
       end
-      -- Every probe path answers with a redirect to an https URL, which is what
-      -- makes nselib write the scheme back.
+      -- Every probe path answers with a redirect to an https URL, which is
+      -- what makes nselib write the scheme back.
       return t.response({status = 302, body = "",
         header = {location = "https://" .. t.host().ip .. "/moved"}})
     end)
@@ -1186,8 +1235,10 @@ suite[#suite + 1] = {
       "two products were detected, so two probes must have gone out")
 
     for _, request in ipairs(sweep_requests(http)) do
-      t.is_true(request.scheme == nil or request.scheme == "http", string.format(
-        "%s was requested over %s; a redirect in one probe must not change the "
+      t.is_true(request.scheme == nil or request.scheme == "http",
+        string.format(
+        "%s was requested over %s; a redirect in one probe must not " ..
+          "change the "
         .. "scheme of the next", request.path, tostring(request.scheme)))
     end
   end,
@@ -1198,10 +1249,10 @@ suite[#suite + 1] = {
   fn = function()
     -- Asserting only that two runs agree would measure nothing: `triggered` is
     -- keyed by integers, and Lua's per-process hash seeding disturbs string
-    -- keys, not integer ones - so a version of this case that compared two runs
-    -- to each other passed with the ordering removed entirely. What is worth
-    -- pinning is the order itself, against the table, so that a scan can be
-    -- reproduced and a diff of two reports means something.
+    -- keys, not integer ones - so a version of this case that compared two
+    -- runs to each other passed with the ordering removed entirely. What is
+    -- worth pinning is the order itself, against the table, so that a scan can
+    -- be reproduced and a diff of two reports means something.
     local env, http = load({paths = ONE_PATH})
     serve(http, function(request)
       if request.path == "/" then
@@ -1248,7 +1299,8 @@ suite[#suite + 1] = {
     local double = t.nmap_double()
     local env, http = t.load_vulners({root = root, paths = ONE_PATH,
                                       nmap = double})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     env.action(t.host(), t.port({service = "http", name = "http"}))
 
@@ -1262,11 +1314,13 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a service nmap only guessed from its ports file is still swept",
   fn = function()
-    -- 7080 is guessed "empowerid" and 8088 "radan-http" - names that are not in
-    -- LIKELY_HTTP_SERVICES - so reading the guess as a naming silently skipped
-    -- the sweep on two of the eleven ports shortport.http exists to admit.
+    -- 7080 is guessed "empowerid" and 8088 "radan-http" - names that are not
+    -- in LIKELY_HTTP_SERVICES - so reading the guess as a naming silently
+    -- skipped the sweep on two of the eleven ports shortport.http exists to
+    -- admit.
     local env, http = load({paths = ONE_PATH})
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     local host = t.host()
     env.action(host, t.port({number = 7080, service = "empowerid",
@@ -1290,11 +1344,13 @@ suite[#suite + 1] = {
       paths = pathfile,
       files = {[pathfile] = "/good\n/a b\n/car\rriage\n"},
     })
-    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"}, body = ""})
+    always(http, {status = 200, header = {["Server"] = "nginx/1.13.4"},
+      body = ""})
 
     env.action(t.host(), t.port())
 
-    t.length(sweep_requests(http), 1, "only the usable path may go on the wire")
+    t.length(sweep_requests(http), 1,
+      "only the usable path may go on the wire")
     t.equals(sweep_requests(http)[1].path, "/good")
   end,
 }
@@ -1302,17 +1358,18 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a probe reads a window around its anchor, not the whole body",
   fn = function()
-    -- The detector and the extractor both ran their downloaded pattern over the
-    -- WHOLE body, with the anchor as nothing but a prefilter - and a prefilter
-    -- does not help when the anchor IS the payload. Measured on the SHIPPED
-    -- Tomcat extractor against a body of "apache tomcat" repeated: 16 KB cost
-    -- 0.22 s, 32 KB 0.90 s, 64 KB 3.60 s. Quadratic, so the 128 KB the body cap
-    -- admits is about fourteen seconds of non-yielding matching with every
-    -- script in the scan stopped - and the target chooses the body.
+    -- The detector and the extractor both ran their downloaded pattern over
+    -- the WHOLE body, with the anchor as nothing but a prefilter - and a
+    -- prefilter does not help when the anchor IS the payload. Measured on the
+    -- SHIPPED Tomcat extractor against a body of "apache tomcat" repeated: 16
+    -- KB cost 0.22 s, 32 KB 0.90 s, 64 KB 3.60 s. Quadratic, so the 128 KB the
+    -- body cap admits is about fourteen seconds of non-yielding matching with
+    -- every script in the scan stopped - and the target chooses the body.
     --
     -- match_group was given this bound; the probe path was not. This pins it
     -- from both ends, as the fingerprint window case does: the extractor still
-    -- reads a version beside its anchor, and does not reach one parked past it.
+    -- reads a version beside its anchor, and does not reach one parked past
+    -- it.
     local function scan(probe_body)
       local env, http = t.load_vulners({
         root = root,
@@ -1353,7 +1410,8 @@ suite[#suite + 1] = {
     -- to let the lazy span cross all 8 KB of it.
     local far = scan("widget/" .. string.rep("x", 8000) .. "9.9.9")
     t.is_true(far == nil or far["cpe:/a:acme:widget:9.9.9"] == nil,
-      "and must not reach a match parked beyond the window; without that bound "
+      "and must not reach a match parked beyond the window; without that " ..
+        "bound "
       .. "one hostile body freezes every script in the scan")
   end,
 }

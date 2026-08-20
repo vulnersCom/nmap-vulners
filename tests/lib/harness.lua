@@ -1,9 +1,10 @@
 --- Test harness for the nmap-vulners NSE scripts.
 --
--- The scripts under test are ordinary Lua chunks that nmap loads with the
--- NSE libraries available through require(). Tests therefore run *inside*
--- nmap (see tests/run.nse), so json, stdnse, url and shortport are the real
--- implementations shipped with nmap - no re-implementation can drift from them.
+-- The scripts under test are ordinary Lua chunks that nmap loads with the NSE
+-- libraries available through require(). Tests therefore run *inside* nmap
+-- (see tests/run.nse), so json, stdnse, url and shortport are the real
+-- implementations shipped with nmap - no re-implementation can drift from
+-- them.
 --
 -- Only two things are faked:
 --   * "http"          - so no test ever touches the network
@@ -30,7 +31,7 @@ local function fail(msg, level)
 end
 M.fail = fail
 
---- Render any value as a stable, readable string for failure messages.
+--; Render any value as a stable, readable string for failure messages.
 local function repr(v, seen)
   local t = type(v)
   if t == "string" then return string.format("%q", v) end
@@ -53,20 +54,23 @@ M.repr = repr
 
 function M.is_true(value, msg)
   if not value then
-    fail(string.format("%s: expected truthy, got %s", msg or "is_true", repr(value)))
+    fail(string.format("%s: expected truthy, got %s", msg or "is_true",
+      repr(value)))
   end
   return value
 end
 
 function M.is_false(value, msg)
   if value then
-    fail(string.format("%s: expected falsy, got %s", msg or "is_false", repr(value)))
+    fail(string.format("%s: expected falsy, got %s", msg or "is_false",
+      repr(value)))
   end
 end
 
 function M.is_nil(value, msg)
   if value ~= nil then
-    fail(string.format("%s: expected nil, got %s", msg or "is_nil", repr(value)))
+    fail(string.format("%s: expected nil, got %s", msg or "is_nil",
+      repr(value)))
   end
 end
 
@@ -78,7 +82,7 @@ function M.equals(actual, expected, msg)
   return actual
 end
 
---- Recursive value comparison; metatables are ignored on purpose, the scripts
+--; Recursive value comparison; metatables are ignored on purpose, the scripts
 -- attach __tostring metatables to their result rows.
 local function deep_equal(a, b)
   if a == b then return true end
@@ -139,8 +143,11 @@ function M.no_error(fn, msg, ...)
   local results = table.pack(pcall(fn, ...))
   if not results[1] then
     local err = results[2]
-    if type(err) == "table" and err.harness_failure then err = err.harness_failure end
-    fail(string.format("%s: unexpected error: %s", msg or "no_error", tostring(err)))
+    if type(err) == "table" and err.harness_failure then
+      err = err.harness_failure
+    end
+    fail(string.format("%s: unexpected error: %s", msg or "no_error",
+      tostring(err)))
   end
   return table.unpack(results, 2, results.n)
 end
@@ -150,14 +157,16 @@ end
 function M.raises(fn, msg, ...)
   local ok, err = pcall(fn, ...)
   if ok then
-    fail(string.format("%s: expected an error, call succeeded", msg or "raises"))
+    fail(string.format("%s: expected an error, call succeeded",
+      msg or "raises"))
   end
   -- An assertion that fails INSIDE the body raises too, and this used to
   -- report that as the error it was hoping for - so any assertion nested in a
   -- raises() body was inert. M.no_error already unwraps this wrapper; the
   -- difference is that there it means failure and here it meant success.
   if type(err) == "table" and err.harness_failure then
-    fail(string.format("%s: the body failed an assertion instead of raising: %s",
+    fail(string.format("%s: the body failed an assertion instead of " ..
+      "raising: %s",
       msg or "raises", tostring(err.harness_failure)))
   end
   return err
@@ -184,12 +193,12 @@ function M.response(opts)
   opts = opts or {}
   -- Two things nselib does that this double has to do as well.
   --
-  -- Lowercased, because nselib does it unconditionally (http.lua:769,
-  -- name = string.lower(name)), so response.header in the field NEVER carries a
+  -- Lowercased, because nselib does it unconditionally (http.lua:769, name =
+  -- string.lower(name)), so response.header in the field NEVER carries a
   -- capital. A double that kept the fixture spelling let a case pass
-  -- {["Server"] = ...} and believe it exercised the hdr:server channel when the
-  -- match was really coming through raw - and it would equally have "proved" a
-  -- rule filed as hdr:Server, which is dead in every real scan.
+  -- {["Server"] = ...} and believe it exercised the hdr:server channel when
+  -- the match was really coming through raw - and it would equally have
+  -- "proved" a rule filed as hdr:Server, which is dead in every real scan.
   --
   -- Sorted, never pairs(). Lua seeds its string hash per process, so building
   -- these in table order gave a DIFFERENT raw channel on every nmap run: one
@@ -217,7 +226,8 @@ function M.response(opts)
   if not rawheader then
     rawheader = {}
     for _, name in ipairs(names) do
-      rawheader[#rawheader + 1] = string.format("%s: %s", name, opts.header[name])
+      rawheader[#rawheader + 1] = string.format("%s: %s", name,
+        opts.header[name])
     end
     -- The blank line that ends the header block. nselib splits the raw header
     -- on newlines, so the trailing empty element is always there.
@@ -225,19 +235,19 @@ function M.response(opts)
   end
   -- rawbody defaults to body, because that is the only shape nselib produces.
   -- nselib/http.lua sets rawbody to the UNDECODED bytes and then replaces body
-  -- with the decoded ones, so rawbody is ALWAYS present - while this double left
-  -- it nil unless a test asked for it. That let every case exercise a branch
-  -- production never takes, and hid a script that was matching its patterns
-  -- against gzip bytes on every server that compresses.
+  -- with the decoded ones, so rawbody is ALWAYS present - while this double
+  -- left it nil unless a test asked for it. That let every case exercise a
+  -- branch production never takes, and hid a script that was matching its
+  -- patterns against gzip bytes on every server that compresses.
   --
   -- Pass rawbody explicitly to model a compressed response: rawbody is what
-  -- arrived on the wire, body is what nmap decoded for the script.
-  -- A response nmap could not get is NOT a response with an empty body. nselib
-  -- builds it in http_error (http.lua:1208) and sets body = nil, rawbody = nil.
-  -- This double returned "" for both, so every "the server could not be
-  -- reached" case in the suite ran against a string - and an `or ""` dropped
-  -- anywhere on a failure path would stay green here while a real scan raised
-  -- and lost the port its entire result.
+  -- arrived on the wire, body is what nmap decoded for the script. A response
+  -- nmap could not get is NOT a response with an empty body. nselib builds it
+  -- in http_error (http.lua:1208) and sets body = nil, rawbody = nil. This
+  -- double returned "" for both, so every "the server could not be reached"
+  -- case in the suite ran against a string - and an `or ""` dropped anywhere
+  -- on a failure path would stay green here while a real scan raised and lost
+  -- the port its entire result.
   if opts.status == nil then
     return {
       status = nil,
@@ -274,8 +284,8 @@ function M.http_double()
 
   local function record(req)
     -- Snapshot rather than read back later: options is the CALLER's table and
-    -- the write-back below mutates it, so a recorded reference would show every
-    -- request carrying whatever the last one ended up with.
+    -- the write-back below mutates it, so a recorded reference would show
+    -- every request carrying whatever the last one ended up with.
     req.scheme = req.options and req.options.scheme
 
     double.requests[#double.requests + 1] = req
@@ -293,8 +303,10 @@ function M.http_double()
     -- against code that has it.
     local status = type(reply) == "table" and reply.status or nil
     if req.options and status and status >= 300 and status < 400 then
-      local location = reply.header and (reply.header.location or reply.header.Location)
-      local scheme = type(location) == "string" and location:match("^(%a[%w+.-]*)://")
+      local location = reply.header
+        and (reply.header.location or reply.header.Location)
+      local scheme = type(location) == "string"
+        and location:match("^(%a[%w+.-]*)://")
       if scheme then
         req.options.scheme = scheme:lower()
       end
@@ -462,9 +474,9 @@ function M.nmap_double(opts)
     registry = nmap.registry,
   }
 
-  -- The sweep asks nmap how aggressive this scan may be, and the answer decides
-  -- how much of the catalogue goes on the wire. Faked, because the real one
-  -- returns whatever -T the suite itself was run with.
+  -- The sweep asks nmap how aggressive this scan may be, and the answer
+  -- decides how much of the catalogue goes on the wire. Faked, because the
+  -- real one returns whatever -T the suite itself was run with.
   if opts.timing ~= nil then
     function double.timing_level()
       return opts.timing
@@ -505,10 +517,10 @@ function M.os_double(vars, files)
     return vars[name]
   end
 
-  -- Nothing in the script renames or removes a file, and these are here to keep
-  -- it that way: the metatable falls through to the real os, so a regression
-  -- that started moving files would move the developer's, quietly, instead of
-  -- being recorded and asserted on.
+  -- Nothing in the script renames or removes a file, and these are here to
+  -- keep it that way: the metatable falls through to the real os, so a
+  -- regression that started moving files would move the developer's, quietly,
+  -- instead of being recorded and asserted on.
   if files then
     function double.remove(path)
       double.removed[#double.removed + 1] = path
@@ -598,7 +610,7 @@ end
 
 local script_arg_backup = nil
 
---- Replace nmap.registry.args for the duration of one test.
+--; Replace nmap.registry.args for the duration of one test.
 --
 -- Scripts read their arguments at different moments: vulners.nse reads
 -- mincvss while loading, http-vulners-regex.nse reads paths inside action().
@@ -611,10 +623,10 @@ local function set_script_args(args)
   nmap.registry.args = args or {}
 end
 
---- Registry keys the scripts under test use for scan-wide caches.
+--; Registry keys the scripts under test use for scan-wide caches.
 -- They survive between action() calls by design, so a test must start clean.
 -- One key, because 2.0 keeps everything scan-wide under it. The 1.x names are
--- gone with the scripts that wrote them, and host.registry.vulners_cpe is on the
+-- gone with the scripts that wrote them, and host.registry.vulners_cpe is on
 -- host table, which every case builds fresh anyway.
 local REGISTRY_KEYS = {"vulners"}
 
@@ -635,10 +647,10 @@ end
 --- Load an .nse script into an isolated environment.
 --
 -- @param path       path to the .nse file
--- @param opts       table:
---                     args    - script arguments, e.g. {["vulners.mincvss"] = "7"}
---                     modules - libraries to inject, e.g. {http = double}
---                     env     - extra globals to expose to the script
+-- @param opts       table: args    - script arguments,
+--                     e.g. {["vulners.mincvss"] = "7"} modules - libraries to
+--                     inject, e.g. {http = double} env     - extra globals to
+--                     expose to the script
 -- @return the script environment: env.action, env.portrule, ...
 function M.load_script(path, opts)
   opts = opts or {}
@@ -675,7 +687,9 @@ function M.load_script(path, opts)
   local chunk, load_err = loadfile(path, "t", env)
   if not chunk then
     M.restore_script_args()
-    for modname, entry in pairs(swapped) do package.loaded[modname] = entry.previous end
+    for modname, entry in pairs(swapped) do
+      package.loaded[modname] = entry.previous
+    end
     error(string.format("cannot load %s: %s", path, tostring(load_err)), 0)
   end
 
@@ -684,14 +698,18 @@ function M.load_script(path, opts)
   -- The script captured the doubles in its own locals during the chunk run,
   -- so package.loaded can go back to the real libraries immediately.
   -- Script arguments stay in place until the test case ends.
-  for modname, entry in pairs(swapped) do package.loaded[modname] = entry.previous end
+  for modname, entry in pairs(swapped) do
+    package.loaded[modname] = entry.previous
+  end
 
   if not ok then
-    error(string.format("error while loading %s: %s", path, tostring(run_err)), 0)
+    error(string.format("error while loading %s: %s", path,
+      tostring(run_err)), 0)
   end
 
   -- Now, and not before: nmap gives the running thread its SCRIPT_TYPE after
-  -- the chunk has been loaded, so this is where a case can read or override it.
+  -- the chunk has been loaded, so this is where a case can read or override
+  -- it.
   env.SCRIPT_TYPE = opts.script_type or "portrule"
 
   return env
@@ -707,8 +725,8 @@ end
 -- and how long for" into something a test can assert instead of something it
 -- endures.
 --
--- Everything else falls through to the real library, including output_table and
--- get_script_args, which the script needs to work at all.
+-- Everything else falls through to the real library, including output_table
+-- and get_script_args, which the script needs to work at all.
 function M.clock_double()
   local double = {sleeps = 0, slept = 0}
   function double.sleep(seconds)
@@ -718,11 +736,11 @@ function M.clock_double()
   return setmetatable(double, {__index = stdnse})
 end
 
---- The catalogue documents this repository publishes, read from disk.
+--; The catalogue documents this repository publishes, read from disk.
 --
 -- Cached across cases: the rule dictionary is 220 KB and 148 cases load a
--- script, so re-reading and re-parsing it every time turned a four-second suite
--- into a much longer one for no extra coverage.
+-- script, so re-reading and re-parsing it every time turned a four-second
+-- suite into a much longer one for no extra coverage.
 local published_cache = nil
 function M.published_catalog(root)
   if published_cache then
@@ -740,7 +758,8 @@ function M.published_catalog(root)
     handle:close()
     local ok, document = json.parse(text)
     if not ok then
-      error({harness_failure = "catalog/" .. kind .. ".json is not valid JSON"})
+      error({harness_failure = "catalog/" .. kind .. ".json is not valid " ..
+        "JSON"})
     end
     documents[kind] = document
   end
@@ -756,11 +775,13 @@ end
 -- data it ships, which is the failure the readers exist to prevent.
 function M.give_catalog(env, documents)
   local shared = env._TEST.state()
-  local fingerprints, count = env._TEST.read_fingerprints(documents.fingerprints)
+  local fingerprints, count =
+    env._TEST.read_fingerprints(documents.fingerprints)
   local paths = env._TEST.read_paths(documents.paths)
 
   if fingerprints == nil or paths == nil then
-    error({harness_failure = "the catalogue handed to the script was refused " ..
+    error({harness_failure = "the catalogue handed to the script was " ..
+      "refused " ..
       "by its own readers"})
   end
 
@@ -819,8 +840,8 @@ function M.load_vulners(opts)
   if args["vulners.paths"] == nil then
     -- The sentinel "embedded" leaves the argument unset, which is how a case
     -- asks for the shipped path list. An empty table used to mean that by
-    -- accident; it now means what it says - request nothing - so the intent has
-    -- to be spelled out.
+    -- accident; it now means what it says - request nothing - so the intent
+    -- has to be spelled out.
     if opts.paths ~= "embedded" then
       args["vulners.paths"] = opts.paths or "none"
     end

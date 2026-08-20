@@ -420,7 +420,7 @@ A scan of a network asks the API far less than it looks:
 ## Development
 
 The tests, the hygiene gate and `CONTRIBUTING.md` are in the git repository
-only; the release archive ships the scripts and their data. Seven gates, all
+only; the release archive ships the scripts and their data. Eight gates, all
 offline except where noted, and CI runs exactly these:
 
 ```sh
@@ -431,17 +431,23 @@ python3 tools/catalog.py --check
 python3 tools/xml_contract.py --selftest
 python3 tools/fingerprints/selftest.py
 python3 tools/catalog_diff.py --selftest
+python3 tools/nmap_style.py
 ```
 
-270 unit cases run inside nmap against the real NSE libraries; 60 end-to-end
+270 unit cases run inside nmap against the real NSE libraries; 64 end-to-end
 cases drive the real nmap binary against a local web server and a stand-in
 Vulners API that enforces what the real one enforces; the hygiene gate keeps
 secrets, scan output and editor clutter out of the tree and refuses a global
 read that NSE would turn into a lost result; and the last four hold the data and
 the tools that publish it - the catalogue's shape, the XML contract every
 importer reads, the pattern translator, and the gate that decides a rebuild is
-safe to publish. `python3 tests/e2e/run_e2e.py --live` adds checks against the
-real service. See [CONTRIBUTING.md](CONTRIBUTING.md).
+safe to publish. The last one holds the whole repository to
+[Nmap's own Code Standards](https://secwiki.org/w/Nmap/Code_Standards), which
+`HACKING` names as the authority for a script that wants to live in nmap's
+tree: no tabs, no trailing whitespace, lines under 80 columns, no semicolons,
+private NSEdoc opening with `--;`, PEP 8 for the Python.
+`python3 tests/e2e/run_e2e.py --live` adds checks against the real service.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## FAQ
 

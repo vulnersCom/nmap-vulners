@@ -2,19 +2,21 @@
 --
 -- This suite owns one question: what does a key-less run ask, of which
 -- endpoint, how often, and what does it remember. The CPEs a port carries turn
--- into GET /api/v3/burp/software/ lookups, the answers are cached for the whole
--- scan, filtered by mincvss and ranked; everything below exercises that through
--- action(), i.e. the way nmap calls it.
+-- into GET /api/v3/burp/software/ lookups, the answers are cached for the
+-- whole scan, filtered by mincvss and ranked; everything below exercises that
+-- through action(), i.e. the way nmap calls it.
 --
 -- Two things every case here has to state, because 2.0 made both variable:
 --
 --   * The MODE. A run that finds a token adds POST /api/v3/search/id/ to every
---     finding and can spend a credit on /api/v4/audit/smart, which changes both
---     the request count and the shape of the answer. load_free() below fakes os
+--     finding and can spend a credit on /api/v4/audit/smart, which changes
+--     both the request count and the shape of the answer. load_free() below
+--     fakes os
 --     and io, so no case can pick up the developer's real VULNERS_API_KEY or
 --     ~/.nmap/vulners.key: the suite is the free path on every machine.
 --   * The SWEEP. The merged action fingerprints every port shortport.http
---     accepts, and the harness port defaults to 80/http, so a case that counted
+--     accepts, and the harness port defaults to 80/http, so a case that
+--     counted
 --     http.requests would be counting 125 sweep paths. The sweep is therefore
 --     off unless a case asks for it, and request counts select the API leg by
 --     its ENDPOINT - burp() below - never by its host: with a token, search/id
@@ -24,7 +26,7 @@ local t, testdir, root = ...
 
 local json = require "json"
 
---- Load the merged script on the free path, with the path sweep off.
+--; Load the merged script on the free path, with the path sweep off.
 --
 -- Named for the mode on purpose: a case reads "load_free()" and its reader
 -- knows which of the two request programmes is under test.
@@ -33,16 +35,17 @@ local function load_free(opts)
   return t.load_vulners({root = root, args = opts.args, clock = opts.clock})
 end
 
---- The requests that went to the lookup endpoint.
+--; The requests that went to the lookup endpoint.
 --
--- The discriminator is the path, not the host. Both the enrichment POST and the
--- billed audit call go to the same host as these, so a host filter would stop
--- telling free traffic from keyed traffic the moment a case gained a token.
+-- The discriminator is the path, not the host. Both the enrichment POST and
+-- the billed audit call go to the same host as these, so a host filter would
+-- stop telling free traffic from keyed traffic the moment a case gained a
+-- token.
 local function burp(http)
   return http.matching("/api/v3/burp/")
 end
 
---- One entry as the burp API returns it.
+--; One entry as the burp API returns it.
 local function vuln(opts)
   return {
     _source = {
@@ -55,26 +58,27 @@ local function vuln(opts)
   }
 end
 
---- A complete, successful API response body.
+--; A complete, successful API response body.
 local function api_body(vulns)
   return json.generate({result = "OK", data = {search = vulns}})
 end
 
---- Answer every request with the same body.
+--; Answer every request with the same body.
 local function answer(http, body, status)
   http.handler = function()
     return t.response({status = status or 200, body = body})
   end
 end
 
---- Extract the ids from a result list, in order.
+--; Extract the ids from a result list, in order.
 local function ids(rows)
   local out = {}
   for _, row in ipairs(rows or {}) do out[#out + 1] = row.id end
   return out
 end
 
---- The finding groups of a result, without the two scalar elems 2.0 opens with.
+--; The finding groups of a result, without the two scalar elems 2.0 opens
+--  with.
 --
 -- output.schema and output.mode are elements of the same table as the CPE
 -- groups, so "how many things were reported" has to skip them.
@@ -86,7 +90,7 @@ local function group_keys(order)
   return keys
 end
 
---- The rendered line that mentions a given id, from action's second value.
+--; The rendered line that mentions a given id, from action's second value.
 local function line_with(text, needle)
   for line in tostring(text or ""):gmatch("[^\n]+") do
     if line:find(needle, 1, true) then return line end
@@ -138,9 +142,12 @@ suite[#suite + 1] = {
     local request = lookups[1]
     t.equals(request.host, "vulners.com", "the default API host is used")
     t.equals(request.port, 443, "the default API port is used")
-    t.matches(request.path, "^/api/v3/burp/software/%?", "the burp endpoint is used")
-    t.matches(request.path, "type=cpe", "the request must be typed as a CPE lookup")
-    t.matches(request.path, "version=9%.8%.2", "the version goes into the query")
+    t.matches(request.path, "^/api/v3/burp/software/%?",
+      "the burp endpoint is used")
+    t.matches(request.path, "type=cpe",
+      "the request must be typed as a CPE lookup")
+    t.matches(request.path, "version=9%.8%.2",
+      "the version goes into the query")
     t.matches(request.path, "software=cpe:/a:isc:bind:9%.8%.2",
       "the CPE goes into the query exactly as it is")
   end,
@@ -178,7 +185,8 @@ suite[#suite + 1] = {
 
     -- A version banner is attacker-controlled text; it must not be able to add
     -- a query argument of its own or break the request line.
-    local port = t.port({product = "Foo & Bar", version = "1.0 beta", cpe = {CPE}})
+    local port = t.port({product = "Foo & Bar", version = "1.0 beta",
+      cpe = {CPE}})
     env.action(t.host(), port)
 
     -- The product+version leg only exists on the free path: with a token, an
@@ -191,10 +199,12 @@ suite[#suite + 1] = {
     t.is_nil(software[1].options.header["X-Api-Key"],
       "and it carries no key: the burp endpoint is never authenticated")
     local path = software[1].path
-    t.matches(path, "software=Foo%%20%%26%%20Bar", "space and ampersand are escaped")
+    t.matches(path, "software=Foo%%20%%26%%20Bar",
+      "space and ampersand are escaped")
     t.is_nil(path:find("+", 1, true),
       "a plus would be read back as a space, so it is escaped too")
-    t.matches(path, "version=1%.0%%20beta", "the version keeps its own argument")
+    t.matches(path, "version=1%.0%%20beta",
+      "the version keeps its own argument")
     t.length(t.split_query(path), 3, "exactly three query arguments are sent")
   end,
 }
@@ -223,19 +233,21 @@ suite[#suite + 1] = {
     local port = t.port({version = "9.8.2", cpe = {CPE}})
     t.is_nil(env.action(t.host(), port), "an unreachable API yields no output")
     t.is_true(#burp(http) > 1,
-      "a single failed attempt must not be the end of it: the retry budget is spent here")
+      "a single failed attempt must not be the end of it: the retry " ..
+        "budget is spent here")
   end,
 }
 
 -- -------------------------------------------------------------------- output
 
 suite[#suite + 1] = {
-  name = "sorts vulnerabilities by CVSS within one ranking bucket, highest first",
+  name = "sorts vulnerabilities by CVSS within one ranking bucket, " ..
+    "highest first",
   fn = function()
     -- 2.0 ranks by exploitability first: KEV, then an active SSVC decision,
     -- then a known exploit, then EPSS, and only inside one of those buckets by
-    -- CVSS. All three fixtures are plain unexploited CVEs with nothing the free
-    -- endpoint could rank them by, so they share the last bucket and the
+    -- CVSS. All three fixtures are plain unexploited CVEs with nothing the
+    -- free endpoint could rank them by, so they share the last bucket and the
     -- tie-break - CVSS, descending - is what this case witnesses.
     local env, http = load_free()
     answer(http, api_body({
@@ -244,11 +256,13 @@ suite[#suite + 1] = {
       vuln({id = "CVE-2015-5986", cvss = 7.1}),
     }))
 
-    local output = env.action(t.host(), t.port({version = "9.8.2", cpe = {CPE}}))
+    local output = env.action(t.host(), t.port({version = "9.8.2",
+      cpe = {CPE}}))
     local plain = t.collect_output(output)
 
     t.equals(plain.mode, "free", "the run must have taken the free path")
-    t.same(ids(plain[CPE]), {"CVE-2012-1667", "CVE-2015-5986", "CVE-2010-3615"})
+    t.same(ids(plain[CPE]), {"CVE-2012-1667", "CVE-2015-5986",
+      "CVE-2010-3615"})
   end,
 }
 
@@ -261,10 +275,12 @@ suite[#suite + 1] = {
       vuln({id = "CVE-2012-1667", cvss = 8.5}),
     }))
 
-    local output = env.action(t.host(), t.port({version = "9.8.2", cpe = {CPE}}))
+    local output = env.action(t.host(), t.port({version = "9.8.2",
+      cpe = {CPE}}))
     local plain = t.collect_output(output)
 
-    t.same(ids(plain[CPE]), {"CVE-2012-1667"}, "only the 8.5 entry passes mincvss=7.0")
+    t.same(ids(plain[CPE]), {"CVE-2012-1667"},
+      "only the 8.5 entry passes mincvss=7.0")
   end,
 }
 
@@ -273,22 +289,25 @@ suite[#suite + 1] = {
   fn = function()
     local env, http = load_free()
     answer(http, api_body({
-      vuln({id = "EDB-ID:45233", type = "exploitdb", family = "exploit", cvss = 0}),
+      vuln({id = "EDB-ID:45233", type = "exploitdb", family = "exploit",
+        cvss = 0}),
     }))
 
-    local output, text = env.action(t.host(), t.port({version = "9.8.2", cpe = {CPE}}))
+    local output, text = env.action(t.host(), t.port({version = "9.8.2",
+      cpe = {CPE}}))
     local plain = t.collect_output(output)
     local row = plain[CPE][1]
 
     -- What makes something an exploit is bulletinFamily, and nothing else:
     -- the 1.x list of exploit types is gone.
-    t.equals(row.is_exploit, "true", "bulletinFamily=exploit marks the row as an exploit")
+    t.equals(row.is_exploit, "true",
+      "bulletinFamily=exploit marks the row as an exploit")
     t.equals(row.href, "https://vulners.com/exploitdb/EDB-ID:45233",
       "the row carries the vulners page as a structured element")
 
-    -- The rendered marker is no longer the word EXPLOIT next to the line: it is
-    -- a fixed-width token in the FLAGS column of the aligned table that action
-    -- returns as its second value.
+    -- The rendered marker is no longer the word EXPLOIT next to the line: it
+    -- is a fixed-width token in the FLAGS column of the aligned table that
+    -- action returns as its second value.
     t.matches(text, "FLAGS", "the rendered table must have a FLAGS column")
     local line = line_with(text, "EDB-ID:45233")
     t.is_true(line, "the exploit must appear in the rendered table")
@@ -305,15 +324,18 @@ suite[#suite + 1] = {
     -- would survive the threshold whether the carve-out existed or not.
     local env, http = load_free({args = {["vulners.mincvss"] = "9.0"}})
     answer(http, api_body({
-      vuln({id = "EDB-ID:45233", type = "exploitdb", family = "exploit", cvss = 5.0}),
+      vuln({id = "EDB-ID:45233", type = "exploitdb", family = "exploit",
+        cvss = 5.0}),
       vuln({id = "CVE-2010-3615", cvss = 5.0}),
     }))
 
-    local output = env.action(t.host(), t.port({version = "9.8.2", cpe = {CPE}}))
+    local output = env.action(t.host(), t.port({version = "9.8.2",
+      cpe = {CPE}}))
     local plain = t.collect_output(output)
 
     t.same(ids(plain[CPE]), {"EDB-ID:45233"},
-      "a working exploit is worth showing regardless, the equally scored CVE is not")
+      "a working exploit is worth showing regardless, the equally scored " ..
+        "CVE is not")
   end,
 }
 
@@ -321,7 +343,8 @@ suite[#suite + 1] = {
   name = "the cvss version is reported when the API sends one",
   fn = function()
     local env, http = load_free()
-    answer(http, api_body({vuln({id = "CVE-2012-1667", cvss = 8.5, cvss_version = "3.1"})}))
+    answer(http, api_body({vuln({id = "CVE-2012-1667", cvss = 8.5,
+      cvss_version = "3.1"})}))
 
     local output, text = env.action(t.host(),
       t.port({version = "9.8.2", cpe = {CPE}}))
@@ -355,7 +378,8 @@ suite[#suite + 1] = {
     -- unscored row has no score to misread as 0.0 - but it still has a
     -- severity, because consumers index that key unguarded.
     t.is_nil(row.cvss, "an unscored row must not carry a score element")
-    t.equals(row.severity, "Unknown", "and must still say what it does not know")
+    t.equals(row.severity, "Unknown",
+      "and must still say what it does not know")
   end,
 }
 
@@ -382,13 +406,16 @@ suite[#suite + 1] = {
     local env, http = load_free()
     answer(http, api_body({vuln({id = "CVE-2012-1667", cvss = 8.5})}))
 
-    env.action(t.host({ip = "10.0.0.1"}), t.port({version = "9.8.2", cpe = {CPE}}))
+    env.action(t.host({ip = "10.0.0.1"}), t.port({version = "9.8.2",
+      cpe = {CPE}}))
     local after_first = #burp(http)
 
     local second = t.collect_output(
-      env.action(t.host({ip = "10.0.0.2"}), t.port({version = "9.8.2", cpe = {CPE}})))
+      env.action(t.host({ip = "10.0.0.2"}), t.port({version = "9.8.2",
+        cpe = {CPE}})))
 
-    t.equals(#burp(http), after_first, "the second host is served from the cache")
+    t.equals(#burp(http), after_first,
+      "the second host is served from the cache")
     t.is_true(second[CPE], "and still gets the answer")
   end,
 }
@@ -420,7 +447,8 @@ suite[#suite + 1] = {
     local plain, order = t.collect_output(output)
 
     t.length(burp(http2), 3, "one product means one fan-out, not two")
-    t.length(group_keys(order), 1, "and one entry in the report, not the same product twice")
+    t.length(group_keys(order), 1,
+      "and one entry in the report, not the same product twice")
     t.same(ids(plain[group_keys(order)[1]]), {"CVE-2018-16843"})
   end,
 }
@@ -454,10 +482,10 @@ suite[#suite + 1] = {
       "the lookup must have been made: otherwise this case passes on silence")
 
     -- The dangerous shape is not HTML. A failed parse hands back an error
-    -- STRING, and indexing a string in Lua is legal and yields nil, so the page
-    -- above never reaches the envelope's type guard. A body that is valid JSON
-    -- but not an object hands back a NUMBER, and indexing that raises - which
-    -- is the branch worth pinning.
+    -- STRING, and indexing a string in Lua is legal and yields nil, so the
+    -- page above never reaches the envelope's type guard. A body that is valid
+    -- JSON but not an object hands back a NUMBER, and indexing that raises -
+    -- which is the branch worth pinning.
     t.reset_registry()
     local env2, http2 = load_free()
     answer(http2, "12345")
@@ -500,11 +528,13 @@ suite[#suite + 1] = {
     local env, http = load_free()
     http.handler = function() return nil end
 
-    env.action(t.host({ip = "10.0.0.1"}), t.port({version = "9.8.2", cpe = {CPE}}))
+    env.action(t.host({ip = "10.0.0.1"}), t.port({version = "9.8.2",
+      cpe = {CPE}}))
     local attempts = #burp(http)
     t.is_true(attempts > 1, "the first host must have tried, and retried")
 
-    env.action(t.host({ip = "10.0.0.2"}), t.port({version = "9.8.2", cpe = {CPE}}))
+    env.action(t.host({ip = "10.0.0.2"}), t.port({version = "9.8.2",
+      cpe = {CPE}}))
     t.equals(#burp(http), attempts,
       "after giving up, the rest of the scan must not keep trying")
   end,
@@ -518,7 +548,8 @@ suite[#suite + 1] = {
     http.handler = function()
       if failing then
         return t.response({status = 200,
-          body = json.generate({result = "error", data = {error = "quota exceeded"}})})
+          body = json.generate({result = "error",
+            data = {error = "quota exceeded"}})})
       end
       return t.response({status = 200,
         body = api_body({vuln({id = "CVE-2012-1667", cvss = 8.5})})})
@@ -534,7 +565,8 @@ suite[#suite + 1] = {
     -- status alone would file it as "this software is clean" and report every
     -- later host in the scan clean along with it.
     failing = false
-    local plain = t.collect_output(env.action(t.host({ip = "127.0.0.2"}), port))
+    local plain = t.collect_output(env.action(t.host({ip = "127.0.0.2"}),
+      port))
     t.same(ids(plain[CPE]), {"CVE-2012-1667"},
       "and it is not remembered as an empty answer either")
   end,
@@ -578,7 +610,8 @@ suite[#suite + 1] = {
     end
 
     local cpe = "cpe:/a:isc:bind:9.8.2rc1"
-    local output = env.action(t.host(), t.port({version = "9.8.2", cpe = {cpe}}))
+    local output = env.action(t.host(), t.port({version = "9.8.2",
+      cpe = {cpe}}))
 
     t.is_true(#burp(http) >= 2,
       "an empty answer for a versioned CPE must be retried in another shape")
@@ -586,7 +619,8 @@ suite[#suite + 1] = {
       "and the other shape is the one with the update part split off")
 
     local plain = t.collect_output(output)
-    t.same(ids(plain[cpe]), {"CVE-2012-1667"}, "the retry result must be reported")
+    t.same(ids(plain[cpe]), {"CVE-2012-1667"},
+      "the retry result must be reported")
   end,
 }
 
@@ -613,7 +647,8 @@ suite[#suite + 1] = {
     t.equals(plain.mode, "free", "the run must have taken the free path")
     t.is_true(plain["ISC BIND 9.8.2"],
       "the software lookup is keyed by product and version")
-    t.is_true(#http.matching("type=software") > 0, "a software lookup must be issued")
+    t.is_true(#http.matching("type=software") > 0,
+      "a software lookup must be issued")
   end,
 }
 
@@ -632,7 +667,8 @@ suite[#suite + 1] = {
     local plain = t.collect_output(output)
 
     t.is_true(plain[registry_cpe],
-      "CPEs another script discovered must be looked up as well, under their own key")
+      "CPEs another script discovered must be looked up as well, under " ..
+        "their own key")
   end,
 }
 
@@ -704,7 +740,8 @@ suite[#suite + 1] = {
     t.is_nil(env.action(t.host(), port), "the failing lookup reports nothing")
 
     fail = false
-    local plain = t.collect_output(env.action(t.host({ip = "127.0.0.2"}), port))
+    local plain = t.collect_output(env.action(t.host({ip = "127.0.0.2"}),
+      port))
     t.same(ids(plain[CPE]), {"CVE-2012-1667"},
       "the next host asks again and gets the answer")
   end,
@@ -759,7 +796,8 @@ suite[#suite + 1] = {
     t.length(lookups, 1, "one CPE, one lookup, nothing else on that endpoint")
     t.equals(lookups[1].path,
       "/api/v3/burp/software/?software=" .. CPE .. "&version=9.8.2&type=cpe",
-      "the query must match what the installed plugin sends, argument for argument")
+      "the query must match what the installed plugin sends, argument for " ..
+        "argument")
   end,
 }
 
@@ -772,8 +810,10 @@ suite[#suite + 1] = {
     answer(http, api_body({vuln({id = "CVE-2018-16843", cvss = 7.5})}))
 
     -- portrule lets this through: no version table at all, but another script
-    -- left CPEs for this host, and publish_cpes must not write through the nil.
-    local host = t.host({registry = {vulners_cpe = {[80] = {"cpe:/a:nginx:nginx:1.13.4"}}}})
+    -- left CPEs for this host, and publish_cpes must not write through the
+    -- nil.
+    local host = t.host(
+      {registry = {vulners_cpe = {[80] = {"cpe:/a:nginx:nginx:1.13.4"}}}})
     local port = t.port({version = false})
 
     local output = t.no_error(function() return env.action(host, port) end,
@@ -799,12 +839,12 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "every malformed answer is survived, and none is remembered as clean",
   fn = function()
-    -- Every byte below came from an HTTP response, so every one of these shapes
-    -- is something a hostile or malfunctioning service can send. Two things are
-    -- asserted for each: the port's whole result is not lost to a raise, and an
-    -- answer that is not an authoritative "nothing known" is NOT cached - the
-    -- CDN caches error bodies for four hours, so remembering one as clean would
-    -- silence the software for the rest of the scan.
+    -- Every byte below came from an HTTP response, so every one of these
+    -- shapes is something a hostile or malfunctioning service can send. Two
+    -- things are asserted for each: the port's whole result is not lost to a
+    -- raise, and an answer that is not an authoritative "nothing known" is NOT
+    -- cached - the CDN caches error bodies for four hours, so remembering one
+    -- as clean would silence the software for the rest of the scan.
     local shapes = {
       {"a v3 error inside a 200",
        [[{"result":"error","data":{"error":"nope","errorCode":103}}]], false},
@@ -859,7 +899,8 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "waiting for a lookup somebody else holds is bounded, and then it asks anyway",
+  name = "waiting for a lookup somebody else holds is bounded, and then " ..
+    "it asks anyway",
   fn = function()
     -- Wall-clock waits are why this needs a counted clock: the bound is 30
     -- seconds, so a case that measured it honestly would take longer than
@@ -870,11 +911,13 @@ suite[#suite + 1] = {
 
     -- Somebody else claimed this identity and never finished.
     env._TEST.state().pending[CPE] = true
-    local result = env.action(t.host(), t.port({version = "9.8.2", cpe = {CPE}}))
+    local result = env.action(t.host(), t.port({version = "9.8.2",
+      cpe = {CPE}}))
 
-    -- One bound, not one per pass. The two-pass loop used to wait in both, so a
-    -- contended identity cost 60 seconds - and the nginx fan-out, which looks up
-    -- three spellings, turned that into three minutes on a single port.
+    -- One bound, not one per pass. The two-pass loop used to wait in both, so
+    -- a contended identity cost 60 seconds - and the nginx fan-out, which
+    -- looks up three spellings, turned that into three minutes on a single
+    -- port.
     t.is_true(clock.slept <= 31,
       string.format("the wait must be bounded once, slept %.1fs", clock.slept))
     t.is_true(clock.slept >= 29,
@@ -891,11 +934,13 @@ suite[#suite + 1] = {
     local clock = t.clock_double()
     local env, http = load_free({clock = clock})
     env._TEST.state().lookups[CPE] = {
-      rows = {{id = "CVE-2012-1667", type = "cve", cvss = 8.5, family = "NVD"}},
+      rows = {{id = "CVE-2012-1667", type = "cve", cvss = 8.5,
+        family = "NVD"}},
       explain = {search_cpe = CPE, matched_cpe = CPE},
     }
 
-    local result = env.action(t.host(), t.port({version = "9.8.2", cpe = {CPE}}))
+    local result = env.action(t.host(), t.port({version = "9.8.2",
+      cpe = {CPE}}))
 
     t.equals(clock.sleeps, 0, "a cached answer must not sleep")
     t.length(burp(http), 0, "nor ask again")
@@ -904,7 +949,8 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "a Retry-After longer than the cap stops the leg; a bare 5xx does not",
+  name = "a Retry-After longer than the cap stops the leg; a bare 5xx " ..
+    "does not",
   fn = function()
     -- The distinction matters. A bare 5xx can be one malformed identity
     -- upsetting the backend, so turning the leg off would report every later
@@ -921,7 +967,8 @@ suite[#suite + 1] = {
       local env, http = load_free({clock = clock})
       http.handler = function()
         return t.response({status = 503,
-                           header = case.header and {["retry-after"] = case.header} or {}})
+                           header = case.header
+                             and {["retry-after"] = case.header} or {}})
       end
 
       env.action(t.host(), t.port({product = "ISC BIND", version = "9.8.2",
@@ -934,7 +981,8 @@ suite[#suite + 1] = {
       t.is_nil(env._TEST.state().lookups[CPE],
         case.why .. ": a failure must not be remembered")
       t.is_true(clock.slept <= 130,
-        string.format("%s: slept %.1fs, which is too long to be a retry budget",
+        string.format("%s: slept %.1fs, which is too long to be a retry " ..
+          "budget",
           case.why, clock.slept))
     end
   end,
@@ -943,8 +991,8 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a hostile identity cannot inject into the request or bloat it",
   fn = function()
-    -- nmap builds CPEs out of banner text, so every one of these is something a
-    -- target can arrange to be handed to this script.
+    -- nmap builds CPEs out of banner text, so every one of these is something
+    -- a target can arrange to be handed to this script.
     local hostile = {
       {"a query separator", "cpe:/a:foo:foo:1.0&type=software"},
       {"an extra parameter", "cpe:/a:foo:foo:1.0&software=evil"},
@@ -957,9 +1005,9 @@ suite[#suite + 1] = {
       {"high bytes", "cpe:/a:foo:foo:1.0\226\128\156"},
       {"a hostile vsftpd banner",
        "cpe:/a:vsftpd:vsftpd:3.0.3%3A%2A%3Apwned_\\_%22quoted%22_%25s"},
-      -- Measured: a 4000-character version produced an 8 KB request line, which
-      -- most servers refuse and which puts 8 KB of the target's choosing into
-      -- the report as a group key.
+      -- Measured: a 4000-character version produced an 8 KB request line,
+      -- which most servers refuse and which puts 8 KB of the target's choosing
+      -- into the report as a group key.
       {"an absurdly long version", "cpe:/a:foo:foo:" .. string.rep("9", 4000)},
     }
 
@@ -984,9 +1032,12 @@ suite[#suite + 1] = {
         -- added, not one this script sent.
         t.is_true(parameters <= 3, string.format(
           "%s: %d query parameters in %s", label, parameters, path))
-        t.is_nil(path:find("[\r\n%z]"), label .. ": a control byte reached the path")
-        t.is_nil(path:find("[^\32-\126]"), label .. ": a non-ASCII byte reached the path")
-        t.is_nil(path:find("#"), label .. ": an unescaped fragment marker reached the path")
+        t.is_nil(path:find("[\r\n%z]"),
+          label .. ": a control byte reached the path")
+        t.is_nil(path:find("[^\32-\126]"),
+          label .. ": a non-ASCII byte reached the path")
+        t.is_nil(path:find("#"),
+          label .. ": an unescaped fragment marker reached the path")
 
         -- A bare * is the ANY wildcard: it would widen one lookup into "every
         -- vulnerability for this product", chosen by the target.
@@ -1012,7 +1063,8 @@ suite[#suite + 1] = {
     -- deleting the guard left all 254 green.
     local env, http = load_free({})
     answer(http, api_body({
-      vuln({id = "EDB-ID:1", type = "exploitdb", family = "exploit", cvss = 0}),
+      vuln({id = "EDB-ID:1", type = "exploitdb", family = "exploit",
+        cvss = 0}),
     }))
 
     local plain = t.collect_output(

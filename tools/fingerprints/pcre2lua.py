@@ -25,8 +25,8 @@ the documented extraction is dropped. See `verify.py`.
 import re
 
 # A pattern that needs more than this many alternatives is not worth importing:
-# the expansion costs more to match than the detection is worth, and in practice
-# such a pattern is a catch-all rather than a fingerprint.
+# the expansion costs more to match than the detection is worth, and in
+# practice such a pattern is a catch-all rather than a fingerprint.
 MAX_VARIANTS = 24
 
 # Above this, a bounded repeat is read as an unbounded one. `[\w.-]{1,512}` is
@@ -58,7 +58,7 @@ class Parser:
 
     Nodes are tuples:
         ('lit', ch)                     one literal character
-        ('class', body, negated)        a character class, body already Lua-ready
+        ('class', body, negated)        a class, body already Lua-ready
         ('any',)                        .
         ('group', [alt, ...], index)    index is the PCRE group number or None
         ('rep', node, lo, hi, lazy)     hi is None for unbounded
@@ -192,9 +192,9 @@ class Parser:
             if kind == ":":
                 self.take()
             elif kind in "iomsxu-":
-                # An inline flag group, (?i) or (?i:...). Only the whole-pattern
-                # form is handled, by the caller lifting it out before parsing;
-                # anything else changes semantics mid-pattern.
+                # An inline flag group, (?i) or (?i:...). Only the
+                # whole-pattern form is handled, by the caller lifting it out
+                # before parsing; anything else changes semantics mid-pattern.
                 raise Untranslatable("inline flags")
             elif kind == "P" and self.peek(1) == "<":
                 self.take()
@@ -277,7 +277,8 @@ class Parser:
                 # endpoint: measured, "[\x25-\x2f]" became "[%%-/]", which Lua
                 # reads as the three characters {%, -, /} rather than the
                 # eleven the range names. Spell such a range out instead.
-                if escape_in_class(low) != low or escape_in_class(upper) != upper:
+                if (escape_in_class(low) != low
+                        or escape_in_class(upper) != upper):
                     if ord(upper) < ord(low):
                         raise Untranslatable("reversed range")
                     if ord(upper) - ord(low) > MAX_SPELT_RANGE:
@@ -286,7 +287,8 @@ class Parser:
                         escape_in_class(chr(c))
                         for c in range(ord(low), ord(upper) + 1))))
                     continue
-                items.append(('set', escape_in_class(low) + "-" + escape_in_class(upper)))
+                items.append(('set',
+                    escape_in_class(low) + "-" + escape_in_class(upper)))
                 continue
             items.append(('ch', ch))
 
@@ -317,8 +319,8 @@ class Parser:
         """One escape inside [...], as ('ch', c) or ('set', lua_text).
 
         'ch' is returned only for something that may legally be a range
-        endpoint; a class shorthand like \\d may not, and saying so here is what
-        keeps [\\d-z] from being read as a range.
+        endpoint; a class shorthand like \\d may not, and saying so here is
+        what keeps [\\d-z] from being read as a range.
         """
         ch = self.take()
         # Inside a class the underscore can simply be added to the set. \W
@@ -331,7 +333,8 @@ class Parser:
 
         simple = CLASS_ESCAPES.get(ch)
         if simple is not None:
-            if simple.startswith("%") and len(simple) == 2 and simple[1].isalpha():
+            if (simple.startswith("%") and len(simple) == 2
+                    and simple[1].isalpha()):
                 return ('set', simple)
             if len(simple) == 1:
                 return ('ch', simple)
@@ -389,7 +392,8 @@ class Parser:
 
         klass = CLASS_ESCAPES.get(ch)
         if klass is not None:
-            if klass.startswith("%") and len(klass) == 2 and klass[1].isalpha():
+            if (klass.startswith("%") and len(klass) == 2
+                    and klass[1].isalpha()):
                 return ('class', klass, False)
             if ch in MULTI_CHAR_ESCAPES:
                 # A set, not a literal: emit it as a bracketed class so the
@@ -418,7 +422,8 @@ CLASS_ESCAPES = {
 # raise TypeError on a string of length 2. build.translated and probes._lua
 # catch only Untranslatable, so a single upstream rule containing \h or \v
 # aborted the entire weekly rebuild.
-MULTI_CHAR_ESCAPES = {ch for ch, value in CLASS_ESCAPES.items() if len(value) > 1}
+MULTI_CHAR_ESCAPES = {ch for ch,
+                      value in CLASS_ESCAPES.items() if len(value) > 1}
 
 
 def escape_in_class(ch):
@@ -448,8 +453,8 @@ def escape_literal(ch):
 def single_char(node):
     """The Lua spelling of a node that matches exactly one character, or None.
 
-    Only such a node can carry a Lua quantifier: Lua applies * + - ? to a single
-    character class, never to a group.
+    Only such a node can carry a Lua quantifier: Lua applies * + - ? to a
+    single character class, never to a group.
     """
     kind = node[0]
     if kind == 'lit':
@@ -461,7 +466,8 @@ def single_char(node):
         return "[^\r\n]"
     if kind == 'class':
         body, negated = node[1], node[2]
-        if not negated and len(body) == 2 and body[0] == "%" and body[1].isalpha():
+        if (not negated and len(body) == 2 and body[0] == "%"
+                and body[1].isalpha()):
             return body
         return "[" + ("^" if negated else "") + body + "]"
     if kind == 'group':
@@ -473,7 +479,8 @@ def single_char(node):
 
 
 def merge_alternation(node):
-    """`(?:a|b|\\d)` as a Lua class, when every branch is a single character."""
+    """`(?:a|b|\\d)` as a Lua class, when every branch is a single "
+        "character."""
     alts, index = node[1], node[2]
     if index is not None:
         # Merging would dissolve the parentheses the capture needs.
@@ -593,20 +600,23 @@ def expand(node, want):
                 pieces = expand(item, want)
                 combos = [a + b for a in combos for b in pieces]
                 if len(combos) > MAX_VARIANTS:
-                    raise Untranslatable("expansion exceeds %d variants" % MAX_VARIANTS)
+                    raise Untranslatable("expansion exceeds %d "
+                        "variants" % MAX_VARIANTS)
             out.extend(combos)
         if len(out) > MAX_VARIANTS:
-            raise Untranslatable("expansion exceeds %d variants" % MAX_VARIANTS)
+            raise Untranslatable("expansion exceeds %d "
+                "variants" % MAX_VARIANTS)
         if index is not None and index == want:
-            # \x04 and \x05 stand in for the capture parentheses so that a later
-            # pass can tell them from a literal ( the pattern happens to match.
+            # \x04 and \x05 stand in for the capture parentheses so that a
+            # later pass can tell them from a literal ( the pattern happens to
+            # match.
             out = ["\x04" + variant + "\x05" for variant in out]
         return out
 
     raise Untranslatable("unknown node %r" % (kind,))
 
 
-# ------------------------------------------------------------------- assembling
+# ------------------------------------------------------------------ assembling
 
 def assemble(raw, anchored_by_default):
     """Turn one expanded variant into a final Lua pattern.
@@ -639,9 +649,10 @@ def assemble(raw, anchored_by_default):
     # outside the set and the next is inside it, so \b becomes %f[%w] when a
     # word follows it and %f[%W] when one ends there. Which of the two is
     # decided by the next ATOM, not the next byte: after "Tomcat" the pattern
-    # continues "%-", whose first byte is the escape and whose atom is a hyphen.
-    # Reading the byte made \bTomcat\b(?:-...)? emit %f[%w] before a hyphen, a
-    # frontier that can never hold, and the rule matched nothing at all.
+    # continues "%-", whose first byte is the escape and whose atom is a
+    # hyphen. Reading the byte made \bTomcat\b(?:-...)? emit %f[%w] before a
+    # hyphen, a frontier that can never hold, and the rule matched nothing at
+    # all.
     out = []
     for index, ch in enumerate(text):
         if ch != "\x03":
@@ -663,7 +674,8 @@ def assemble(raw, anchored_by_default):
     return text
 
 
-# The Lua class shorthands that describe word characters, and those that do not.
+# The Lua class shorthands that describe word characters, and those that
+# do not.
 #
 # The negated forms belong on the OTHER side: %D is "not a digit" and %W is
 # "not a word character", so neither can start a word. Listing them as word
@@ -719,7 +731,7 @@ def starts_with_word(text):
     return head.isalnum() or head == "_"
 
 
-# ----------------------------------------------------------------------- driver
+# ---------------------------------------------------------------------- driver
 
 INLINE_FLAGS = re.compile(r"^\(\?([imsxu]+)\)")
 
@@ -796,7 +808,7 @@ def translate(pattern, want_group=None, ignore_case=False, anchored=False,
 
     @param want_group the PCRE group number to capture, or None for a rule that
            only reports presence.
-    @param anchored force a leading ^, for a field whose whole value is matched.
+    @param anchored force a leading ^, for a field matched whole.
     @return list of Lua patterns; every one of them must be tried
     @raises Untranslatable when the pattern uses PCRE this cannot model
     """
@@ -860,9 +872,9 @@ def translate(pattern, want_group=None, ignore_case=False, anchored=False,
 def units(lua_pattern):
     """Walk a Lua pattern as (literal_or_None, quantifier) units.
 
-    A unit's literal is the one character it is guaranteed to match, or None for
-    a class, a `.`, an anchor or a frontier. The quantifier is "", "*", "-", "+"
-    or "?".
+    A unit's literal is the one character it is guaranteed to match, or None
+    for a class, a `.`, an anchor or a frontier. The quantifier is "", "*",
+    "-", "+" or "?".
     """
     index = 0
     length = len(lua_pattern)
@@ -926,11 +938,12 @@ def literal_anchor(lua_pattern):
     makes a thousand rules affordable where a hundred and seventy-eight were
     not.
 
-    Only `*`, `-` and `?` break a run. `+` does not: `ab+c` still guarantees the
-    substring "abc", because at least one b sits between them. Treating `+` as a
-    break lost the anchor on a third of the corpus; treating it as an ordinary
-    character - which the first version of this function did - put a literal
-    plus sign into the anchor and the prefilter then matched nothing at all.
+    Only `*`, `-` and `?` break a run. `+` does not: `ab+c` still guarantees
+    the substring "abc", because at least one b sits between them. Treating `+`
+    as a break lost the anchor on a third of the corpus; treating it as an
+    ordinary character - which the first version of this function did - put a
+    literal plus sign into the anchor and the prefilter then matched nothing at
+    all.
     """
     best = ""
     current = ""
@@ -977,11 +990,11 @@ DIGIT_BEARING = set("dwxSWgG")
 def capture_can_hold_a_digit(lua_pattern):
     """Whether the captured group could ever contain a digit.
 
-    The runtime refuses a capture with no digit in it, because a version without
-    one is a word - a Debian codename, a product name, a stray token - and
-    appending it to a CPE asks the service about a release that does not exist.
-    A rule whose capture is a literal alternative therefore cannot fire at all,
-    and shipping it is shipping a detection that is switched off.
+    The runtime refuses a capture with no digit in it, because a version
+    without one is a word - a Debian codename, a product name, a stray token -
+    and appending it to a CPE asks the service about a release that does not
+    exist. A rule whose capture is a literal alternative therefore cannot fire
+    at all, and shipping it is shipping a detection that is switched off.
 
     Two recog rules capture `sarge` and `squeeze` exactly this way.
     """

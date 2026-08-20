@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Compare two catalogues and decide whether one may replace the other unattended.
+"""Compare two catalogues and decide whether one may replace the other
+unattended.
 
     tools/catalog_diff.py --before <dir> --after <dir> [--summary <file>]
 
-The dictionaries are published to a branch that every installed script downloads
-from, so a bad catalogue reaches the whole world within a day and there is no
-release to hold it back. Once the rebuild is automatic, nothing but this stands
-between an upstream that reorganised itself and every scan on earth quietly
-recognising less than it did yesterday.
+The dictionaries are published to a branch that every installed script
+downloads from, so a bad catalogue reaches the whole world within a day and
+there is no release to hold it back. Once the rebuild is automatic, nothing but
+this stands between an upstream that reorganised itself and every scan on earth
+quietly recognising less than it did yesterday.
 
 The asymmetry that makes an automatic gate possible: **growth is safe and loss
 is not**. A catalogue that gained two hundred rules cannot make any existing
@@ -29,26 +30,29 @@ import os
 import sys
 from pathlib import Path
 
-# How much of the catalogue may disappear in one rebuild before a human is asked.
+# How much of the catalogue may disappear in one rebuild before a human is
+# asked.
 #
 # Not zero: upstreams do retire fingerprints, and the importer itself drops a
-# rule whose examples stop reproducing, so a small loss is ordinary maintenance.
-# Five per cent of 722 rules is 36, which is a big enough cleanup to be worth a
-# glance and small enough that ordinary churn does not stop the pipeline.
+# rule whose examples stop reproducing, so a small loss is ordinary
+# maintenance. Five per cent of 722 rules is 36, which is a big enough cleanup
+# to be worth a glance and small enough that ordinary churn does not stop the
+# pipeline.
 MAX_RULE_LOSS = 0.05
 
 # Identities are held tighter than rules. Losing a rule usually means one of
-# several patterns for a product went away; losing an IDENTITY means the product
-# became undetectable, which is the failure an operator would actually notice.
+# several patterns for a product went away; losing an IDENTITY means the
+# product became undetectable, which is the failure an operator would actually
+# notice.
 MAX_IDENTITY_LOSS = 0.02
 
 # Paths are held loosest of the three, and are still held. A sweep that stops
 # asking stops finding, and NO RULE HAS TO CHANGE for that to happen - so a
-# clone that failed, or an upstream that reorganised its plugin directory, walks
-# straight past both thresholds above while quietly costing the sweep its reach.
-# Ten per cent of 939 paths is 94, which no ordinary week of upstream churn
-# reaches: the paths come from three catalogues at once, and losing a tenth means
-# one of them stopped being read.
+# clone that failed, or an upstream that reorganised its plugin directory,
+# walks straight past both thresholds above while quietly costing the sweep its
+# reach. Ten per cent of 939 paths is 94, which no ordinary week of upstream
+# churn reaches: the paths come from three catalogues at once, and losing a
+# tenth means one of them stopped being read.
 MAX_PATH_LOSS = 0.10
 
 
@@ -123,7 +127,8 @@ def _probe_names(probes):
 
 def main():
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--selftest", action="store_true",
                         help="prove this gate refuses what it must")
     parser.add_argument("--before", help="the published catalogue")
@@ -150,22 +155,30 @@ def main():
         "",
         "| | before | after | change |",
         "|---|---:|---:|---:|",
-        "| rules | %d | %d | %+d |" % (len(before["rules"]), len(after["rules"]),
-                                       len(after["rules"]) - len(before["rules"])),
+        "| rules | %d | %d | %+d |" % (len(before["rules"]),
+                                                  len(after["rules"]),
+                                       len(after["rules"])
+                                       - len(before["rules"])),
         "| identities | %d | %d | %+d |" % (len(before["identities"]),
                                             len(after["identities"]),
-                                            len(after["identities"]) - len(before["identities"])),
-        "| paths | %d | %d | %+d |" % (len(before["paths"]), len(after["paths"]),
-                                       len(after["paths"]) - len(before["paths"])),
-        "| probes | %d | %d | %+d |" % (len(before["probes"]), len(after["probes"]),
-                                        len(after["probes"]) - len(before["probes"])),
+                                            len(after["identities"])
+                                            - len(before["identities"])),
+        "| paths | %d | %d | %+d |" % (len(before["paths"]),
+                                                  len(after["paths"]),
+                                       len(after["paths"])
+                                       - len(before["paths"])),
+        "| probes | %d | %d | %+d |" % (len(before["probes"]),
+                                                   len(after["probes"]),
+                                        len(after["probes"])
+                                        - len(before["probes"])),
         "",
         "%d rules added, %d removed." % (len(new_rules), len(lost_rules)),
     ]
 
     renamed = len(after["names"] - before["names"])
     if renamed and not (new_rules or lost_rules):
-        lines += ["", "%d rules were renamed and none changed behaviour." % renamed]
+        lines += ["",
+            "%d rules were renamed and none changed behaviour." % renamed]
 
     if new_identities:
         lines += ["", "**Newly detectable (%d):** %s"
@@ -227,30 +240,38 @@ def _decide(before, after, lost_rules, lost_identities, lost_probes,
                         "cached copy would ever download it"
                         % (after["serial"], before["serial"]))
     elif rule_loss > MAX_RULE_LOSS:
-        verdict, why = ("review", "%.1f%% of the rules disappeared (%d of %d), "
+        verdict, why = ("review",
+                        "%.1f%% of the rules disappeared (%d of %d), "
                         "which is more often an upstream that moved than an "
                         "intended cleanup"
-                        % (100 * rule_loss, len(lost_rules), len(before["rules"])))
+                        % (100 * rule_loss, len(lost_rules),
+                                                len(before["rules"])))
     elif identity_loss > MAX_IDENTITY_LOSS:
-        verdict, why = ("review", "%.1f%% of the identities became undetectable "
-                        "(%d of %d)" % (100 * identity_loss, len(lost_identities),
+        verdict, why = ("review",
+                        "%.1f%% of the identities became undetectable "
+                        "(%d of %d)" % (100 * identity_loss,
+                                        len(lost_identities),
                                         len(before["identities"])))
     elif path_loss > MAX_PATH_LOSS:
-        verdict, why = ("review", "%.1f%% of the swept paths disappeared (%d of "
+        verdict, why = ("review",
+                        "%.1f%% of the swept paths disappeared (%d of "
                         "%d); a sweep that stops asking stops finding, and no "
                         "rule has to change for that to happen"
-                        % (100 * path_loss, len(lost_paths), len(before["paths"])))
+                        % (100 * path_loss, len(lost_paths),
+                                                len(before["paths"])))
     elif lost_probes:
         verdict, why = ("review",
                         "a targeted probe was removed, or lost paths or "
                         "detectors: %s" % ", ".join(_probe_names(lost_probes)))
-    elif (after["rules"] == before["rules"] and after["paths"] == before["paths"]
+    elif (after["rules"] == before["rules"]
+          and after["paths"] == before["paths"]
           and after["probes"] == before["probes"]):
         # All three dictionaries, not just the rules and the paths. Publishing
         # only happens on "auto", so a rebuild whose one change was a NEW probe
         # was called unchanged and never reached anybody - and a probe is the
         # only thing in the catalogue that goes and asks.
-        verdict, why = "unchanged", "nothing changed, so there is nothing to publish"
+        verdict = "unchanged"
+        why = "nothing changed, so there is nothing to publish"
 
     return verdict, why
 
@@ -265,9 +286,11 @@ def _verdict(before_dir, after_dir):
                    before["paths"] - after["paths"],
                    )
 
-# --------------------------------------------------------------------- selftest
+# -------------------------------------------------------------------- selftest
 
-def _catalogue(directory, rules, serial=1, paths=("/",), probes=(), regex_from=None,
+
+def _catalogue(directory, rules, serial=1, paths=("/",), probes=(),
+                                                  regex_from=None,
                anchor_from=None, probe_paths=("/a", "/b")):
     """Write a minimal catalogue, for the selftest below."""
     directory = Path(directory)
@@ -276,7 +299,8 @@ def _catalogue(directory, rules, serial=1, paths=("/",), probes=(), regex_from=N
         "schema": 1,
         "rules": {name: {"alias": alias,
                          "regex": "%s([%%d.]+)"
-                                  % (regex_from(name) if regex_from else name).replace(" ", ""),
+                                  % (regex_from(name) if regex_from
+                                     else name).replace(" ", ""),
                          # Follows the regex by default, because that is what
                          # the importer does - so a pure rename moves neither.
                          "anchor": (anchor_from(name) if anchor_from else
@@ -302,9 +326,9 @@ def selftest():
     """Prove the gate refuses what it is there to refuse.
 
     This tool is the only thing standing between an automatic rebuild and every
-    installed scanner, so "it looked right" is not a standard it can be held to.
-    Each case below is a way the pipeline could ship a worse catalogue than the
-    one it replaces.
+    installed scanner, so "it looked right" is not a standard it can be held
+    to. Each case below is a way the pipeline could ship a worse catalogue than
+    the one it replaces.
     """
     import shutil
     import tempfile
@@ -316,15 +340,17 @@ def selftest():
     cases = []
 
     # The "after" serial defaults to one past the "before" serial, because
-    # tools/catalog.py --index bumps it on every rebuild - even one that changed
-    # nothing. A case about content must therefore not also be a case about the
-    # serial, or it only ever measures the serial.
+    # tools/catalog.py --index bumps it on every rebuild - even one that
+    # changed nothing. A case about content must therefore not also be a case
+    # about the serial, or it only ever measures the serial.
     def case(name, expected, after_rules, serial=3, **kwargs):
         cases.append((name, expected, after_rules, serial, kwargs))
 
-    case("an identical catalogue has nothing to publish", "unchanged", dict(base))
+    case("an identical catalogue has nothing to publish", "unchanged",
+         dict(base))
     case("pure growth publishes itself", "auto",
-         dict(base, **{"rule new %d" % i: "cpe:/a:v:new%d" % i for i in range(30)}))
+         dict(base,
+              **{"rule new %d" % i: "cpe:/a:v:new%d" % i for i in range(30)}))
     case("a small cleanup still publishes", "auto",
          {k: v for k, v in base.items() if k not in ("rule 1", "rule 2")})
     case("losing a tenth of the rules asks for a human", "review",
@@ -332,14 +358,17 @@ def selftest():
     # Paths, which nothing tested until the branch that reads them existed. A
     # rebuild can lose the sweep's reach without a single rule changing, so
     # these two cases keep the rules identical and vary only the path list.
-    case("losing most of the swept paths asks for a human", "review", dict(base),
-         paths=("/", "/a"), before_paths=tuple(["/"] + ["/p%d" % i for i in range(19)]))
+    case("losing most of the swept paths asks for a human", "review",
+         dict(base),
+         paths=("/", "/a"),
+                before_paths=tuple(["/"] + ["/p%d" % i for i in range(19)]))
     case("losing one path of twenty still publishes", "auto", dict(base),
          paths=tuple(["/"] + ["/p%d" % i for i in range(18)]),
          before_paths=tuple(["/"] + ["/p%d" % i for i in range(19)]))
     case("a rebuild whose only change is a new probe publishes", "auto",
          dict(base), after_probes=("drupal",))
-    case("a serial that did not move is broken", "broken", dict(base), serial=1)
+    case("a serial that did not move is broken", "broken", dict(base),
+                                                                serial=1)
     case("a serial going backwards is broken", "broken", dict(base), serial=0)
     case("an empty catalogue is broken", "broken", {})
     # An empty paths.json is not "the sweep got smaller": read_paths returning
@@ -379,7 +408,8 @@ def selftest():
 
             verdict = _verdict(str(before), str(after))[0]
             if verdict != expected:
-                failures.append("%s: expected %s, got %s" % (name, expected, verdict))
+                failures.append("%s: expected %s, got %s" % (name, expected,
+                                                             verdict))
             else:
                 print("ok    %s" % name)
         finally:
@@ -394,7 +424,8 @@ def selftest():
         _catalogue(after, base, serial=3, probes=("drupal",))
         verdict = _verdict(str(before), str(after))[0]
         if verdict != "review":
-            failures.append("a removed probe: expected review, got %s" % verdict)
+            failures.append("a removed probe: expected review, got "
+                "%s" % verdict)
         else:
             print("ok    a removed probe asks for a human")
     finally:
@@ -415,18 +446,21 @@ def selftest():
             failures.append("a probe narrowed to one path: expected review, "
                             "got %s" % verdict)
         else:
-            print("ok    a probe that loses most of its paths asks for a human")
+            print("ok    a probe that loses most of its paths asks for a "
+                "human")
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
 
-    # And the published catalogue must compare clean against itself, or the gate
-    # would block the next real rebuild for a reason that has nothing to do with it.
+    # And the published catalogue must compare clean against itself, or the
+    # gate would block the next real rebuild for a reason that has nothing to
+    # do with it.
     published = Path(__file__).resolve().parents[1] / "catalog"
     if published.exists():
         verdict = _verdict(str(published), str(published))[0]
         if verdict != "broken":
             failures.append("the published catalogue against itself: expected "
-                            "broken (the serial cannot move), got %s" % verdict)
+                            "broken (the serial cannot move), got "
+                                "%s" % verdict)
         else:
             print("ok    the published catalogue is readable by this gate")
 

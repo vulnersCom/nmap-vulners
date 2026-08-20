@@ -1,4 +1,4 @@
---- Tests for the Config seam: where the key comes from, and what the numbers do.
+--- Tests for the Config seam: the key, and what the numbers do.
 --
 -- Almost nothing here is visible in a report, which is why it is worth a file
 -- of its own. A key discovered from the wrong place is a scan that silently
@@ -17,7 +17,7 @@ local string = require "string"
 local KEY = "FAKE-CONFIG-KEY-NOT-A-REAL-TOKEN"
 local OTHER = "SECOND-FAKE-KEY-NOT-A-REAL-TOKEN"
 
---- Load the script and hand back its resolved configuration.
+--; Load the script and hand back its resolved configuration.
 local function config_of(opts)
   opts = opts or {}
   local env = t.load_vulners({
@@ -34,7 +34,7 @@ end
 
 local suite = {}
 
--- ------------------------------------------------------------ where the key is
+-- ----------------------------------------------------------- where the key
 
 suite[#suite + 1] = {
   name = "the key can be given on the command line",
@@ -44,7 +44,8 @@ suite[#suite + 1] = {
     local cfg = config_of({args = {["vulners.api_key"] = KEY}})
 
     t.equals(cfg.key, KEY, "the argument must be the key")
-    t.equals(cfg.key_source, "script argument", "and it must say where it came from")
+    t.equals(cfg.key_source, "script argument",
+      "and it must say where it came from")
   end,
 }
 
@@ -82,14 +83,16 @@ suite[#suite + 1] = {
       },
     })
 
-    t.equals(env._TEST.config().key, KEY, "the 1.x name must still be honoured")
+    t.equals(env._TEST.config().key, KEY,
+      "the 1.x name must still be honoured")
     t.matches(logger.log(), "deprecated",
       "and the operator must be told to move to the new one")
   end,
 }
 
 suite[#suite + 1] = {
-  name = "the deprecation notice is printed once for the scan, not once per port",
+  name = "the deprecation notice is printed once for the scan, not once " ..
+    "per port",
   fn = function()
     -- The chunk is re-executed for every open port and config() re-reads every
     -- argument each time, so advice about a renamed argument was repeated once
@@ -133,7 +136,8 @@ suite[#suite + 1] = {
       files = {[path] = KEY .. "\n"},
     })
 
-    t.equals(cfg.key, KEY, "the file the operator named is the one that counts")
+    t.equals(cfg.key, KEY,
+      "the file the operator named is the one that counts")
     t.equals(cfg.key_source, "api_key_file", "and it must say so")
   end,
 }
@@ -198,7 +202,8 @@ suite[#suite + 1] = {
     })
 
     t.equals(cfg.key, KEY, "a key in nmap's data directory must be picked up")
-    t.equals(cfg.key_source, found, "and the report must name where it was found")
+    t.equals(cfg.key_source, found,
+      "and the report must name where it was found")
   end,
 }
 
@@ -230,7 +235,8 @@ suite[#suite + 1] = {
 -- --------------------------------------------------------------- the numbers
 
 suite[#suite + 1] = {
-  name = "a fractional width is floored rather than carried into the arithmetic",
+  name = "a fractional width is floored rather than carried into the " ..
+    "arithmetic",
   fn = function()
     -- string.rep demands an integer, so a width of 80.5 propagated a fraction
     -- into the column arithmetic and raised inside action() - which nmap turns
@@ -273,9 +279,13 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "the mirror URL is normalised once, not on every use",
   fn = function()
-    t.equals(config_of({args = {["vulners.catalog_url"] = "http://m/cat"}}).catalog_url,
+    local plain =
+      config_of({args = {["vulners.catalog_url"] = "http://m/cat"}})
+    t.equals(plain.catalog_url,
       "http://m/cat/", "a missing trailing slash is added")
-    t.equals(config_of({args = {["vulners.catalog_url"] = "http://m/cat/"}}).catalog_url,
+    local slashed =
+      config_of({args = {["vulners.catalog_url"] = "http://m/cat/"}})
+    t.equals(slashed.catalog_url,
       "http://m/cat/", "and one that is there is left alone")
   end,
 }

@@ -72,6 +72,17 @@ jobs:
       - name: The publish gate refuses what it must
         run: python3 tools/catalog_diff.py --selftest
 
+      # vulners.nse is a script FOR nmap, so it is held to what nmap asks of
+      # one: HACKING points at secwiki.org/w/Nmap/Code_Standards, and that page
+      # is what tools/nmap_style.py enforces. pycodestyle is installed rather
+      # than assumed, because the gate SKIPS the PEP 8 half when it is missing
+      # and a barrier that skips in CI is not a barrier.
+      - name: Nmap's own code standards
+        run: |
+          python3 -m pip install --quiet pycodestyle
+          python3 -m pycodestyle --version
+          python3 tools/nmap_style.py
+
   tests:
     name: NSE test suite
     runs-on: ubuntu-latest

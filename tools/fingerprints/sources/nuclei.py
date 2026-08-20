@@ -1,22 +1,22 @@
 """Read ProjectDiscovery's technology templates, for the paths they know.
 
 Nuclei is the answer to a question the other catalogues do not ask: **where do
-you go to find out the version**. Recog reads a banner, Wappalyzer reads a front
-page, and both are silent when the front page does not say. Nuclei knows that
-Confluence tells you at `/dologin.action`, Drupal at `/CHANGELOG.txt`, PuppetDB
-at `/pdb/meta/v1/version` - 314 templates pair a specific path with a regex that
-pulls a version out of what comes back.
+you go to find out the version**. Recog reads a banner, Wappalyzer reads a
+front page, and both are silent when the front page does not say. Nuclei knows
+that Confluence tells you at `/dologin.action`, Drupal at `/CHANGELOG.txt`,
+PuppetDB at `/pdb/meta/v1/version` - 314 templates pair a specific path with a
+regex that pulls a version out of what comes back.
 
-What it does not carry is a CPE, not for a single one of its 909 templates. That
-matters more here than anywhere else, because the endpoint this script queries
-is addressed by CPE: a probe that finds "Confluence 7.13.0" and cannot name the
-identity has found nothing this script can use.
+What it does not carry is a CPE, not for a single one of its 909 templates.
+That matters more here than anywhere else, because the endpoint this script
+queries is addressed by CPE: a probe that finds "Confluence 7.13.0" and cannot
+name the identity has found nothing this script can use.
 
 So the join is by product name against identities the curated sources already
 supplied, and a template that does not join is **skipped and counted**, never
 resolved by guessing a vendor. Nine of them join today. The rest are listed by
-`--report-unjoined`, and turning that list into identities needs a CPE resolver,
-which is recorded in dev_docs/backlog.md as the blocker it is.
+`--report-unjoined`, and turning that list into identities needs a CPE
+resolver, which is recorded in dev_docs/backlog.md as the blocker it is.
 """
 
 import glob
@@ -45,7 +45,8 @@ INTERPOLATED = re.compile(r"\{\{")
 
 
 def _capture_count(expression):
-    """Capturing groups in a PCRE: '(' not escaped, not '(?', not in a class."""
+    """Capturing groups in a PCRE: '(' not escaped, not '(?', not in a "
+        "class."""
     count, index, in_class = 0, 0, False
     while index < len(expression):
         ch = expression[index]
@@ -56,7 +57,8 @@ def _capture_count(expression):
             in_class = True
         elif ch == "]" and in_class:
             in_class = False
-        elif ch == "(" and not in_class and expression[index + 1:index + 2] != "?":
+        elif (ch == "(" and not in_class
+                and expression[index + 1:index + 2] != "?"):
             count += 1
         index += 1
     return count
@@ -74,7 +76,7 @@ def _product_tokens(template_id):
 def load(root_dir, alias_for, already_swept=()):
     """Targeted version probes, joined to identities that already exist.
 
-    @param alias_for callable taking a set of product tokens and returning a CPE
+    @param alias_for callable taking product tokens and returning a CPE
            alias or None. Supplied by the caller so that the only identities
            used are ones another catalogue already curated.
     """
@@ -95,7 +97,8 @@ def load(root_dir, alias_for, already_swept=()):
         template_id = document.get("id") or os.path.basename(path)[:-5]
         info = document.get("info") or {}
 
-        for request in (document.get("http") or document.get("requests") or []):
+        requests = document.get("http") or document.get("requests") or []
+        for request in requests:
             if str(request.get("method", "GET")).upper() != "GET":
                 continue
 

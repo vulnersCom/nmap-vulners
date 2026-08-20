@@ -2,9 +2,9 @@
 --
 -- The script carries no fingerprint data any more. It downloads three
 -- dictionaries at scan time, so this file covers the one thing that decides
--- whether the plugin recognises anything at all - and the several ways that can
--- go wrong without anybody noticing, because a scan that recognised nothing
--- looks exactly like a network where nothing is running.
+-- whether the plugin recognises anything at all - and the several ways that
+-- can go wrong without anybody noticing, because a scan that recognised
+-- nothing looks exactly like a network where nothing is running.
 --
 -- Three properties are load-bearing and every case here is really about one of
 -- them:
@@ -27,7 +27,7 @@ local table = require "table"
 
 local CATALOG_URL = "https://catalog.example/"
 
---- A rule dictionary with one usable rule in it.
+--; A rule dictionary with one usable rule in it.
 local function fingerprints(rules)
   return {schema = 1, rules = rules or {
     ["Nginx, server"] = {
@@ -47,7 +47,7 @@ local function probes(list)
   return {schema = 1, probes = list or {}}
 end
 
---- One probe, in the shape read_probes accepts.
+--; One probe, in the shape read_probes accepts.
 local function probe(overrides)
   local entry = {
     name = "Drupal",
@@ -60,7 +60,7 @@ local function probe(overrides)
   return entry
 end
 
---- Serve a whole catalogue at CATALOG_URL, and count what was asked for.
+--; Serve a whole catalogue at CATALOG_URL, and count what was asked for.
 local function serve_catalog(http, opts)
   opts = opts or {}
   local documents = {
@@ -94,7 +94,7 @@ local function serve_catalog(http, opts)
   end
 end
 
---- Which catalogue files were requested, in order.
+--; Which catalogue files were requested, in order.
 local function fetched(http)
   local names = {}
   for _, request in ipairs(http.requests) do
@@ -105,7 +105,7 @@ local function fetched(http)
   return names
 end
 
---- A loaded script with nothing but what the case gave it.
+--; A loaded script with nothing but what the case gave it.
 local function load(opts)
   opts = opts or {}
   local args = {["vulners.catalog_url"] = CATALOG_URL}
@@ -122,7 +122,7 @@ local function load(opts)
   })
 end
 
---- Load, run the prerule, and hand back the catalogue that resulted.
+--; Load, run the prerule, and hand back the catalogue that resulted.
 local function loaded(opts)
   local env, http, disk = load(opts)
   env.action()
@@ -155,11 +155,11 @@ suite[#suite + 1] = {
   name = "no file is ever opened for writing",
   fn = function()
     -- The behaviour this script is expected to have, and there is no argument
-    -- that changes it. Of the 611 scripts nmap ships, 26 write a file and every
-    -- one writes only where a script argument pointed it; none keeps a cache.
-    -- An earlier version of this cached under ~/.nmap, which is worse than it
-    -- sounds - that is a nmap DATADIR, read for nmap-services and scripts/, not
-    -- a place for a plugin's scratch state.
+    -- that changes it. Of the 611 scripts nmap ships, 26 write a file and
+    -- every one writes only where a script argument pointed it; none keeps a
+    -- cache. An earlier version of this cached under ~/.nmap, which is worse
+    -- than it sounds - that is a nmap DATADIR, read for nmap-services and
+    -- scripts/, not a place for a plugin's scratch state.
     local http = t.http_double()
     serve_catalog(http)
 
@@ -196,11 +196,12 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "a port reached without a prerule uses an empty catalogue, not a fetch",
+  name = "a port reached without a prerule uses an empty catalogue, not a " ..
+    "fetch",
   fn = function()
-    -- The port action must never open a socket for the catalogue: several ports
-    -- run concurrently and would race into the same download. Whatever the
-    -- prerule left is what a port gets.
+    -- The port action must never open a socket for the catalogue: several
+    -- ports run concurrently and would race into the same download. Whatever
+    -- the prerule left is what a port gets.
     local http = t.http_double()
     serve_catalog(http)
     local env = load({http = http})
@@ -237,8 +238,8 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a catalogue declaring a newer schema is refused, not half read",
   fn = function()
-    -- The whole reason the schema exists. An old script must say "I am too old"
-    -- rather than read a file whose meaning it was never taught.
+    -- The whole reason the schema exists. An old script must say "I am too
+    -- old" rather than read a file whose meaning it was never taught.
     local http = t.http_double()
     serve_catalog(http, {index = {
       schema = 99, serial = 12,
@@ -259,14 +260,15 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "an index with no schema at all is refused",
   fn = function()
-    -- Not a catalogue index: a login page, a CDN error document, an S3 listing.
-    -- All parse as JSON and none of them declare a schema.
+    -- Not a catalogue index: a login page, a CDN error document, an S3
+    -- listing. All parse as JSON and none of them declare a schema.
     local http = t.http_double()
     serve_catalog(http, {index = {message = "Not Found"}})
 
     local catalog, env = loaded({http = http})
 
-    t.equals(catalog.rule_count, 0, "an unlabelled document is not a catalogue")
+    t.equals(catalog.rule_count, 0,
+      "an unlabelled document is not a catalogue")
     t.is_true(env._TEST.state().catalog_note ~= nil, "and it is not silent")
   end,
 }
@@ -353,8 +355,8 @@ suite[#suite + 1] = {
   name = "an unreachable catalogue leaves a working scan and says so",
   fn = function()
     -- The airgapped case. It must not be an error and must not be silent: the
-    -- lookups that do not need a dictionary still run, and the operator is told
-    -- which capability was missing so an empty report cannot be misread.
+    -- lookups that do not need a dictionary still run, and the operator is
+    -- told which capability was missing so an empty report cannot be misread.
     local http = t.http_double()
     http.handler = function() return nil end
 
@@ -363,7 +365,8 @@ suite[#suite + 1] = {
     t.equals(catalog.rule_count, 0, "there is nothing to load")
     t.length(catalog.paths, 0, "and nothing to sweep")
     local note = env._TEST.state().catalog_note
-    t.is_true(note ~= nil, "a scan with no catalogue must not be silent about it")
+    t.is_true(note ~= nil,
+      "a scan with no catalogue must not be silent about it")
     t.is_true(note:find("still looked up", 1, true) ~= nil,
       "and must say what DID happen, got: " .. tostring(note))
   end,
@@ -394,7 +397,8 @@ suite[#suite + 1] = {
     -- pointed the one operator who can fix it at the wrong thing.
     local note = env._TEST.state().catalog_note
     t.is_true(note ~= nil and note:find("could not be read", 1, true) ~= nil,
-      "a reachable catalogue with an unusable file is not a failed download, " ..
+      "a reachable catalogue with an unusable file is not a failed " ..
+        "download, " ..
       "got: " .. tostring(note))
     t.is_true(note:find("still looked up", 1, true) ~= nil,
       "and it must still say what DID happen")
@@ -449,8 +453,8 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "an index naming a path outside the catalogue is refused",
   fn = function()
-    -- The file name from the index reaches a URL. Without a check it could walk
-    -- out of the catalogue directory entirely.
+    -- The file name from the index reaches a URL. Without a check it could
+    -- walk out of the catalogue directory entirely.
     local http = t.http_double()
     serve_catalog(http, {index = {
       schema = 1, serial = 3,
@@ -472,7 +476,8 @@ suite[#suite + 1] = {
     local http = t.http_double()
     serve_catalog(http)
 
-    local catalog, env = loaded({http = http, args = {["vulners.catalog"] = "none"}})
+    local catalog, env = loaded({http = http,
+      args = {["vulners.catalog"] = "none"}})
 
     t.length(fetched(http), 0, "an operator who said no must be obeyed")
     t.equals(catalog.rule_count, 0, "and nothing must be loaded")
@@ -489,7 +494,8 @@ suite[#suite + 1] = {
     local http = t.http_double()
     serve_catalog(http)
 
-    t.equals(loaded({http = http, args = {["vulners.catalog"] = "yes"}}).rule_count,
+    t.equals(loaded({http = http,
+      args = {["vulners.catalog"] = "yes"}}).rule_count,
       1, "an unrecognised mode falls back to fetching")
   end,
 }
@@ -498,8 +504,8 @@ suite[#suite + 1] = {
 --
 -- Everything above proves the readers REFUSE what they must. This proves they
 -- ACCEPT what actually ships, which is the other half and the one nothing was
--- watching: a rule the readers drop costs a detection silently, and a scan that
--- recognises less looks exactly like a network running less.
+-- watching: a rule the readers drop costs a detection silently, and a scan
+-- that recognises less looks exactly like a network running less.
 suite[#suite + 1] = {
   name = "the published catalogue survives this script's own readers intact",
   fn = function()
@@ -508,10 +514,10 @@ suite[#suite + 1] = {
     -- with no capture, two captures, a position capture or a back-reference
     -- passes every gate in CI and is dropped here instead, in the field.
     --
-    -- Asserted THROUGH the readers rather than by reimplementing them: a second
-    -- copy of usable_pattern in Python would be a second thing to keep in step,
-    -- and this repository has already been bitten by two spellings of one rule
-    -- drifting apart.
+    -- Asserted THROUGH the readers rather than by reimplementing them: a
+    -- second copy of usable_pattern in Python would be a second thing to keep
+    -- in step, and this repository has already been bitten by two spellings of
+    -- one rule drifting apart.
     local documents = t.published_catalog(root)
     local env = t.load_vulners({root = root, catalog = false})
 
@@ -589,15 +595,17 @@ suite[#suite + 1] = {
   name = "a rule that cannot produce a version is dropped",
   fn = function()
     -- match_group builds `alias .. ":" .. version` out of the one capture. No
-    -- capture can never produce an identity; two silently report whichever came
-    -- first as the version, which is a wrong CPE rather than a missing one.
+    -- capture can never produce an identity; two silently report whichever
+    -- came first as the version, which is a wrong CPE rather than a missing
+    -- one.
     local http = t.http_double()
     serve_catalog(http, {fingerprints = fingerprints({
       ["No capture, server"] = {alias = "cpe:/a:x:y", channel = "hdr:server",
                                 regex = "nginx"},
       ["Two captures, server"] = {alias = "cpe:/a:x:z", channel = "hdr:server",
                                   regex = "(%w+)/([%d.]+)"},
-      ["Position capture, server"] = {alias = "cpe:/a:x:w", channel = "hdr:server",
+      ["Position capture, server"] = {alias = "cpe:/a:x:w",
+        channel = "hdr:server",
                                       regex = "nginx()"},
       ["Good, server"] = {alias = "cpe:/a:f5:nginx", channel = "hdr:server",
                           regex = "nginx/([%d.]+)"},
@@ -636,7 +644,8 @@ suite[#suite + 1] = {
                        regex = "nginx/([%d.]+)"},
       ["Wrong part"] = {alias = "cpe:/x:f5:nginx", channel = "hdr:server",
                         regex = "nginx/([%d.]+)"},
-      ["Already versioned"] = {alias = "cpe:/a:f5:nginx:1.0", channel = "hdr:server",
+      ["Already versioned"] = {alias = "cpe:/a:f5:nginx:1.0",
+        channel = "hdr:server",
                                regex = "nginx/([%d.]+)"},
       ["Good, server"] = {alias = "cpe:/a:f5:nginx", channel = "hdr:server",
                           regex = "nginx/([%d.]+)"},
@@ -655,7 +664,8 @@ suite[#suite + 1] = {
     -- and nothing else would notice.
     local rules = {}
     for _, channel in ipairs({"raw", "body", "title", "script", "banner",
-                              "cookie", "hdr:x-powered-by", "meta:generator"}) do
+                              "cookie", "hdr:x-powered-by",
+                              "meta:generator"}) do
       rules[channel] = {alias = "cpe:/a:x:y", channel = channel,
                         regex = "x/([%d.]+)"}
     end
@@ -709,8 +719,8 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a catalogue with no usable path is refused",
   fn = function()
-    -- Rules with nowhere to send them recognise only what the front page shows,
-    -- which is a quiet, partial scan rather than an obvious failure.
+    -- Rules with nowhere to send them recognise only what the front page
+    -- shows, which is a quiet, partial scan rather than an obvious failure.
     local http = t.http_double()
     serve_catalog(http, {paths = paths({"relative", "/no good"})})
 
@@ -738,8 +748,8 @@ suite[#suite + 1] = {
   name = "a probe missing any of its three parts is dropped",
   fn = function()
     -- A probe that cannot be triggered, cannot be sent, or cannot read an
-    -- answer is not a probe. Each part is dropped by a different check, so each
-    -- is a separate way to ship one that does nothing.
+    -- answer is not a probe. Each part is dropped by a different check, so
+    -- each is a separate way to ship one that does nothing.
     local http = t.http_double()
     serve_catalog(http, {probes = probes({
       probe({detect = {{channel = "sideband", regex = "Drupal"}}}),
@@ -773,12 +783,12 @@ suite[#suite + 1] = {
 suite[#suite + 1] = {
   name = "a detect rule is validated exactly as it will be run",
   fn = function()
-    -- The gate used to wrap the pattern in parentheses to force the one capture
-    -- it insisted on, which validated a DIFFERENT string from the one stored.
-    -- Measured against real Lua: the raw pattern "X)%" is refused while
-    -- "(X)%)" is accepted - the prepended "(" absorbs the stray ")" and the
-    -- trailing "%" escapes the appended one - so the probe shipped and the raw
-    -- pattern went to string.find, costing the port its entire result.
+    -- The gate used to wrap the pattern in parentheses to force the one
+    -- capture it insisted on, which validated a DIFFERENT string from the one
+    -- stored. Measured against real Lua: the raw pattern "X)%" is refused
+    -- while "(X)%)" is accepted - the prepended "(" absorbs the stray ")" and
+    -- the trailing "%" escapes the appended one - so the probe shipped and the
+    -- raw pattern went to string.find, costing the port its entire result.
     local http = t.http_double()
     serve_catalog(http, {probes = {schema = 1, probes = {
       {name = "wrapped-only", alias = "cpe:/a:x:y",
@@ -801,9 +811,9 @@ suite[#suite + 1] = {
   fn = function()
     -- The gate validated tostring(rule.regex) and stored the raw value, and
     -- tostring({}) is "table: 0x...", which is a perfectly good one-capture
-    -- pattern. The probe was kept and string.find then raised "string expected,
-    -- got table" - costing the port its entire result, which is the one outcome
-    -- this whole section exists to prevent.
+    -- pattern. The probe was kept and string.find then raised "string
+    -- expected, got table" - costing the port its entire result, which is the
+    -- one outcome this whole section exists to prevent.
     local http = t.http_double()
     serve_catalog(http, {probes = {schema = 1, probes = {
       {name = "bad", alias = "cpe:/a:x:y",

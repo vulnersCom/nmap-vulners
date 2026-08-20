@@ -1,16 +1,17 @@
 """Where to knock: the paths the sweep requests on every web port.
 
-The sweep is the half of this plugin that finds software nmap's own probe cannot
-see, and it can only find what it asks for. Until this module existed the list
-was inherited from 1.x and was not a fingerprinting list at all: 125 paths that
-were eleven filenames - index, default, home, main, start, admin, base, menu,
-inicio, indice, localstart - crossed with eleven extensions. 121 requests per
-port looking for a front page, and not one path that reveals a product.
+The sweep is the half of this plugin that finds software nmap's own probe
+cannot see, and it can only find what it asks for. Until this module existed
+the list was inherited from 1.x and was not a fingerprinting list at all: 125
+paths that were eleven filenames - index, default, home, main, start, admin,
+base, menu, inicio, indice, localstart - crossed with eleven extensions. 121
+requests per port looking for a front page, and not one path that reveals a
+product.
 
 What a useful path looks like is what the upstream catalogues already record.
 Measured on 2026-08-19:
 
-    WhatWeb            1 832 plugins, 549 distinct :url probes, each attached to
+    WhatWeb            1 832 plugins, 549 distinct :url probes, attached to
                        a named product - by far the richest source of "go here
                        to see whether this is installed"
     nuclei             909 technology templates; 456 of their path mentions are
@@ -19,7 +20,7 @@ Measured on 2026-08-19:
                        and SIX distinct non-root paths in the whole corpus. The
                        source document rates it the primary source of active
                        probe paths; against today's upstream that is not true.
-    Wappalyzer         no probe paths at all. Its `url` field is a regex matched
+    Wappalyzer         no probe paths at all. Its `url` field is a regex
                        against the URL a browser is already on, not a path to
                        fetch.
     Recog              none by design; it parses banners, it does not knock.
@@ -29,11 +30,11 @@ whose product this catalogue already had a rule for - 51 paths - and that was
 the wrong test twice over.
 
 The first reason is what the sweep actually matches. It runs all 722 rules over
-every response, and a response carries `Server`, `X-Powered-By`, `Set-Cookie`, a
-title and a body whoever the path belongs to. Knocking on `/mifs/user/login.jsp`
-on a host that runs no MobileIron still gets an answer, and that answer is where
-the header rules find nginx, PHP, IIS or the reverse proxy in front of them. The
-point of a broad list is that SOMETHING answers.
+every response, and a response carries `Server`, `X-Powered-By`, `Set-Cookie`,
+a title and a body whoever the path belongs to. Knocking on
+`/mifs/user/login.jsp` on a host that runs no MobileIron still gets an answer,
+and that answer is where the header rules find nginx, PHP, IIS or the reverse
+proxy in front of them. The point of a broad list is that SOMETHING answers.
 
 The second reason is that the paths are nearly free. Measured against a live
 server on loopback, one nmap run each:
@@ -51,8 +52,8 @@ seconds in nmap's own version probe. There was nothing to save.
 What is still filtered is what cannot work rather than what might not: a path
 that can only answer with an image or a font, one that carries a traversal, a
 backslash or a percent escape, a nuclei interpolation, an ALL_CAPS placeholder
-the operator was supposed to fill in, and an absolute URL naming somebody else's
-host.
+the operator was supposed to fill in, and an absolute URL naming somebody
+else's host.
 """
 
 import glob
@@ -65,11 +66,11 @@ except ImportError:  # pragma: no cover - reported by the caller
     yaml = None
 
 
-# What "/" plus redirect-following does not cover: a server that answers 404 for
-# "/" without redirecting, and serves its front page under a name. Seven, not
-# the 121 the 1.x list spent on it - the sweep follows redirects that stay on
-# the host, so the ordinary "front page lives elsewhere" case is already handled
-# by fetching "/" and going where it points.
+# What "/" plus redirect-following does not cover: a server that answers 404
+# for "/" without redirecting, and serves its front page under a name. Seven,
+# not the 121 the 1.x list spent on it - the sweep follows redirects that stay
+# on the host, so the ordinary "front page lives elsewhere" case is already
+# handled by fetching "/" and going where it points.
 #
 # /robots.txt earns its place differently: it is one request on any server, and
 # its body names the directories the software keeps - which is text the body
@@ -114,19 +115,20 @@ REFUSED = re.compile(r"\.\.|[{}<>|^\"`\\*%\s\x00-\x1f]")
 # path field, not a path.
 PORT_FRAGMENT = re.compile(r"^/:")
 
-# A path made only of punctuation - "/&?=?" - is not a path either. Checked over
-# the whole string rather than the part before "?", because PHP's own easter egg
-# is "/?=PHPB8B5F2A0-..." and everything it says is in the query.
+# A path made only of punctuation - "/&?=?" - is not a path either. Checked
+# over the whole string rather than the part before "?", because PHP's own
+# easter egg is "/?=PHPB8B5F2A0-..." and everything it says is in the query.
 # "/" itself is a path, and is handled before this is reached.
 HAS_SUBSTANCE = re.compile(r"[A-Za-z0-9]")
 
 # Nuclei and WhatWeb leave the operator's own value in the example: an
-# ALL_CAPS_TOKEN in a query is a placeholder like FIREBASE_SECRET, not something
-# to send.
+# ALL_CAPS_TOKEN in a query is a placeholder like FIREBASE_SECRET, not
+# something to send.
 PLACEHOLDER = re.compile(r"[A-Z][A-Z0-9]*_[A-Z0-9_]{2,}")
 
-# Long enough for the deepest real fingerprinting path measured (78 characters),
-# short enough that a corrupt entry cannot become a request line of its own.
+# Long enough for the deepest real fingerprinting path measured (78
+# characters), short enough that a corrupt entry cannot become a request line
+# of its own.
 MAX_PATH = 128
 
 # Paths every scan already makes, or that say nothing about the software.
@@ -163,8 +165,8 @@ def normalise(raw):
     if not text:
         return None
 
-    # nuclei writes the path as an interpolation of the base URL; WhatWeb writes
-    # some of its paths without the leading slash.
+    # nuclei writes the path as an interpolation of the base URL; WhatWeb
+    # writes some of its paths without the leading slash.
     text = text.replace("{{BaseURL}}", "")
     if text.startswith("http://") or text.startswith("https://"):
         # An absolute URL names somebody else's host. It is not a path this
@@ -173,7 +175,8 @@ def normalise(raw):
     if not text.startswith("/"):
         text = "/" + text
 
-    if len(text) > MAX_PATH or REFUSED.search(text) or PLACEHOLDER.search(text):
+    if (len(text) > MAX_PATH or REFUSED.search(text)
+            or PLACEHOLDER.search(text)):
         return None
     if PORT_FRAGMENT.match(text) or not HAS_SUBSTANCE.search(text):
         return None
@@ -217,8 +220,8 @@ class Candidates:
 # ------------------------------------------------------------------- WhatWeb
 
 # `matches [ {:url=>"/wp-login.php", ...} ]`. Ruby, so it is read with a regex
-# rather than parsed: the `passive do ... end` bodies are arbitrary code and out
-# of reach, but the `matches` array is declarative and its :url entries are
+# rather than parsed: the `passive do ... end` bodies are arbitrary code and
+# out of reach, but the `matches` array is declarative and its :url entries are
 # exactly the paths WhatWeb fetches in aggressive mode.
 WW_NAME = re.compile(r'^\s*name\s+"([^"]+)"', re.M)
 WW_URL = re.compile(r':url\s*=>\s*["\']([^"\']+)["\']')
@@ -258,7 +261,8 @@ def _nuclei(root, out, report):
             continue
         files += 1
         product = document.get("id") or os.path.basename(filename)[:-5]
-        for request in (document.get("http") or document.get("requests") or []):
+        requests = document.get("http") or document.get("requests") or []
+        for request in requests:
             if str(request.get("method", "GET")).upper() != "GET":
                 continue
             for raw in (request.get("path") or []):
@@ -281,8 +285,10 @@ def _fingerprinthub(root, out, report):
         files += 1
         metadata = ((document.get("info") or {}).get("metadata") or {})
         label = ("%s %s" % (metadata.get("vendor") or "",
-                            metadata.get("product") or document.get("id") or "")).strip()
-        for request in (document.get("http") or document.get("requests") or []):
+                            metadata.get("product")
+                            or document.get("id") or "")).strip()
+        requests = document.get("http") or document.get("requests") or []
+        for request in requests:
             if str(request.get("method", "GET")).upper() != "GET":
                 continue
             for raw in (request.get("path") or []):
@@ -347,8 +353,10 @@ def select(candidates, alias_for, report, exclude=()):
     """The published list, in the order the sweep will request it.
 
     @param alias_for callable taking a set of product tokens and returning the
-           CPE alias this catalogue would report, or None. Not a filter - a path
-           for software we cannot name still gets an answer whose headers we can
+           CPE alias this catalogue would report, or None. Not a filter -
+           a path
+           for software we cannot name still gets an answer whose headers
+           we can
            read - only a count, so the build log can say how much of the list
            this catalogue could put a name to.
     @param exclude paths a targeted probe already owns. A probe goes out only
@@ -373,8 +381,9 @@ def select(candidates, alias_for, report, exclude=()):
     #   1. what every scan asks anyway
     #   2. the product paths, most corroborated first - the informative half
     #   3. the front-page names, last, because they are a guess at where a page
-    #      lives rather than a statement about what software is there. They earn
-    #      their place only on a server that refuses "/", which is why they must
+    #      lives rather than a statement about what software is there. They
+    #      earn their place only on a server that refuses "/", which is why
+    #      they must
     #      not push a real fingerprinting path out of a small budget.
     for path in ALWAYS:
         take(path)

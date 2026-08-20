@@ -13,10 +13,10 @@ see - an application framework, a CMS, a PHP version behind a reverse proxy.
 Those CPEs are looked up too, and published onto the port so the rest of the
 scan can use them.
 
-The pattern set is not carried in this file. It is fetched once per scan, before
-the first host is touched, and held in memory for the rest of it; nothing is
-written to disk. A scan that cannot reach it loses the web fingerprinting and
-keeps everything else.
+The pattern set is not carried in this file. It is fetched once per scan,
+before the first host is touched, and held in memory for the rest of it;
+nothing is written to disk. A scan that cannot reach it loses the web
+fingerprinting and keeps everything else.
 
 Without an API key it uses the free endpoint and says so once the scan ends.
 With a key it adds detail to each finding, and can identify software that has
@@ -36,8 +36,9 @@ came from.
 -- nmap -sV --script vulners <target>
 -- nmap -sV --script vulners --script-args vulners.mincvss=7 <target>
 --
--- @args vulners.mincvss Hide findings scored below this. Unscored bulletins and
---       anything with a known exploit are shown whatever the threshold.
+-- @args vulners.mincvss Hide findings scored below this. Unscored
+--       bulletins and anything with a known exploit are shown whatever the
+--       threshold.
 -- @args vulners.paths Paths for the web sweep: a list of strings, one string
 --       naming a file with one path per line, or "none" to disable the sweep.
 --       Defaults to every path the catalogue publishes. How fast they go out
@@ -47,12 +48,15 @@ came from.
 --       web fingerprinting, and no request for it. Defaults to fetching it.
 -- @args vulners.catalog_url Base URL to fetch the catalogue from, for a mirror
 --       on a network that cannot reach raw.githubusercontent.com.
--- @args vulners.width Terminal width the table is laid out for. Defaults to 80.
+-- @args vulners.width Terminal width the table is laid out for. Defaults
+--       to 80.
 -- @args vulners.max_items Ceiling on billed items for the whole scan.
 -- @args vulners.api_key API token. Leaky: nmap copies its own command line
 --       into -oX, so a key passed this way lands in the report.
--- @args vulners.api_key_file Absolute path to a file whose first line is the token.
--- @args vulners.api_host Domain name of the vulners API. Defaults to vulners.com.
+-- @args vulners.api_key_file Absolute path to a file whose first line is
+--       the token.
+-- @args vulners.api_host Domain name of the vulners API. Defaults to
+--       vulners.com.
 -- @args vulners.api_port Port on api_host. Defaults to 443.
 --
 -- @output
@@ -97,8 +101,8 @@ license = "Same as Nmap--See https://nmap.org/book/man-legal.html"
 -- and the sweep requests every path the catalogue publishes - 939 of them
 -- today - of every web port, at every timing level. nmap's own http-enum
 -- requests 2 204 and is categorised {"discovery","intrusive","vuln"}; this
--- script does the same kind of thing to a server, so it carries the same label.
--- "external" stays, because the lookups leave the operator's network.
+-- script does the same kind of thing to a server, so it carries the same
+-- label. "external" stays, because the lookups leave the operator's network.
 categories = {"discovery", "intrusive", "vuln", "external"}
 
 local http = require "http"
@@ -148,11 +152,12 @@ local MAX_FETCH_ROUNDS = 4
 local MAX_REDIRECTS = 2
 
 -- Lua pattern matching does not yield, so the whole NSE scheduler stops while
--- the downloaded patterns run over a body. Measured: 0.068 s for 63 KB, 0.479 s
--- for 511 KB, 1.863 s for 2 MiB - against nmap's 2 MiB default body cap, over
--- every path the catalogue publishes. truncated_ok is not optional: without it
--- nselib/http.lua treats an oversized body as an error and discards the
--- response whole, so the path looks unanswered and is re-queued every round.
+-- the downloaded patterns run over a body. Measured: 0.068 s for 63 KB, 0.479
+-- s for 511 KB, 1.863 s for 2 MiB - against nmap's 2 MiB default body cap,
+-- over every path the catalogue publishes. truncated_ok is not optional:
+-- without it nselib/http.lua treats an oversized body as an error and discards
+-- the response whole, so the path looks unanswered and is re-queued every
+-- round.
 local MAX_BODY_SIZE = 131072
 local SWEEP_BYTE_BUDGET = 4 * 1024 * 1024
 
@@ -176,8 +181,8 @@ local MAX_DEFAULT_ROWS = 10
 -- free path it always is: with no key there is no cvelist, so an exploit can
 -- never be attributed to the CVE it exploits - every exploit bulletin sits in
 -- band 3 and every CVE in band 5. Measured against the live service, all ten
--- rows for a real Apache 2.4.7 were exploit ids, not one of which names what it
--- exploits, while the CVEs a reader could act on sat below the cut.
+-- rows for a real Apache 2.4.7 were exploit ids, not one of which names what
+-- it exploits, while the CVEs a reader could act on sat below the cut.
 local MAX_BAND_ROWS = 6
 
 -- nginx is published under three vendor spellings for one product. The service
@@ -202,8 +207,8 @@ local SEVERITY_BANDS = {
 -- The rules, the swept paths and the targeted probes are three dictionaries
 -- published separately and fetched at scan time - see the Catalog seam below.
 -- They used to be generated into this file by tools/embed.py, which meant a
--- corpus that changes weekly could only reach a user through a new release of a
--- script that does not.
+-- corpus that changes weekly could only reach a user through a new release of
+-- a script that does not.
 --
 --   catalog/fingerprints.json   product and version rules
 --   catalog/paths.json          the paths the sweep requests
@@ -215,12 +220,13 @@ local SEVERITY_BANDS = {
 
 -- What catalog() answers when nothing was loaded, so every reader can index it
 -- without asking whether it exists first.
-local EMPTY_CATALOG = {fingerprints = {}, paths = {}, probes = {}, rule_count = 0}
+local EMPTY_CATALOG =
+  {fingerprints = {}, paths = {}, probes = {}, rule_count = 0}
 
 -- The catalogue format this script can read. A published catalogue declaring a
--- HIGHER schema is refused rather than half-read: that is what makes it safe to
--- change the format later, because an old script says "I am too old" instead of
--- silently misreading a file it was never taught.
+-- HIGHER schema is refused rather than half-read: that is what makes it safe
+-- to change the format later, because an old script says "I am too old"
+-- instead of silently misreading a file it was never taught.
 local CATALOG_SCHEMA = 1
 
 -- A GitHub branch that holds only the dictionaries, so publishing a catalogue
@@ -245,15 +251,16 @@ local MAX_CATALOG_STRING = 2048
 local CATALOG_FILES = {"fingerprints", "paths", "probes"}
 
 -- The whole published list is always requested. What nmap's timing template
--- changes is the RATE: how many paths go out together, and how long the sweep
--- waits between batches. Asking less would mean finding less, which is not what
--- -T is for; -T is the operator saying how much of the target's attention this
--- scan may take.
+-- changes is the RATE: how many paths go out together, and how long the
+-- sweep waits between batches. Asking less would mean finding less, which is
+-- not what -T is for; -T is the operator saying how much of the target's
+-- attention this scan may take.
 --
 -- nmap's own templates set a delay between probes - 5 min at -T0, 15 s at -T1,
--- 0.4 s at -T2, none above - and applying those per REQUEST to a 939-path sweep
--- would take four hours at -T1. So the delay is per batch, which makes the
--- ladder land where the operator would expect it. Against the published list:
+-- 0.4 s at -T2, none above - and applying those per REQUEST to a 939-path
+-- sweep would take four hours at -T1. So the delay is per batch, which makes
+-- the ladder land where the operator would expect it. Against the published
+-- list:
 --
 --   0 paranoid     188 batches of  5, 2.0 s apart   ~6 min per web port
 --   1 sneaky        94 batches of 10, 1.0 s apart   ~1.5 min
@@ -276,7 +283,7 @@ local DEFAULT_PACE = {100, 0.1}
 
 -- ---------------------------------------------------------------- 1. Util
 
---- Index a chain of keys in somebody else's JSON without raising.
+--; Index a chain of keys in somebody else's JSON without raising.
 --
 -- Every field below this line comes from an HTTP response. A record that is a
 -- string where a table was expected must skip the port's finding, not take the
@@ -291,19 +298,19 @@ local function dig(value, ...)
   return value
 end
 
---- The value only if it is a table, otherwise an empty one.
+--; The value only if it is a table, otherwise an empty one.
 local function as_table(value)
   return type(value) == "table" and value or {}
 end
 
---- The value only if it is a non-empty string.
+--; The value only if it is a non-empty string.
 local function as_string(value)
   if type(value) == "string" and value ~= "" then
     return value
   end
 end
 
---- Cut text to a limit, leaving a mark that says something was cut.
+--; Cut text to a limit, leaving a mark that says something was cut.
 local function clip(text, limit)
   if limit and #text > limit then
     return text:sub(1, math.max(1, limit - 1)) .. "~"
@@ -311,7 +318,7 @@ local function clip(text, limit)
   return text
 end
 
---- Text that survives nmap's own output escaping unchanged.
+--; Text that survives nmap's own output escaping unchanged.
 --
 -- escape_for_screen() in output.cc passes TAB, LF and 0x20-0x7E and rewrites
 -- everything else as the literal text \xHH - in the screen output, in -oN and
@@ -322,27 +329,28 @@ local function ascii(value, limit)
   return clip(text:gsub("%s+", " "):gsub("^ ", ""):gsub(" $", ""), limit)
 end
 
---- ascii(), except that line breaks survive.
+--; ascii(), except that line breaks survive.
 --
 -- The banner channel matches each line of a probe response on its own, because
 -- recog's banner patterns are written against a single greeting line: 143 of
--- the 163 shipped banner rules are anchored with ^ or $. Folding a payload with
--- ascii() collapses its newlines into spaces, which left fingerprint_banner
--- splitting a single line and every one of those rules unable to fire unless
--- its software happened to open the first probe response.
+-- the 163 shipped banner rules are anchored with ^ or $. Folding a payload
+-- with ascii() collapses its newlines into spaces, which left
+-- fingerprint_banner splitting a single line and every one of those rules
+-- unable to fire unless its software happened to open the first probe
+-- response.
 local function ascii_lines(value, limit)
   local text = tostring(value or ""):gsub("[^\32-\126\n]", " ")
-  -- Runs of blanks collapse as they do in ascii(); a newline absorbs the blanks
-  -- around it rather than being absorbed by them.
+  -- Runs of blanks collapse as they do in ascii(); a newline absorbs the
+  -- blanks around it rather than being absorbed by them.
   text = text:gsub("[ \t]+", " "):gsub(" *\n *", "\n"):gsub("\n\n+", "\n")
   return clip(text:gsub("^%s+", ""):gsub("%s+$", ""), limit)
 end
 
---- A score, or nil when the API did not score the bulletin.
+--; A score, or nil when the API did not score the bulletin.
 --
 -- Two of 102 rows measured on one real CPE carry score 0.0 with vector "NONE".
--- Read as 0.0 they sort below every MEDIUM finding; read as absent they sort as
--- unscored, which is what they are.
+-- Read as 0.0 they sort below every MEDIUM finding; read as absent they sort
+-- as unscored, which is what they are.
 local function score_of(cvss)
   if type(cvss) ~= "table" then
     return nil
@@ -361,16 +369,16 @@ local function score_of(cvss)
     return nil
   end
   -- A score of exactly 0.0 is not a score. The free endpoint gives every
-  -- exploit bulletin 0 - 1.x carried the note "exploits seem to have cvss == 0,
-  -- so print them anyway" - and two of 102 rows measured on one real CPE pair
-  -- it with vector "NONE". Read as 0.0 those sort below every MEDIUM finding;
-  -- read as absent they sort as unscored, which is what they are, and
+  -- exploit bulletin 0 - 1.x carried the note "exploits seem to have cvss ==
+  -- 0, so print them anyway" - and two of 102 rows measured on one real CPE
+  -- pair it with vector "NONE". Read as 0.0 those sort below every MEDIUM
+  -- finding; read as absent they sort as unscored, which is what they are, and
   -- enrichment can still supply a real score later.
   if score == 0 then
     return nil
   end
-  -- tostring() on a table yields its address, which would put a heap pointer in
-  -- the report - different on every run, which defeats the whole point of
+  -- tostring() on a table yields its address, which would put a heap pointer
+  -- in the report - different on every run, which defeats the whole point of
   -- deterministic output.
   local kind
   local version = as_string(cvss.version) or tonumber(cvss.version)
@@ -380,7 +388,7 @@ local function score_of(cvss)
   return score, kind
 end
 
---- A score only if it is on the 0-10 scale everything here is laid out for.
+--; A score only if it is on the 0-10 scale everything here is laid out for.
 local function bounded_score(value)
   if value == nil or value < 0 or value > 10 then
     return nil
@@ -388,7 +396,7 @@ local function bounded_score(value)
   return value
 end
 
---- The NVD severity word for a score.
+--; The NVD severity word for a score.
 local function severity_of(score)
   if score == nil then
     return "Unknown"
@@ -403,7 +411,7 @@ end
 
 -- ----------------------------------------------------------------- 2. Cpe
 
---- The same CPE under every nginx spelling, or nil if it is not nginx.
+--; The same CPE under every nginx spelling, or nil if it is not nginx.
 local function nginx_variants(cpe)
   for _, spelling in ipairs(NGINX_SPELLINGS) do
     if cpe:find(spelling, 1, true) then
@@ -416,37 +424,39 @@ local function nginx_variants(cpe)
   end
 end
 
---- One key for a product that has three names, so it is reported once.
+--; One key for a product that has three names, so it is reported once.
 local function canonical_cpe(cpe)
   local variants = nginx_variants(cpe)
   return variants and variants[1] or cpe
 end
 
---- The version and the trailing update part of a CPE.
+--; The version and the trailing update part of a CPE.
 local CPE_VERSION_PATTERN = ":([%d%.%-%_]+)([^:]*)$"
 
--- The longest identity worth asking about. nmap builds CPEs out of banner text,
--- so a hostile banner can make one arbitrarily long: measured, a 4000-character
--- version produced an 8 KB request line, which most servers refuse outright and
--- which puts 8 KB of the target's choosing into the report as a group key.
+-- The longest identity worth asking about. nmap builds CPEs out of banner
+-- text, so a hostile banner can make one arbitrarily long: measured, a
+-- 4000-character version produced an 8 KB request line, which most servers
+-- refuse outright and which puts 8 KB of the target's choosing into the report
+-- as a group key.
 --
 -- Measured against the 8 396 CPE templates nmap ships: median 26 characters,
 -- 99th percentile 50, longest 80 before its version is filled in. 256 is four
--- times the realistic maximum, so refusing beyond it cannot cost a real lookup.
--- Refused rather than truncated: a truncated CPE is a DIFFERENT identity, and
--- asking about the wrong one produces a silent false negative.
+-- times the realistic maximum, so refusing beyond it cannot cost a real
+-- lookup. Refused rather than truncated: a truncated CPE is a DIFFERENT
+-- identity, and asking about the wrong one produces a silent false negative.
 local MAX_IDENTITY = 256
 
 -- How many identities one SOURCE on a port may contribute, and how many the
--- whole scan may look up. MAX_IDENTITY caps the LENGTH of one identity, not the
--- NUMBER of them: measured, an 8 KB body of repeated "Server: nginx/9.x.y"
+-- whole scan may look up. MAX_IDENTITY caps the LENGTH of one identity, not
+-- the NUMBER of them: measured, an 8 KB body of repeated "Server: nginx/9.x.y"
 -- lines produced 301 <cpe> elements on nmap's own service element and 903 GETs
 -- to the API, from a scan the operator did not ask for - with the count chosen
 -- by the target. A real web stack has fewer than ten.
 --
 -- Per source, not per port: the banner channel and the path sweep each count
--- their own, so a port that has both can reach twice this. That is deliberate -
--- they read different things and neither should be able to crowd the other out
+-- their own, so a port that has both can reach twice this. That is
+-- deliberate - they read different things and neither should be able to
+-- crowd the other out
 -- - and the scan-wide ceiling below is what actually bounds the requests.
 local MAX_IDENTITIES_PER_PORT = 24
 local MAX_LOOKUPS_PER_SCAN = 512
@@ -454,10 +464,10 @@ local MAX_LOOKUPS_PER_SCAN = 512
 -- How long the pattern set may run on one port - ONE budget, shared by the
 -- banner pass, the sweep and the probes. Each used to start its own, so a port
 -- that did all three could spend three times this in non-yielding matching
--- while the constant said otherwise. The byte budget was calibrated
--- on benign HTML at roughly a second per megabyte, but cost is not a function of
--- length: two shipped jQuery patterns are lazy and unanchored, which is O(n^2)
--- on adversarial text, and 128 KB of the substring "jquery" - one response the
+-- while the constant said otherwise. The byte budget was calibrated on benign
+-- HTML at roughly a second per megabyte, but cost is not a function of length:
+-- two shipped jQuery patterns are lazy and unanchored, which is O(n^2) on
+-- adversarial text, and 128 KB of the substring "jquery" - one response the
 -- body cap already allows - was measured at 24.9 s. Pattern matching does not
 -- yield, so that is the whole scan frozen. Bytes remain as a second barrier.
 local SWEEP_TIME_BUDGET = 3.0
@@ -468,31 +478,32 @@ local SWEEP_TIME_BUDGET = 3.0
 -- until it is done. Measured against the shipped rule "Bootstrap, body" on a
 -- body of "<link href=bootstrap" repeated with no ">": 2 KB took 0.064 s, 4 KB
 -- 0.50 s, 8 KB 3.9 s, 16 KB 31.8 s - cubic, so the 128 KB the body cap already
--- admits is roughly four and a half HOURS inside one uninterruptible call, with
--- the whole nmap scheduler stopped. The 3 s budget is consulted before the call
--- and passes.
+-- admits is roughly four and a half HOURS inside one uninterruptible call,
+-- with the whole nmap scheduler stopped. The 3 s budget is consulted before
+-- the call and passes.
 --
--- A rule's anchor is a literal its pattern cannot match without, so the pattern
--- only ever needs the text around that literal. All 74 body-channel rules carry
--- one; only 12 of 722 rules have none at all, and none of those read a body.
--- Sized by measurement, not by eye. The same shipped rule against the same
--- adversarial body: 256 B costs 0.7 ms, 512 B 7 ms, 1 KB 64 ms, 2 KB 917 ms.
--- 512 plus 256 of lookbehind is far more than any real <link href=...> tag needs
--- and keeps one rule under ~7 ms, so the time budget below can actually bound
--- the pass.
+-- A rule's anchor is a literal its pattern cannot match without, so the
+-- pattern only ever needs the text around that literal. All 74 body-channel
+-- rules carry one; only 12 of 722 rules have none at all, and none of those
+-- read a body. Sized by measurement, not by eye. The same shipped rule against
+-- the same adversarial body: 256 B costs 0.7 ms, 512 B 7 ms, 1 KB 64 ms, 2 KB
+-- 917 ms. 512 plus 256 of lookbehind is far more than any real <link href=...>
+-- tag needs and keeps one rule under ~7 ms, so the time budget below can
+-- actually bound the pass.
 local MATCH_LOOKBEHIND = 256
 local MATCH_WINDOW = 512
 -- A rule with no anchor cannot be centred on anything, so it reads from the
--- start - generously, because a header block is not a body, and no body-channel
--- rule is anchorless (measured: 12 of 722 rules have no anchor, none on body).
+-- start - generously, because a header block is not a body, and no
+-- body-channel rule is anchorless (measured: 12 of 722 rules have no anchor,
+-- none on body).
 local UNANCHORED_WINDOW = 4096
--- How many times one rule's anchor is chased through one subject. A body of ten
--- thousand "bootstrap"s is not a page being fingerprinted.
+-- How many times one rule's anchor is chased through one subject. A body of
+-- ten thousand "bootstrap"s is not a page being fingerprinted.
 local MAX_ANCHOR_HITS = 8
 
--- How many targeted version probes one port may send. A probe only fires when a
--- product was positively identified and no rule produced a version for it, so
--- on a host running none of the products in the probe table this is zero
+-- How many targeted version probes one port may send. A probe only fires when
+-- a product was positively identified and no rule produced a version for it,
+-- so on a host running none of the products in the probe table this is zero
 -- requests. Three is the ceiling for the pathological case: a page that
 -- deliberately carries every detector at once, which a target can trivially
 -- build, and which must not turn into one request per probe in the table.
@@ -500,21 +511,22 @@ local MAX_PROBES_PER_PORT = 3
 
 -- There is deliberately no CPE-to-dictionary converter here, and no call to
 -- POST /api/v4/audit/software/. That endpoint rejects nmap's CPE 2.2 form with
--- a 400, so using it needs a converter - and a converter needs to percent-decode
--- each component, which is where the hazard lives: nmap builds CPEs out of
--- banner text, so a hostile banner can carry %2A, which decodes to "*", the ANY
--- wildcard, turning one lookup into "every CVE for this product".
+-- a 400, so using it needs a converter - and a converter needs to
+-- percent-decode each component, which is where the hazard lives: nmap builds
+-- CPEs out of banner text, so a hostile banner can carry %2A, which decodes to
+-- "*", the ANY wildcard, turning one lookup into "every CVE for this product".
 --
 -- Nothing here decodes anything. The free endpoint takes the CPE verbatim,
 -- byte-identical to what nmap emitted, which is both what keeps its answers on
--- the shared CDN cache and the reason no injection is possible. An earlier draft
--- carried the converter and its guard for a fallback that is not written; that
--- is scaffolding, and the guard read as load-bearing while protecting nothing.
--- If burp is ever retired, this comment is the warning to whoever writes it.
+-- the shared CDN cache and the reason no injection is possible. An earlier
+-- draft carried the converter and its guard for a fallback that is not
+-- written; that is scaffolding, and the guard read as load-bearing while
+-- protecting nothing. If burp is ever retired, this comment is the warning to
+-- whoever writes it.
 
 -- --------------------------------------------------------------- 3. State
 
---- Everything that outlives one action() call, under one registry key.
+--; Everything that outlives one action() call, under one registry key.
 --
 -- The chunk is re-executed once per open port, so nothing here can be a
 -- file-level table. The registry is shared with every other script in the run,
@@ -533,19 +545,20 @@ local function state()
       balance = nil,  -- last x-vulners-wallet-amount seen
       unnamed = 0,    -- services that produced no usable identity
       -- Separate from mode on purpose. Reaching a spending ceiling must not
-      -- withdraw the token: POST /api/v3/search/id/ needs it and costs nothing,
-      -- so conflating the two made a BUDGET limit silently switch off a FREE
-      -- feature for every remaining host - punishing the operator who set a low
-      -- ceiling with a worse report on the hosts they were not spending on.
+      -- withdraw the token: POST /api/v3/search/id/ needs it and costs
+      -- nothing, so conflating the two made a BUDGET limit silently switch off
+      -- a FREE feature for every remaining host - punishing the operator who
+      -- set a low ceiling with a worse report on the hosts they were not
+      -- spending on.
       billed = {},    -- audit/smart answers, keyed by the string bought
       billing_off = false,
       deprecated = {},-- legacy argument names already warned about, once each
       mode = "free",
       degraded = nil, -- why the scan dropped to the free path
       consulted = false,
-      -- Set as they are learnt rather than declared here, because assigning nil
-      -- creates no key: catalog, catalog_loaded and catalog_note come from the
-      -- prerule, free_stopped from a dead free leg, billing_stopped from
+      -- Set as they are learnt rather than declared here, because assigning
+      -- nil creates no key: catalog, catalog_loaded and catalog_note come from
+      -- the prerule, free_stopped from a dead free leg, billing_stopped from
       -- stop_billing.
     }
     nmap.registry.vulners = shared
@@ -553,7 +566,7 @@ local function state()
   return shared
 end
 
---- Wait, briefly, for a lookup another host started.
+--; Wait, briefly, for a lookup another host started.
 --
 -- nmap runs the port scripts of a host group concurrently, so a network of
 -- identical servers would otherwise ask the same question once per host before
@@ -567,7 +580,7 @@ local function wait_for_pending(pending, key)
   end
 end
 
---- Drop to the free path for the rest of the scan, and record why.
+--; Drop to the free path for the rest of the scan, and record why.
 --
 -- The 1.x enterprise script set one scan-wide "failed" flag, which in a merged
 -- script would silence the free path too - so a user whose trial key expired
@@ -581,7 +594,7 @@ local function degrade(reason)
   shared.degraded = shared.degraded or reason
 end
 
---- Stop one leg for the rest of the scan, and remember why.
+--; Stop one leg for the rest of the scan, and remember why.
 --
 -- Both halves matter, and each was missing on a different path.
 --
@@ -591,8 +604,8 @@ end
 -- prevent, and it was reachable through every door except 401/402/403.
 --
 -- A dead FREE leg has to be reported, or a scan that checked nothing looks
--- exactly like a scan that found nothing: the burp GET carries no key, so a 403
--- there is a CDN verdict that silences every port on every host while the
+-- exactly like a scan that found nothing: the burp GET carries no key, so a
+-- 403 there is a CDN verdict that silences every port on every host while the
 -- postrule prints the ordinary "get a key" advertisement.
 local function stop_leg(leg, reason)
   local shared = state()
@@ -605,7 +618,7 @@ local function stop_leg(leg, reason)
   end
 end
 
---- Stop buying identifications for the rest of the scan, and say why once.
+--; Stop buying identifications for the rest of the scan, and say why once.
 --
 -- Beside stop_leg because it is the same kind of decision and the opposite
 -- verdict: this one stops SPENDING and nothing else. Reaching a spending
@@ -615,13 +628,13 @@ local function stop_billing(reason)
   local shared = state()
   shared.billing_off = true
   shared.billing_stopped = reason
-  stdnse.verbose1("vulners: %s; identification stops, everything else continues",
-    reason)
+  stdnse.verbose1(
+    "vulners: %s; identification stops, everything else continues", reason)
 end
 
 -- -------------------------------------------------------------- 4. Config
 
---- Read a script argument, accepting the 1.x names for one release.
+--; Read a script argument, accepting the 1.x names for one release.
 --
 -- stdnse.get_script_args(a, b) returns ONE VALUE PER NAME, not the first
 -- non-nil, so passing two names and reading one result silently ignores the
@@ -647,18 +660,18 @@ local function arg_value(name, legacy)
   return value
 end
 
---- Is this token one that can safely be put in a header?
+--; Is this token one that can safely be put in a header?
 --
 -- nselib concatenates a header as name .. ": " .. value with no validation
 -- (http.lua:1314-1316), so a CR or LF in the token injects whatever follows it
--- into the request. The file reader has always rejected control characters -
--- a Windows-written key file leaves a CR - but a key from --script-args or from
+-- into the request. The file reader has always rejected control characters - a
+-- Windows-written key file leaves a CR - but a key from --script-args or from
 -- the environment reached the header unchecked.
 local function usable_token(key)
   return key ~= nil and not key:find("%c")
 end
 
---- The first line of a key file, or nil plus the reason it could not be read.
+--; The first line of a key file, or nil plus the reason it could not be read.
 local function key_from_file(path)
   local file = io.open(path, "r")
   if file == nil then
@@ -682,16 +695,18 @@ local function key_from_file(path)
   return key
 end
 
---- Where the key comes from, in order of how explicit the operator was.
+--; Where the key comes from, in order of how explicit the operator was.
 --
 -- A file the operator NAMED and that cannot be read is fatal for the run: it
--- matches this project's existing rule for a named paths file - an operator who
--- names a file means that file. Only the implicit lookups fall through quietly.
+-- matches this project's existing rule for a named paths file - an operator
+-- who names a file means that file. Only the implicit lookups fall through
+-- quietly.
 local function discover_key(named_file)
   local key = as_string(arg_value("api_key", "vulners_enterprise.api_key"))
   if key then
     if not usable_token(key) then
-      return nil, nil, "the vulners.api_key argument contains a control character"
+      return nil, nil,
+        "the vulners.api_key argument contains a control character"
     end
     return key, "script argument"
   end
@@ -732,7 +747,7 @@ local function discover_key(named_file)
   return nil
 end
 
---- Everything the run needs from its arguments, resolved once per chunk.
+--; Everything the run needs from its arguments, resolved once per chunk.
 local config_cache = nil
 
 local function config()
@@ -740,16 +755,17 @@ local function config()
     return config_cache
   end
 
-  local mincvss = tonumber(arg_value("mincvss", "vulners_enterprise.mincvss")) or 0.0
+  local mincvss = tonumber(
+    arg_value("mincvss", "vulners_enterprise.mincvss")) or 0.0
   -- Floored: string.rep demands an integer, so a width of 80.5 propagated a
-  -- fraction into the column arithmetic and raised inside action() - which nmap
-  -- turns into "Script execution failed", losing every finding for that port in
-  -- both the text and the XML.
-  -- tointeger as well as floor: math.floor(1e308) returns the FLOAT 1e308,
-  -- because that value has no integer representation, and it then travels into
-  -- string.rep as a float and raises inside action() - losing the port's whole
-  -- result, which is the very failure the floor was added to prevent. Bounded
-  -- above too: a title column computed from an absurd width is not a table.
+  -- fraction into the column arithmetic and raised inside action() - which
+  -- nmap turns into "Script execution failed", losing every finding for that
+  -- port in both the text and the XML. tointeger as well as floor:
+  -- math.floor(1e308) returns the FLOAT 1e308, because that value has no
+  -- integer representation, and it then travels into string.rep as a float and
+  -- raises inside action() - losing the port's whole result, which is the very
+  -- failure the floor was added to prevent. Bounded above too: a title column
+  -- computed from an absurd width is not a table.
   local width = math.tointeger(
     math.floor(tonumber(arg_value("width")) or DEFAULT_WIDTH)) or DEFAULT_WIDTH
   local max_items = tonumber(arg_value("max_items")) or DEFAULT_MAX_ITEMS
@@ -788,7 +804,8 @@ local function config()
   }
 
   if key then
-    stdnse.debug1("Api key is set (%d characters) from %s", #key, tostring(source))
+    stdnse.debug1("Api key is set (%d characters) from %s", #key,
+      tostring(source))
     -- Only if the scan has not already given up on the key. The chunk is
     -- re-executed once per OPEN port, so this line runs again on every port -
     -- and it used to overwrite the mode that degrade() had set on an earlier
@@ -808,7 +825,7 @@ end
 
 -- ---------------------------------------------------------------- 5. Http
 
---- Is this request allowed to carry the key?
+--; Is this request allowed to carry the key?
 --
 -- http.get/post without options.scheme route through comm.tryssl, which tries
 -- PLAINTEXT FIRST for any port outside its likely-SSL list - probed, 443 and
@@ -823,7 +840,7 @@ local function key_is_safe_here(cfg)
   return host == "127.0.0.1" or host == "localhost" or host == "::1"
 end
 
---- A whole number the service sent, or nil when it sent something else.
+--; A whole number the service sent, or nil when it sent something else.
 --
 -- Validated, because these are bytes from a response like any other. A
 -- fractional amount reached string.format("%d") and raised in the postrule.
@@ -839,11 +856,11 @@ local function whole(value)
   return number
 end
 
---- What the service says this billed call cost, or nil if it did not say.
+--; What the service says this billed call cost, or nil if it did not say.
 --
--- ONE function, because two readers ask this question and they must agree. They
--- did not: record_wallet charged only a VALID cost, while audit_smart released
--- its reservation on the header merely being PRESENT. So
+-- ONE function, because two readers ask this question and they must agree.
+-- They did not: record_wallet charged only a VALID cost, while audit_smart
+-- released its reservation on the header merely being PRESENT. So
 -- "x-vulners-wallet-cost: abc" charged nothing and refunded everything -
 -- shared.spent never advanced, and vulners.max_items became a ceiling the
 -- service itself could disarm. A present-but-unreadable header must mean
@@ -852,7 +869,7 @@ local function billed_cost(response)
   return whole(dig(response, "header", "x-vulners-wallet-cost"))
 end
 
---- Read the wallet headers the billed endpoints send back.
+--; Read the wallet headers the billed endpoints send back.
 local function record_wallet(response)
   local shared = state()
   local amount = whole(dig(response, "header", "x-vulners-wallet-amount"))
@@ -865,7 +882,7 @@ local function record_wallet(response)
   end
 end
 
---- One request, retried when retrying can change the answer.
+--; One request, retried when retrying can change the answer.
 --
 -- Transport failures, 408, 429 and 5xx are retried; everything else is final.
 -- 5xx is retried on the billed endpoints too: the service bills on a 200, so a
@@ -878,17 +895,19 @@ end
 --
 -- @param leg "free" or "keyed" - the two keep independent failure flags, so a
 --        rejected key never silences the free path.
--- @param billed true when the service charges for this call. It changes one
---        thing: a transport failure is NOT retried. "Billing happens on a 200,
---        so a retried 5xx cannot double-charge" is sound for a 5xx, because the
---        client saw the server's verdict - it is not sound for a timeout, where
---        the server may have completed and charged while the client gave up.
+-- @param billed true when the service charges for this call. It changes
+--        one thing: a transport failure is NOT retried. "Billing happens on a
+--        200, so a retried 5xx cannot double-charge" is sound for a 5xx,
+--        because the client saw the server's verdict - it is not sound for a
+--        timeout, where the server may have completed and charged while the
+--        client gave up.
 local function request(leg, path, body, billed)
   local cfg = config()
   local shared = state()
 
   if shared.failed[leg] then
-    stdnse.debug1("Skipping %s request, that leg already failed in this scan", leg)
+    stdnse.debug1(
+      "Skipping %s request, that leg already failed in this scan", leg)
     return nil
   end
 
@@ -900,10 +919,10 @@ local function request(leg, path, body, billed)
     header["Content-Type"] = "application/json"
   end
   -- The burp request never carries the key, in any mode. Measured: a keyed
-  -- burp GET answers cf-cache-status DYNAMIC, an unkeyed one is cached for four
-  -- hours. Sending the key would take every user of this script off the shared
-  -- warm cache and onto the origin, and buy nothing - the endpoint does not
-  -- need a key and its answer does not improve with one.
+  -- burp GET answers cf-cache-status DYNAMIC, an unkeyed one is cached for
+  -- four hours. Sending the key would take every user of this script off the
+  -- shared warm cache and onto the origin, and buy nothing - the endpoint does
+  -- not need a key and its answer does not improve with one.
   if leg == "keyed" and cfg.key and key_is_safe_here(cfg) then
     header["X-Api-Key"] = cfg.key
   end
@@ -920,7 +939,8 @@ local function request(leg, path, body, billed)
   while attempt <= MAX_ATTEMPTS do
     local response
     if body then
-      response = http.post(cfg.api_host, cfg.api_port, path, options, nil, body)
+      response = http.post(cfg.api_host, cfg.api_port, path, options, nil,
+        body)
     else
       response = http.get(cfg.api_host, cfg.api_port, path, options)
     end
@@ -931,11 +951,12 @@ local function request(leg, path, body, billed)
       return response
     end
 
-    -- 401 and 403 are verdicts on the TOKEN, so they stop the keyed leg. 402 is
-    -- a verdict on the WALLET, and only the billed endpoint can give one: taking
-    -- the leg down for it switched off search/id - which needs the token and
-    -- costs nothing - for every later host, which is the exact regression
-    -- stop_billing exists to prevent, arriving through the other door.
+    -- 401 and 403 are verdicts on the TOKEN, so they stop the keyed leg. 402
+    -- is a verdict on the WALLET, and only the billed endpoint can give one:
+    -- taking the leg down for it switched off search/id - which needs the
+    -- token and costs nothing - for every later host, which is the exact
+    -- regression stop_billing exists to prevent, arriving through the other
+    -- door.
     if status == 401 or status == 403 then
       stop_leg(leg, string.format("the API answered %d", status))
       return nil
@@ -955,8 +976,8 @@ local function request(leg, path, body, billed)
     end
 
     if status == nil and billed then
-      stdnse.debug1("A billed call did not answer; not re-sending it, because " ..
-        "the service may have completed and charged for it")
+      stdnse.debug1("A billed call did not answer; not re-sending it, " ..
+        "because the service may have completed and charged for it")
       return nil
     end
 
@@ -985,8 +1006,8 @@ local function request(leg, path, body, billed)
         -- malformed identity upsetting the backend, and turning the whole leg
         -- off would report every later host as having nothing known.
         stop_leg(leg, "the API asked for more delay than this scan will wait")
-        stdnse.debug1("The API asked for more delay than this scan will wait; " ..
-          "stopping requests")
+        stdnse.debug1("The API asked for more delay than this scan will " ..
+          "wait; stopping requests")
       else
         stdnse.debug1("The API kept answering %d, giving up", status)
       end
@@ -1000,8 +1021,8 @@ local function request(leg, path, body, billed)
       delay = math.max(0, math.min(retry_after, RETRY_AFTER_CAP))
       -- >=, not >. A Retry-After of exactly the cap clamped to the cap, slept
       -- twice for it, and then missed this branch entirely - so every identity
-      -- paid 120 s again. Measured: a service answering "Retry-After: 60" turned
-      -- a six-second scan into 307 seconds.
+      -- paid 120 s again. Measured: a service answering "Retry-After: 60"
+      -- turned a six-second scan into 307 seconds.
       if retry_after >= RETRY_AFTER_CAP then
         asked_to_wait_longer = true
       end
@@ -1013,11 +1034,12 @@ end
 
 -- ----------------------------------------------------------------- 6. Api
 
---- Decode a response body, distinguishing the three envelopes in use.
+--; Decode a response body, distinguishing the three envelopes in use.
 --
 -- v3 answers {result = "OK"|"warning"|"error", data = {...}} where result is a
--- STRING; v4 answers {result = {...}} where result is an ARRAY; a v4 validation
--- failure answers {errors = [...]} with neither. Code that tests result == "OK"
+-- STRING; v4 answers {result = {...}} where result is an ARRAY; a v4
+-- validation failure answers {errors = [...]} with neither. Code that tests
+-- result == "OK"
 -- rejects a good v4 answer, and code that iterates result on a v3 answer walks
 -- the characters of "OK", so the dispatch is on the TYPE of result.
 --
@@ -1045,10 +1067,10 @@ local function envelope(response)
   end
 
   if type(body.result) == "string" then
-    -- "OK" with a data field that is not an object is not a clean answer, it is
-    -- a malfunction. Coercing it to an empty table made the scan remember the
-    -- software as having nothing known about it, for the rest of the run - which
-    -- is the one thing the caching rule forbids.
+    -- "OK" with a data field that is not an object is not a clean answer, it
+    -- is a malfunction. Coercing it to an empty table made the scan remember
+    -- the software as having nothing known about it, for the rest of the run -
+    -- which is the one thing the caching rule forbids.
     if type(body.data) ~= "table" then
       stdnse.debug1("A v3 answer carried result=%s with no usable data",
         tostring(body.result))
@@ -1060,37 +1082,38 @@ local function envelope(response)
   return nil
 end
 
---- Look one software identity up on the free endpoint.
+--; Look one software identity up on the free endpoint.
 --
--- One request per identity: the endpoint does not batch, and a list is silently
--- mangled into one nonsense CPE. GET rather than POST, because only GET is
--- CDN-cached.
+-- One request per identity: the endpoint does not batch, and a list is
+-- silently mangled into one nonsense CPE. GET rather than POST, because only
+-- GET is CDN-cached.
 --
--- @return rows, answered, explain
---         answered is false when the request itself failed, which must never be
---         remembered as "this software is clean".
+-- @return rows, answered, explain answered is false when the request
+--         itself failed, which must never be remembered as "this software is
+--         clean".
 local function burp_lookup(software, version, kind)
   local parts = {}
   for _, pair in ipairs({{"software", software}, {"version", version},
                          {"type", kind}}) do
     if pair[2] ~= nil then
-      -- Sent the way nmap's own shipped copy sends it: verbatim apart from what
-      -- would change the meaning of the request. ':' and '/' are legal in a
-      -- query (RFC 3986 3.4), and leaving them alone means the lookup does not
-      -- depend on the endpoint decoding anything - which mattered on
+      -- Sent the way nmap's own shipped copy sends it: verbatim apart from
+      -- what would change the meaning of the request. ':' and '/' are legal in
+      -- a query (RFC 3986 3.4), and leaving them alone means the lookup does
+      -- not depend on the endpoint decoding anything - which mattered on
       -- 2026-08-18, when escaped values were answered with errorCode 303 for a
       -- few hours while the raw form kept working. '+' is escaped, because the
-      -- endpoint reads it as a space.
-      -- Note there is no "*" in this class. It is the ANY wildcard, and a CPE
-      -- carrying one - which any other script can put in host.registry - would
-      -- widen one lookup into "every vulnerability for this product".
+      -- endpoint reads it as a space. Note there is no "*" in this class. It
+      -- is the ANY wildcard, and a CPE carrying one - which any other script
+      -- can put in host.registry - would widen one lookup into "every
+      -- vulnerability for this product".
       local escaped = tostring(pair[2]):gsub("[^!$'(),%-./0-9:;@A-Z_a-z~]",
         function(char) return ("%%%02X"):format(char:byte()) end)
       parts[#parts + 1] = pair[1] .. "=" .. escaped
     end
   end
 
-  local response = request("free", BURP_PATH .. "?" .. table.concat(parts, "&"))
+  local response = request("free",
+    BURP_PATH .. "?" .. table.concat(parts, "&"))
   local kind_of, data, result = envelope(response)
 
   if kind_of ~= "v3" then
@@ -1125,8 +1148,8 @@ local function burp_lookup(software, version, kind)
         cvss = score,
         cvss_type = kind_name,
         -- Range-checked exactly as score_of checks cvss, and for the same
-        -- measured reason: a value of 12345.678 formats into a four-column cell
-        -- and shifts that row clear of the header and the rule.
+        -- measured reason: a value of 12345.678 formats into a four-column
+        -- cell and shifts that row clear of the header and the rule.
         ai_score = bounded_score(tonumber(dig(source, "ai_score", "value"))),
       }
     end
@@ -1135,15 +1158,15 @@ local function burp_lookup(software, version, kind)
   return rows, true, explain
 end
 
---- The fields the enrichment call asks for, on every id, every time.
+--; The fields the enrichment call asks for, on every id, every time.
 --
--- Asked for unconditionally: a licence that does not grant one simply omits it,
--- and the renderer follows what arrives. An earlier draft asked for "metrics"
--- only on CVE-family documents, reasoning that an exploit bulletin has no ADP
--- container. That is false and expensively so - measured over a 100-document
--- batch, 55 of the 62 exploit-family documents carry metrics, and BOTH KEV hits
--- in the batch were on exploit documents. The partition would have emptied the
--- top ranking bucket outright.
+-- Asked for unconditionally: a licence that does not grant one simply omits
+-- it, and the renderer follows what arrives. An earlier draft asked for
+-- "metrics" only on CVE-family documents, reasoning that an exploit bulletin
+-- has no ADP container. That is false and expensively so - measured over a
+-- 100-document batch, 55 of the 62 exploit-family documents carry metrics, and
+-- BOTH KEV hits in the batch were on exploit documents. The partition would
+-- have emptied the top ranking bucket outright.
 --
 -- "enchantments" is deliberately absent: 11.3 KB per document against 1.3 KB
 -- for metrics, and what it buys is a different exploitation signal rather than
@@ -1153,7 +1176,7 @@ local SEARCH_ID_FIELDS = {
   "epss", "cvelist", "metrics",
 }
 
---- Normalise one enriched document into the fields the report uses.
+--; Normalise one enriched document into the fields the report uses.
 local function read_document(document)
   local id = as_string(document.id)
   if not id then
@@ -1164,9 +1187,9 @@ local function read_document(document)
   local metrics = as_table(document.metrics)
   local adp = as_table(metrics.adp)
 
-  -- epss is a list of objects, one per CVE. Taking element 1 read whichever CVE
-  -- the service happened to list first: a distro advisory covering three CVEs
-  -- put another CVE's probability on this row, and moved the row between
+  -- epss is a list of objects, one per CVE. Taking element 1 read whichever
+  -- CVE the service happened to list first: a distro advisory covering three
+  -- CVEs put another CVE's probability on this row, and moved the row between
   -- ranking bands depending on list order. The entry for this document wins;
   -- failing that the worst of them, which is the honest summary for a record
   -- that covers several.
@@ -1224,7 +1247,7 @@ local function read_document(document)
   }
 end
 
---- Walk a list in chunks no larger than the endpoint accepts.
+--; Walk a list in chunks no larger than the endpoint accepts.
 local function in_chunks(list, size, consume)
   for first = 1, #list, size do
     local chunk = {}
@@ -1235,23 +1258,24 @@ local function in_chunks(list, size, consume)
   end
 end
 
---- Ask for one chunk of ids and keep every document that came back.
+--; Ask for one chunk of ids and keep every document that came back.
 --
--- @return true when the service answered at all. "The request failed" and "this
---         id has no document" are different facts, and only the second is worth
---         remembering.
+-- @return true when the service answered at all. "The request failed"
+--         and "this id has no document" are different facts, and only the
+--         second is worth remembering.
 local function enrich_chunk(chunk)
   local shared = state()
   local body = json.generate({id = chunk, fields = SEARCH_ID_FIELDS})
   local kind, data, result = envelope(request("keyed", SEARCH_ID_PATH, body))
   -- The result STRING matters, not just the envelope kind. Vulners reports
   -- business errors inside an HTTP 200 - {"result":"error","data":{...}} - and
-  -- data is a table, so the envelope is a perfectly good "v3". Taking that as an
-  -- answer made the caller write docs[id] = false for the whole chunk, so one
-  -- transient error permanently marked up to 100 bulletins "asked, nothing
+  -- data is a table, so the envelope is a perfectly good "v3". Taking that as
+  -- an answer made the caller write docs[id] = false for the whole chunk, so
+  -- one transient error permanently marked up to 100 bulletins "asked, nothing
   -- there" for the rest of the scan: every later host silently lost titles,
-  -- EPSS, KEV and cvelist, and losing cvelist also disarms exploit attribution.
-  -- burp_lookup has always made this distinction; this call never did.
+  -- EPSS, KEV and cvelist, and losing cvelist also disarms exploit
+  -- attribution. burp_lookup has always made this distinction; this call never
+  -- did.
   if kind ~= "v3" or (result ~= "OK" and result ~= "warning") then
     return false
   end
@@ -1267,7 +1291,7 @@ local function enrich_chunk(chunk)
   return true
 end
 
---- Enrich a set of bulletin ids, at most 100 per call, once per scan.
+--; Enrich a set of bulletin ids, at most 100 per call, once per scan.
 --
 -- search/id needs a key and costs no credits, so this runs for every finding
 -- whatever discovered it. It is a POST and therefore never CDN-cached, which
@@ -1320,17 +1344,18 @@ local function enrich(ids)
   end)
 
   -- Wait for the ids somebody else claimed, then take over the ones that never
-  -- arrived. Without the second half a port that died mid-enrichment cost every
-  -- other port its enrichment for those ids for the whole scan - and the design
-  -- says a claim whose owner died is re-claimed after the timeout, so this was
-  -- documented behaviour that was not there.
-  -- ONE bound for the whole set, not one per id. wait_for_pending resets its own
-  -- counter on every call, so waiting per id multiplied the bound by the number
-  -- of ids: one Apache CPE answers with 342, and a port whose owner died left
-  -- the next port asleep for nearly three hours before it printed a line.
+  -- arrived. Without the second half a port that died mid-enrichment cost
+  -- every other port its enrichment for those ids for the whole scan - and the
+  -- design says a claim whose owner died is re-claimed after the timeout, so
+  -- this was documented behaviour that was not there. ONE bound for the whole
+  -- set, not one per id. wait_for_pending resets its own counter on every
+  -- call, so waiting per id multiplied the bound by the number of ids: one
+  -- Apache CPE answers with 342, and a port whose owner died left the next
+  -- port asleep for nearly three hours before it printed a line.
   --
   -- The first still-held id is waited for; by the time that bound expires the
-  -- owner is gone for all of them, so the rest are swept without waiting again.
+  -- owner is gone for all of them, so the rest are swept without waiting
+  -- again.
   local orphaned = {}
   local waited_once = false
   for _, id in ipairs(waiting) do
@@ -1366,7 +1391,7 @@ local function enrich(ids)
   end)
 end
 
---- Identify software from free-form text. The only billed call in the design.
+--; Identify software from free-form text. The only billed call in the design.
 --
 -- This is what a credit buys: measured, "Apache httpd" sent to the free
 -- endpoint as text returned 0 results where the CPE returned 342. A port that
@@ -1375,11 +1400,11 @@ end
 --
 -- Sent in batches, because the two ceilings that bound one are learnt at
 -- different times: vulners.max_items is known from the start, and the wallet
--- balance is only ever readable from a previous billed call's header. The first
--- call of a scan is therefore capped purely to learn the balance, and the rest
--- of the queue follows in this same loop. Stopping after the capped call
--- instead reported five of six identities while blaming a ceiling the operator
--- never set.
+-- balance is only ever readable from a previous billed call's header. The
+-- first call of a scan is therefore capped purely to learn the balance, and
+-- the rest of the queue follows in this same loop. Stopping after the capped
+-- call instead reported five of six identities while blaming a ceiling the
+-- operator never set.
 local function audit_smart(strings)
   local shared = state()
   local cfg = config()
@@ -1425,14 +1450,14 @@ local function audit_smart(strings)
     for index = first, math.min(first + ceiling - 1, #queue) do
       batch[#batch + 1] = queue[index]
     end
-    -- The loop's own termination proof, and not a formality. `first` advances by
-    -- the size of the batch, so an empty batch is an iteration that changes
-    -- nothing - and because an empty batch also sends no request, nothing in it
-    -- yields, so the coroutine spins without ever handing the scheduler back:
-    -- the whole nmap scan hangs, not just this port. Reaching it needs a ceiling
-    -- of zero or less, which the guard above rules out today; this makes the
-    -- loop safe without depending on that guard staying correct. Found by
-    -- mutating that guard away, which hung the test run.
+    -- The loop's own termination proof, and not a formality. `first` advances
+    -- by the size of the batch, so an empty batch is an iteration that changes
+    -- nothing - and because an empty batch also sends no request, nothing in
+    -- it yields, so the coroutine spins without ever handing the scheduler
+    -- back: the whole nmap scan hangs, not just this port. Reaching it needs a
+    -- ceiling of zero or less, which the guard above rules out today; this
+    -- makes the loop safe without depending on that guard staying correct.
+    -- Found by mutating that guard away, which hung the test run.
     if #batch == 0 then
       break
     end
@@ -1443,9 +1468,10 @@ local function audit_smart(strings)
 
     -- Reserved BEFORE the request, not after it. nmap runs port scripts as
     -- concurrent coroutines and an http POST yields, so every port in flight
-    -- used to compute its room from a "spent" that could not move until its own
-    -- answer came back: two ports with 30 items each billed 61 against a ceiling
-    -- of 32. The reservation is reconciled with the wallet header below.
+    -- used to compute its room from a "spent" that could not move until its
+    -- own answer came back: two ports with 30 items each billed 61 against a
+    -- ceiling of 32. The reservation is reconciled with the wallet header
+    -- below.
     shared.spent = shared.spent + #batch
 
     local body = json.generate({software = batch, fields = {"type"}})
@@ -1477,8 +1503,8 @@ local function audit_smart(strings)
         end
         answers[input] = {
           ids = ids,
-          -- The smart entry carries these without being asked, which is why the
-          -- field list is only {"type"}.
+          -- The smart entry carries these without being asked, which is why
+          -- the field list is only {"type"}.
           cpe = as_string(entry.cpe),
           confidence = tonumber(entry.confidence),
         }
@@ -1486,9 +1512,9 @@ local function audit_smart(strings)
       end
     end
 
-    -- A string the service answered nothing for is remembered too: "smart could
-    -- not name this either" is an answer, and paying to be told so twice is the
-    -- same mistake as paying for it twice.
+    -- A string the service answered nothing for is remembered too: "smart
+    -- could not name this either" is an answer, and paying to be told so twice
+    -- is the same mistake as paying for it twice.
     for _, text in ipairs(batch) do
       if shared.billed[text] == nil then
         shared.billed[text] = false
@@ -1500,8 +1526,9 @@ local function audit_smart(strings)
 
   if first <= #queue then
     -- Never drop coverage silently: a bounded scan that says nothing about the
-    -- bound reads exactly like a scan that found nothing there. Said afterwards
-    -- rather than before, so it names what actually stopped the queue.
+    -- bound reads exactly like a scan that found nothing there. Said
+    -- afterwards rather than before, so it names what actually stopped the
+    -- queue.
     stdnse.verbose1("vulners: identified %d of %d unnamed services here; %s",
       first - 1, #queue,
       shared.billing_stopped or "the identification call did not answer")
@@ -1512,7 +1539,7 @@ end
 
 -- --------------------------------------------------------------- 7. Model
 
---- Merge what enrichment knows into a discovered row.
+--; Merge what enrichment knows into a discovered row.
 local function enrich_row(row)
   local document = state().docs[row.id]
   -- false means "asked, and the service holds nothing" - an answer, not a gap.
@@ -1541,19 +1568,19 @@ local function enrich_row(row)
   return row
 end
 
---- An exploit is what the service says it is.
+--; An exploit is what the service says it is.
 --
--- The 1.x list of exploit TYPES drifted: measured on one real CPE it dropped 17
--- of 58 exploit references (9 zdt, 8 exploitpack), and across four products the
--- live type set also included gitee, canvas, dsquare and seebug. bulletinFamily
--- is the service's own classification, arrives on every hit from both
--- endpoints, and needs no maintenance.
+-- The 1.x list of exploit TYPES drifted: measured on one real CPE it dropped
+-- 17 of 58 exploit references (9 zdt, 8 exploitpack), and across four products
+-- the live type set also included gitee, canvas, dsquare and seebug.
+-- bulletinFamily is the service's own classification, arrives on every hit
+-- from both endpoints, and needs no maintenance.
 local function is_exploit(row)
   local family = row.family
   return type(family) == "string" and family:lower() == "exploit"
 end
 
---- Spread what an exploit knows onto the CVEs it exploits.
+--; Spread what an exploit knows onto the CVEs it exploits.
 --
 -- cvelist comes back on 100/100 enriched documents, so inverting it is free.
 -- It carries two facts outward: that an exploit exists, and - because adp.kev
@@ -1587,10 +1614,10 @@ local function attribute_exploits(rows)
   return rows
 end
 
---- Which ranking bucket a row falls in. Lower sorts first.
+--; Which ranking bucket a row falls in. Lower sorts first.
 --
--- Facts outrank predictions: KEV means observed in the wild, SSVC "active" is a
--- coordinator's judgement that exploitation is happening now, an exploit
+-- Facts outrank predictions: KEV means observed in the wild, SSVC "active" is
+-- a coordinator's judgement that exploitation is happening now, an exploit
 -- bulletin means the code exists, EPSS is a model's expectation.
 --
 -- A bucket is evaluated when its data arrived and skipped when it did not, so
@@ -1613,7 +1640,7 @@ local function bucket(row)
   return 5
 end
 
---- The one order findings are ever read in.
+--; The one order findings are ever read in.
 --
 -- Named, because the summary re-sorts its selection and a second comparator
 -- would drift: it did, and the exploit block came out with its AI scores
@@ -1642,7 +1669,7 @@ local function ranks_before(a, b)
   end
   return a.id < b.id
 end
---- Order findings by how likely they are to be used against the target.
+--; Order findings by how likely they are to be used against the target.
 local function rank(rows)
   for _, row in ipairs(rows) do
     row.bucket = bucket(row)
@@ -1651,7 +1678,7 @@ local function rank(rows)
   return rows
 end
 
---- Hide what the operator asked to hide.
+--; Hide what the operator asked to hide.
 --
 -- mincvss stays a filter on the score and keeps its 1.x carve-out: an unscored
 -- bulletin and anything with a known exploit are shown whatever the threshold.
@@ -1670,7 +1697,7 @@ local function apply_mincvss(rows, mincvss)
   return kept
 end
 
---- Concatenate result lists, dropping ids already present.
+--; Concatenate result lists, dropping ids already present.
 --
 -- table.pack, not {...}: a nil argument leaves a hole that ipairs stops at, so
 -- merge_rows(nil, rows) would silently return nothing. That is not theoretical
@@ -1693,27 +1720,27 @@ end
 
 -- -------------------------------------------------------------- 8. Catalog
 
---- Where the dictionaries come from, and what to do when they do not arrive.
+--; Where the dictionaries come from, and what to do when they do not arrive.
 --
 -- The script carries no fingerprint data. The rules, the swept paths and the
 -- probes are three dictionaries published to a GitHub branch and fetched at
--- scan time, so the catalogue can grow without shipping a new script - which is
--- the whole point, because the useful half of this plugin is a corpus that
+-- scan time, so the catalogue can grow without shipping a new script - which
+-- is the whole point, because the useful half of this plugin is a corpus that
 -- changes weekly and a matcher that does not.
 --
 -- What that costs, stated plainly: a scan with no route to
 -- raw.githubusercontent.com does not fingerprint web stacks. It still does
 -- everything else - the identities nmap itself produced are still looked up -
--- because the catalogue feeds the sweep and the probes and nothing else. That is
--- the same degrade ladder the API key uses: lose a capability, never the whole
--- report.
+-- because the catalogue feeds the sweep and the probes and nothing else. That
+-- is the same degrade ladder the API key uses: lose a capability, never the
+-- whole report.
 --
 -- Fetched once per scan, in the prerule, and held in the registry for the rest
 -- of it. **Nothing is written to disk**, and no argument makes it: of the 611
 -- scripts nmap ships, 26 open a file for writing and every one writes only
 -- where a script argument pointed it; none keeps a cache. The whole catalogue
--- is 34 KB gzipped, which is what a scan costs - one response, once, before the
--- first host is touched - so there was never much for a cache to save.
+-- is 34 KB gzipped, which is what a scan costs - one response, once, before
+-- the first host is touched - so there was never much for a cache to save.
 --
 -- There is deliberately no signature and no per-file hash. HTTPS to GitHub is
 -- the trust boundary the maintainer has accepted. What IS checked is the shape
@@ -1723,7 +1750,7 @@ end
 -- did not ask for. Validation here is not about trust, it is about a file that
 -- arrived intact but wrong.
 
---- Fetch one catalogue file and parse it, or nil.
+--; Fetch one catalogue file and parse it, or nil.
 local function catalog_fetch(address)
   local options = {
     header = {["User-Agent"] = USER_AGENT},
@@ -1756,7 +1783,8 @@ local function catalog_fetch(address)
     -- Set by hand: nselib fills Host from the host argument, which is now
     -- unbracketed, and an unbracketed IPv6 literal in a Host header is not a
     -- valid authority.
-    options.header["Host"] = parsed.host .. (parsed.port and (":" .. parsed.port) or "")
+    options.header["Host"] =
+      parsed.host .. (parsed.port and (":" .. parsed.port) or "")
     response = http.get(literal, port, path, options)
   else
     response = http.get_url(address, options)
@@ -1778,7 +1806,7 @@ local function catalog_fetch(address)
   return document, tostring(response.body)
 end
 
---- Is this string safe to put in a pattern position?
+--; Is this string safe to put in a pattern position?
 --
 -- A malformed pattern raises inside string.find, and in the matcher that means
 -- nmap replaces the port's ENTIRE result with "Script execution failed" - one
@@ -1792,7 +1820,8 @@ end
 --
 -- The walk also counts captures, because the matcher builds
 -- `alias .. ":" .. version` out of exactly one. None can never produce an
--- identity; more than one silently reports whichever came first as the version.
+-- identity; more than one silently reports whichever came first as the
+-- version.
 -- @param wanted how many captures the caller needs; nil means "any number".
 local function usable_pattern(text, wanted)
   if type(text) ~= "string" or text == "" or #text > MAX_CATALOG_STRING then
@@ -1812,15 +1841,16 @@ local function usable_pattern(text, wanted)
         -- %0 is the whole match and %1-%9 are back-references. Neither is a
         -- character class, and string.find raises "invalid capture index" for
         -- any index the pattern did not open - measured against Lua 5.4,
-        -- "(%d)([%d.]+)%2" and "nginx/([%d.]+)%0" both raise, and a raise inside
-        -- the matcher costs the port its ENTIRE result. The capture count below
-        -- cannot catch this: the walk reads %2 as an ordinary escape.
+        -- "(%d)([%d.]+)%2" and "nginx/([%d.]+)%0" both raise, and a raise
+        -- inside the matcher costs the port its ENTIRE result. The capture
+        -- count below cannot catch this: the walk reads %2 as an ordinary
+        -- escape.
         --
         -- Rejected outright rather than checked against the count, because no
         -- rule here has anything to refer back to: a rule captures exactly one
-        -- version. The generator refuses PCRE back-references too, which is why
-        -- nothing published has one - and precisely why this reader must not
-        -- depend on that writer staying correct.
+        -- version. The generator refuses PCRE back-references too, which is
+        -- why nothing published has one - and precisely why this reader must
+        -- not depend on that writer staying correct.
         return false
       end
       if next_char == "b" then
@@ -1843,7 +1873,7 @@ local function usable_pattern(text, wanted)
         close = close + 1
       end
       if text:sub(close, close) == "]" then
-        close = close + 1                   -- a ] in first position is a member
+        close = close + 1          -- a ] in first position is a member
       end
       while true do
         local inner = text:sub(close, close)
@@ -1895,7 +1925,7 @@ local FIXED_CHANNELS = {
   script = true, banner = true, cookie = true,
 }
 
---- Is this a channel key the matcher will ever look up?
+--; Is this a channel key the matcher will ever look up?
 local function usable_channel(key)
   if type(key) ~= "string" then
     return false
@@ -1905,19 +1935,19 @@ local function usable_channel(key)
       or key:match("^meta:[%w%-_.:]+$") ~= nil
 end
 
---- Is this a CPE prefix the endpoint can be addressed with?
+--; Is this a CPE prefix the endpoint can be addressed with?
 local function usable_alias(alias)
   return type(alias) == "string" and #alias <= MAX_CATALOG_STRING
      and alias:match("^cpe:/[aoh]:[^:]+:[^:]+$") ~= nil
 end
 
---- Is this a path this script would put on the wire?
+--; Is this a path this script would put on the wire?
 local function usable_path(path)
   return type(path) == "string" and path:sub(1, 1) == "/"
      and #path <= MAX_CATALOG_STRING and path:find("[%s\r\n]") == nil
 end
 
---- The list a dictionary carries, once the file is one this script can read.
+--; The list a dictionary carries, once the file is one this script can read.
 --
 -- The schema gate lives here rather than in the caller so that each reader is
 -- safe on its own: they are the seam the tests drive directly, and a reader
@@ -1934,7 +1964,7 @@ local function catalog_list(payload, field)
   return list
 end
 
---- The rule dictionary, grouped by the response part each rule reads.
+--; The rule dictionary, grouped by the response part each rule reads.
 --
 -- @return the grouped table and the number of rules kept, or nil
 local function read_fingerprints(payload)
@@ -1971,9 +2001,9 @@ local function read_fingerprints(payload)
         group = {}
         grouped[rule.channel] = group
       end
-      -- Slot 1 records whether the pattern is start-anchored, which the matcher
-      -- needs and nothing else does. It used to hold the rule's NAME, which no
-      -- reader ever looked at - 722 strings kept alive for nothing.
+      -- Slot 1 records whether the pattern is start-anchored, which the
+      -- matcher needs and nothing else does. It used to hold the rule's NAME,
+      -- which no reader ever looked at - 722 strings kept alive for nothing.
       --
       -- It is needed because string.find(s, pat, init) re-anchors "^" AT init:
       -- measured, "^nginx/([%d.]+)" against "nginx/1.2.3nginx/9.9.9" matches
@@ -2000,7 +2030,7 @@ local function read_fingerprints(payload)
   return grouped, kept
 end
 
---- The swept path list.
+--; The swept path list.
 local function read_paths(payload)
   local listed = catalog_list(payload, "paths")
   if listed == nil then
@@ -2024,7 +2054,7 @@ local function read_paths(payload)
   return paths
 end
 
---- The targeted version probes.
+--; The targeted version probes.
 local function read_probes(payload)
   local listed = catalog_list(payload, "probes")
   if listed == nil then
@@ -2043,18 +2073,19 @@ local function read_probes(payload)
       local detect = {}
       for _, rule in ipairs(entry.detect) do
         -- A detector reports presence, so it needs no capture - only a pattern
-        -- that compiles and a channel something will read.
-        -- A detector reports presence, so it needs no capture - but it must
-        -- still be a pattern that cannot raise, for the same reason.
-        -- The pattern is validated EXACTLY as it will be run. It used to be
-        -- wrapped in parentheses first, to force the one capture usable_pattern
-        -- insisted on - and that wrap validated a different string from the one
-        -- stored. Measured: the raw pattern "X)%" is refused while "(X)%)" is
+        -- that compiles and a channel something will read. A detector reports
+        -- presence, so it needs no capture - but it must still be a pattern
+        -- that cannot raise, for the same reason. The pattern is validated
+        -- EXACTLY as it will be run. It used to be wrapped in parentheses
+        -- first, to force the one capture usable_pattern insisted on - and
+        -- that wrap validated a different string from the one stored.
+        -- Measured: the raw pattern "X)%" is refused while "(X)%)" is
         -- accepted, because the prepended "(" absorbs the stray ")" and the
-        -- trailing "%" escapes the appended one. The same wrap also laundered a
-        -- non-string through tostring(), since "table: 0x..." is itself a
+        -- trailing "%" escapes the appended one. The same wrap also laundered
+        -- a non-string through tostring(), since "table: 0x..." is itself a
         -- perfectly good one-capture pattern. Both cost the port its entire
-        -- result, which is the one outcome this whole section exists to prevent.
+        -- result, which is the one outcome this whole section exists to
+        -- prevent.
         --
         -- A detector reports presence, so it needs no capture and no shipped
         -- one has any; nil says the count is not what is being checked here.
@@ -2100,7 +2131,7 @@ local function read_probes(payload)
   return probes
 end
 
---- Turn three parsed dictionaries into what the matcher reads, or nil.
+--; Turn three parsed dictionaries into what the matcher reads, or nil.
 local function assemble(parsed)
   local fingerprints, count = read_fingerprints(parsed.fingerprints)
   if fingerprints == nil then
@@ -2122,12 +2153,12 @@ local function assemble(parsed)
   }
 end
 
---- The schema an index declares, or nil when it declares nothing readable.
+--; The schema an index declares, or nil when it declares nothing readable.
 local function index_schema_of(index)
   return type(index) == "table" and index.schema or nil
 end
 
---- Fetch every dictionary the index lists and validate it.
+--; Fetch every dictionary the index lists and validate it.
 local function catalog_from_network(base, index)
   local parsed = {}
   for _, kind in ipairs(CATALOG_FILES) do
@@ -2135,9 +2166,9 @@ local function catalog_from_network(base, index)
     local filename = as_string(listed and listed.file) or (kind .. ".json")
     -- A file name from the index reaches a URL, so it may name a file and
     -- nothing else. Excluding characters was not enough: "." was inside the
-    -- permitted class, so ".." matched nothing and passed, and the fetch walked
-    -- to the parent of the operator's catalog_url. Required to LOOK like a
-    -- catalogue file instead.
+    -- permitted class, so ".." matched nothing and passed, and the fetch
+    -- walked to the parent of the operator's catalog_url. Required to LOOK
+    -- like a catalogue file instead.
     if not filename:match("^[%w_%-]+%.json$") then
       stdnse.debug1("Catalogue index names an unusable file %q", filename)
       return nil
@@ -2161,10 +2192,10 @@ local function catalog_from_network(base, index)
   return catalog
 end
 
---- Load the catalogue once per scan.
+--; Load the catalogue once per scan.
 --
--- Called from the prerule, which is the one place that runs before any port and
--- exactly once - so the fetch cannot race itself across the per-port chunk
+-- Called from the prerule, which is the one place that runs before any port
+-- and exactly once - so the fetch cannot race itself across the per-port chunk
 -- re-executions, and a hundred open ports cost one request rather than a
 -- hundred.
 local function load_catalog()
@@ -2189,8 +2220,8 @@ local function load_catalog()
     if declared > CATALOG_SCHEMA then
       -- Refused, not half-read. This is the whole reason the schema exists.
       -- %s, not %d. string.format("%d", 2.5) RAISES in Lua 5.3+, and the
-      -- schema is a number this script just parsed out of somebody else's JSON:
-      -- a published index declaring 2.5 killed the prerule outright.
+      -- schema is a number this script just parsed out of somebody else's
+      -- JSON: a published index declaring 2.5 killed the prerule outright.
       shared.catalog_note = string.format(
         "the published catalogue is schema %s and this script reads %d; " ..
         "update nmap-vulners to use it", tostring(declared), CATALOG_SCHEMA)
@@ -2215,20 +2246,20 @@ local function load_catalog()
     -- exactly those operators.
     shared.catalog_note = string.format(
       "the catalogue at %s answered, but one of its dictionaries could not " ..
-      "be read, so no web fingerprinting was done; the software nmap itself " ..
-      "identified was still looked up", base)
+      "be read, so no web fingerprinting was done; the software nmap " ..
+      "itself identified was still looked up", base)
     stdnse.verbose1("vulners: %s", shared.catalog_note)
     return nil
   end
 
-  shared.catalog_note = "the fingerprint catalogue could not be downloaded, " ..
-    "so no web fingerprinting was done; the software nmap itself identified " ..
-    "was still looked up"
+  shared.catalog_note = "the fingerprint catalogue could not be " ..
+    "downloaded, so no web fingerprinting was done; the software nmap " ..
+    "itself identified was still looked up"
   stdnse.verbose1("vulners: %s", shared.catalog_note)
   return nil
 end
 
---- The loaded catalogue, or an empty one.
+--; The loaded catalogue, or an empty one.
 --
 -- Never fetches. The prerule owns the loading; anything reached without one -
 -- a port action in a run where the prerule did not fire - reads what is there
@@ -2241,7 +2272,7 @@ end
 
 -- --------------------------------------------------------- 9. Fingerprint
 
---- How fast the sweep may go, from nmap's own timing template.
+--; How fast the sweep may go, from nmap's own timing template.
 --
 -- @return paths per batch, seconds to wait between batches
 local function sweep_pace()
@@ -2251,7 +2282,7 @@ local function sweep_pace()
   return pace[1], pace[2]
 end
 
---- The paths to sweep, from the argument or the catalogue.
+--; The paths to sweep, from the argument or the catalogue.
 --
 -- An operator who names a file means that file: a named file that yields
 -- nothing stops the sweep rather than quietly substituting the catalogue list,
@@ -2261,8 +2292,9 @@ local function sweep_paths(paths_arg)
 
   if type(paths_arg) == "table" then
     -- Normalised exactly like the file branch. Taking the list as-is meant
-    -- --script-args "vulners.paths={index.php}" put "GET index.php HTTP/1.1" on
-    -- the wire - a malformed request line every strict server answers with 400,
+    -- --script-args "vulners.paths={index.php}" put "GET index.php
+    -- HTTP/1.1" on the wire - a malformed request line every strict server
+    -- answers with 400,
     -- so the operator's chosen list silently fingerprinted nothing while the
     -- same list in a file worked. nmap also parses "{}" as one empty string.
     chosen = {}
@@ -2280,8 +2312,8 @@ local function sweep_paths(paths_arg)
     if #chosen == 0 then
       stdnse.verbose1("vulners: the paths argument holds no usable path; " ..
         "requesting nothing")
-      state().sweep_note = "the vulners.paths argument holds no usable path, " ..
-        "so no web fingerprinting was done"
+      state().sweep_note = "the vulners.paths argument holds no usable " ..
+        "path, so no web fingerprinting was done"
       return {}
     end
   elseif type(paths_arg) == "string" then
@@ -2291,11 +2323,12 @@ local function sweep_paths(paths_arg)
     chosen = {}
     local file = io.open(paths_arg, "r")
     if file == nil then
-      stdnse.verbose1("vulners: cannot read the paths file %s; requesting nothing",
+      stdnse.verbose1(
+        "vulners: cannot read the paths file %s; requesting nothing",
         paths_arg)
       state().sweep_note = string.format(
-        "the paths file %s could not be read, so no web fingerprinting was done",
-        paths_arg)
+        "the paths file %s could not be read, so no web fingerprinting " ..
+        "was done", paths_arg)
       return {}
     end
     for line in file:lines() do
@@ -2311,10 +2344,11 @@ local function sweep_paths(paths_arg)
     end
     file:close()
     if #chosen == 0 then
-      stdnse.verbose1("vulners: no usable paths in %s; requesting nothing", paths_arg)
-      state().sweep_note = string.format(
-        "the paths file %s holds no usable path, so no web fingerprinting was done",
+      stdnse.verbose1("vulners: no usable paths in %s; requesting nothing",
         paths_arg)
+      state().sweep_note = string.format(
+        "the paths file %s holds no usable path, so no web " ..
+        "fingerprinting was done", paths_arg)
       return {}
     end
   end
@@ -2328,13 +2362,12 @@ local function sweep_paths(paths_arg)
   -- determinism, which a file already provides - and which threw away the one
   -- thing the order carries: the paths most likely to answer are published
   -- first, so a sweep that is cut short by a dead server has already asked its
-  -- best questions.
-  -- Held to the rule the catalogue's own paths are held to. usable_path refuses
-  -- whitespace, control characters and absurd length for a downloaded path, for
-  -- stated reasons - and the same string arriving from the operator's file or
-  -- argument reached the request line unchecked, so an interior CR or space
-  -- became a second request line's worth of text. MAX_CATALOG_PATHS applies
-  -- here too: an accidental file is not a path list.
+  -- best questions. Held to the rule the catalogue's own paths are held to.
+  -- usable_path refuses whitespace, control characters and absurd length for a
+  -- downloaded path, for stated reasons - and the same string arriving from
+  -- the operator's file or argument reached the request line unchecked, so an
+  -- interior CR or space became a second request line's worth of text.
+  -- MAX_CATALOG_PATHS applies here too: an accidental file is not a path list.
   local unique, seen = {}, {}
   local refused = 0
   for _, path in ipairs(chosen) do
@@ -2356,16 +2389,16 @@ local function sweep_paths(paths_arg)
   return unique
 end
 
---- Options for one request the sweep makes.
+--; Options for one request the sweep makes.
 --
 -- A NEW table each time, never one shared between requests. nselib assigns
--- `options.scheme = u.scheme or options.scheme` INTO THE CALLER'S TABLE when it
--- parses a Location, and it does so before deciding whether the redirect may be
--- followed (nselib/http.lua:1794-1802) - so it happens even to a caller that
--- does not follow redirects at all. One path answering a redirect to an https
--- URL therefore pinned https for every later fetch on a plaintext port, and the
--- rest of the sweep failed. Caught in follow_redirects first, then again in the
--- probe loop, which is why it is one function now.
+-- `options.scheme = u.scheme or options.scheme` INTO THE CALLER'S TABLE when
+-- it parses a Location, and it does so before deciding whether the redirect
+-- may be followed (nselib/http.lua:1794-1802) - so it happens even to a caller
+-- that does not follow redirects at all. One path answering a redirect to an
+-- https URL therefore pinned https for every later fetch on a plaintext port,
+-- and the rest of the sweep failed. Caught in follow_redirects first, then
+-- again in the probe loop, which is why it is one function now.
 --
 -- Safe to reuse across a pipeline: pipeline_add takes its own copy
 -- (nselib/http.lua:1962), and pipeline_go never parses a Location.
@@ -2377,7 +2410,7 @@ local function sweep_options()
   }
 end
 
---- Request one slice of the path list, keeping what a broken pipeline dropped.
+--; Request one slice of the path list, keeping what a broken pipeline dropped.
 --
 -- http.pipeline_go returns responses in queue order and stops as soon as the
 -- first request on a fresh connection fails, so one path a tarpit or a WAF
@@ -2410,7 +2443,8 @@ local function fetch_batch(host, port, paths, pending, options, responses)
       -- Nothing came back at all, and the library gives up on the request at
       -- the head of the queue, so that is the one being refused. The rest have
       -- not had their turn yet.
-      stdnse.debug1("No response for %s, continuing without it", paths[left[1]])
+      stdnse.debug1("No response for %s, continuing without it",
+        paths[left[1]])
       table.remove(left, 1)
     end
 
@@ -2418,7 +2452,7 @@ local function fetch_batch(host, port, paths, pending, options, responses)
   end
 end
 
---- Request every path, at the rate nmap's timing template allows.
+--; Request every path, at the rate nmap's timing template allows.
 --
 -- The whole list, always: asking less would find less. What -T changes is how
 -- many go out together and how long the sweep waits in between, so an operator
@@ -2454,7 +2488,7 @@ end
 -- What a scheme implies when a Location does not spell the port out.
 local DEFAULT_SCHEME_PORT = {http = 80, https = 443}
 
---- The path a redirect points at, when it stays on the port being scanned.
+--; The path a redirect points at, when it stays on the port being scanned.
 local function redirect_target(host, port, response)
   local location = dig(response, "header", "location")
   if not location then
@@ -2466,18 +2500,20 @@ local function redirect_target(host, port, response)
     return nil
   end
 
-  if parsed.host and parsed.host ~= host.targetname and parsed.host ~= host.ip then
+  if parsed.host and parsed.host ~= host.targetname
+      and parsed.host ~= host.ip then
     -- Somebody else's server is not ours to fingerprint.
     return nil
   end
 
-  -- Nor is another port of this host. The target would be fetched from the port
-  -- being swept, so "https://host:8443/admin" reads /admin off port 80 and
-  -- attributes whatever it says to a service that never served it. nmap's own
-  -- redirect policy refuses the same thing, on the same reasoning
+  -- Nor is another port of this host. The target would be fetched from the
+  -- port being swept, so "https://host:8443/admin" reads /admin off port 80
+  -- and attributes whatever it says to a service that never served it. nmap's
+  -- own redirect policy refuses the same thing, on the same reasoning
   -- (nselib/http.lua, redirect_ok_rules rule 3), and a relative Location - the
   -- common case - names no port and is unaffected.
-  local target_port = tonumber(parsed.port) or DEFAULT_SCHEME_PORT[parsed.scheme]
+  local target_port =
+    tonumber(parsed.port) or DEFAULT_SCHEME_PORT[parsed.scheme]
   if target_port and target_port ~= port.number then
     return nil
   end
@@ -2490,21 +2526,22 @@ local function redirect_target(host, port, response)
   local target = parsed.query and (path .. "?" .. parsed.query) or path
   -- Held to the same rule as a catalogue path, and for the same reason: nselib
   -- builds the request line as method .. " " .. path .. " HTTP/1.1" verbatim
-  -- (http.lua:1312), so "Location: /x HTTP/1.0" - which url.parse hands back as
-  -- the path "/x HTTP/1.0" - would put a second request line's worth of text
-  -- into the first. usable_path already refused exactly this for the catalogue.
+  -- (http.lua:1312), so "Location: /x HTTP/1.0" - which url.parse hands back
+  -- as the path "/x HTTP/1.0" - would put a second request line's worth of
+  -- text into the first. usable_path already refused exactly this for the
+  -- catalogue.
   if not usable_path(target) then
     return nil
   end
   return target
 end
 
---- Fetch what the redirecting paths actually point at.
+--; Fetch what the redirecting paths actually point at.
 --
 -- Without this the sweep only ever sees the 3xx envelope, and a site whose
 -- paths redirect to its application is fingerprinted from its Server header
--- alone. Distinct targets are fetched once, so a host that redirects everything
--- to one page costs one request.
+-- alone. Distinct targets are fetched once, so a host that redirects
+-- everything to one page costs one request.
 local function follow_redirects(host, port, responses)
   local fetched = {}
 
@@ -2520,7 +2557,8 @@ local function follow_redirects(host, port, responses)
       end
 
       if fetched[target] == nil then
-        fetched[target] = http.get(host, port, target, sweep_options()) or false
+        fetched[target] =
+          http.get(host, port, target, sweep_options()) or false
       end
 
       -- Only replaced when the redirect actually produced something. Otherwise
@@ -2538,13 +2576,14 @@ local function follow_redirects(host, port, responses)
   end
 end
 
---- What a pattern captured, as a version - or nil when it is not one.
+--; What a pattern captured, as a version - or nil when it is not one.
 --
 -- Two things this catches, both measured against the shipped rules:
 --
 -- * **surrounding space.** Wappalyzer writes CMSimple's rule as
---   `CMSimple( [\d.]+)`, with the separator INSIDE the group, so the capture is
---   " 5.4" and the request line carried `cpe:/a:cmsimple:cmsimple: 5.4`. Ten
+--   `CMSimple( [\d.]+)`, with the separator INSIDE the group, so the
+--   capture is " 5.4" and the request line carried
+--   `cpe:/a:cmsimple:cmsimple: 5.4`. Ten
 --   rules capture a leading space; every one produced a malformed identity.
 -- * **a capture that is not a version at all.** Several rules capture whatever
 --   follows a product name - `(%S+)`, or a whole header value - and recog has
@@ -2577,7 +2616,7 @@ local function version_of(captured)
   return version
 end
 
---- Run one group of rules against the one subject that group is written for.
+--; Run one group of rules against the one subject that group is written for.
 --
 -- Rules are filed under the part of a response they read - "hdr:server",
 -- "meta:generator", "title", "body" - so a response with twelve headers runs
@@ -2586,11 +2625,12 @@ end
 -- byte of everything: it removes the work rather than budgeting for it.
 --
 -- Each rule also carries a literal it cannot match without. Searching for that
--- literal is a memory scan where running the pattern is an interpreter loop, so
--- the pattern only runs on a subject that could possibly match it.
+-- literal is a memory scan where running the pattern is an interpreter loop,
+-- so the pattern only runs on a subject that could possibly match it.
 --
 -- @param deadline os.clock() value after which matching stops
--- @param lowered  a lowercase copy of the subject, when the caller already has one
+-- @param lowered  a lowercase copy of the subject, when the caller
+--       already has one
 local function match_group(key, subject, found, seen, deadline, lowered)
   local group = catalog().fingerprints[key]
   if group == nil or subject == nil or subject == "" then
@@ -2605,10 +2645,10 @@ local function match_group(key, subject, found, seen, deadline, lowered)
   for i = 1, #group, 4 do
     hits = 0
     -- Every rule, not every sixteenth. That was affordable when one call could
-    -- cost seconds; now that MATCH_WINDOW holds one call to a few milliseconds,
-    -- reading the clock sixteen times less often is what would let the budget
-    -- overshoot. os.clock is the right clock here because nothing in this loop
-    -- yields.
+    -- cost seconds; now that MATCH_WINDOW holds one call to a few
+    -- milliseconds, reading the clock sixteen times less often is what would
+    -- let the budget overshoot. os.clock is the right clock here because
+    -- nothing in this loop yields.
     if os.clock() >= deadline then
       return
     end
@@ -2623,12 +2663,13 @@ local function match_group(key, subject, found, seen, deadline, lowered)
     --   anchored on a    one window around each occurrence of that literal, up
     --   literal          to MAX_ANCHOR_HITS of them; the pattern cannot match
     --                    anywhere the literal is absent, so nothing is lost
-    --   neither          the first MATCH_WINDOW bytes, which is all a rule with
-    --                    nothing to say about itself has earned
+    --   neither          the first MATCH_WINDOW bytes, which is all a rule
+    --                    with nothing to say about itself has earned
     --
     -- Chasing the ANCHOR rather than the pattern also keeps the old behaviour
-    -- of reading every occurrence: a reverse-proxied host names the same product
-    -- in two headers, and the second version is often the one actually exposed.
+    -- of reading every occurrence: a reverse-proxied host names the same
+    -- product in two headers, and the second version is often the one actually
+    -- exposed.
     local at, exhausted = 1, false
     repeat
       local first, last = 1, UNANCHORED_WINDOW
@@ -2643,10 +2684,10 @@ local function match_group(key, subject, found, seen, deadline, lowered)
         at = at + 1
       end
 
-      -- Every occurrence WITHIN the window, not only the first: a reverse-proxied
-      -- host names the same product in two headers, and both usually land in one
-      -- window. Looping here is safe in a way looping over the whole subject was
-      -- not - the window is bounded, so the scan is too.
+      -- Every occurrence WITHIN the window, not only the first: a
+      -- reverse-proxied host names the same product in two headers, and both
+      -- usually land in one window. Looping here is safe in a way looping over
+      -- the whole subject was not - the window is bounded, so the scan is too.
       local window = subject:sub(first, last)
       local init = 1
       while true do
@@ -2655,9 +2696,9 @@ local function match_group(key, subject, found, seen, deadline, lowered)
           break
         end
 
-        -- A capture that crossed a line boundary means the pattern is unbounded;
-        -- accepting it would put whatever followed - a Set-Cookie value, say -
-        -- into the CPE, into the report and into the API request.
+        -- A capture that crossed a line boundary means the pattern is
+        -- unbounded; accepting it would put whatever followed - a Set-Cookie
+        -- value, say - into the CPE, into the report and into the API request.
         if vers ~= nil and not vers:find("[\r\n]") then
           local version = version_of(vers)
           if version then
@@ -2681,7 +2722,7 @@ local function match_group(key, subject, found, seen, deadline, lowered)
   end
 end
 
---- Run one downloaded probe pattern over the windows its anchor allows.
+--; Run one downloaded probe pattern over the windows its anchor allows.
 --
 -- The probes reach here rather than through match_group because they are not
 -- rules: a detector answers yes or no, and an extractor is asked for exactly
@@ -2731,7 +2772,7 @@ local MAX_TAGS_PER_BODY = 64
 -- than this is not a filename or a generator string.
 local MAX_TAG_VALUE = 512
 
---- The text of <title>, or nil.
+--; The text of <title>, or nil.
 --
 -- Bounded with [^<] rather than the obvious lazy .-, because a lazy match
 -- rescans to the end of the body from every <title it finds, and a body of
@@ -2746,7 +2787,7 @@ local function title_of(body)
   return text ~= "" and text:sub(1, MAX_TAG_VALUE) or nil
 end
 
---- One attribute out of a tag's attribute text, unquoted or quoted.
+--; One attribute out of a tag's attribute text, unquoted or quoted.
 local function attribute(text, name)
   local value = text:match(name .. "%s*=%s*\"([^\"]*)\"")
       or text:match(name .. "%s*=%s*'([^']*)'")
@@ -2757,7 +2798,7 @@ local function attribute(text, name)
   return value:sub(1, MAX_TAG_VALUE)
 end
 
---- Every (channel, text) pair one response offers, built once.
+--; Every (channel, text) pair one response offers, built once.
 --
 -- Built once and reused, because two things read it: the fingerprint rules,
 -- which turn it into identities, and the probe detectors, which decide whether
@@ -2804,17 +2845,17 @@ local function subjects_of(response, deadline)
   end
 
   -- response.body, NOT response.rawbody. nselib sets rawbody to the UNDECODED
-  -- bytes and then replaces body with the decoded ones (nselib/http.lua:953-968),
-  -- so rawbody is always present and "rawbody or body" always chose the
-  -- compressed form. Since this script asks for gzip, it was handing itself
-  -- gzip bytes to match against: the same WordPress page yields
-  -- cpe:/a:wordpress:wordpress:5.5.1 served plain and nothing at all served
-  -- gzipped.
-  -- NOT stdnse.string_or_blank: its second argument is the SUBSTITUTE, and
-  -- passing nil selects the default substitute "<blank>" rather than disabling
-  -- substitution (nselib/stdnse.lua:376-386). Every 204, 304 and body-less 302
-  -- therefore ran the whole body rule group and every probe detector against a
-  -- seven-byte string this script invented, and the guard below was dead.
+  -- bytes and then replaces body with the decoded ones
+  -- (nselib/http.lua:953-968), so rawbody is always present and "rawbody or
+  -- body" always chose the compressed form. Since this script asks for gzip,
+  -- it was handing itself gzip bytes to match against: the same WordPress page
+  -- yields cpe:/a:wordpress:wordpress:5.5.1 served plain and nothing at all
+  -- served gzipped. NOT stdnse.string_or_blank: its second argument is the
+  -- SUBSTITUTE, and passing nil selects the default substitute "<blank>"
+  -- rather than disabling substitution (nselib/stdnse.lua:376-386). Every 204,
+  -- 304 and body-less 302 therefore ran the whole body rule group and every
+  -- probe detector against a seven-byte string this script invented, and the
+  -- guard below was dead.
   local body = tostring(response.body or "")
   if body ~= "" then
     offer("title", title_of(body))
@@ -2851,14 +2892,15 @@ local function subjects_of(response, deadline)
   return subjects
 end
 
---- Everything one response says about the software behind it.
+--; Everything one response says about the software behind it.
 local function match_subjects(subjects, found, seen, deadline)
   for _, subject in ipairs(subjects) do
-    match_group(subject.key, subject.text, found, seen, deadline, subject.lowered)
+    match_group(subject.key, subject.text, found, seen, deadline,
+      subject.lowered)
   end
 end
 
---- Which targeted probes this response makes worth sending.
+--; Which targeted probes this response makes worth sending.
 --
 -- A probe's detector says only "this product is here". It is deliberately
 -- cheap and deliberately versionless - a versioned rule would have produced an
@@ -2879,7 +2921,8 @@ local function detect_probes(subjects, triggered, deadline)
         local key, anchor, regex = detect[i], detect[i + 1], detect[i + 2]
         for _, subject in ipairs(subjects) do
           if subject.key == key
-              and match_probe(subject.text, subject.lowered, anchor, regex) then
+              and match_probe(subject.text, subject.lowered, anchor, regex)
+              then
             triggered[index] = true
             break
           end
@@ -2892,7 +2935,7 @@ local function detect_probes(subjects, triggered, deadline)
   end
 end
 
---- Go and ask a product that would not say, and read the version off the answer.
+--; Ask a product that would not say, and read the version off the answer.
 --
 -- Sent only when all three of these hold, which is what keeps a probing script
 -- from knocking on doors:
@@ -2904,7 +2947,8 @@ end
 --
 -- A CMS that names itself and hides its version is the normal case for exactly
 -- the software worth checking, and it is the one case the passive rules cannot
--- win: no amount of pattern matching extracts a number that is not on the page.
+-- win: no amount of pattern matching extracts a number that is not on the
+-- page.
 --
 -- @return map of cpe -> the path it was found on
 local function run_probes(host, port, triggered, discovered, deadline)
@@ -2913,13 +2957,14 @@ local function run_probes(host, port, triggered, discovered, deadline)
     return found
   end
 
-  -- What is already known, by identity rather than by CPE: a probe for Drupal is
-  -- pointless once anything has produced a Drupal version, even a different one.
+  -- What is already known, by identity rather than by CPE: a probe for Drupal
+  -- is pointless once anything has produced a Drupal version, even a different
+  -- one.
   --
   -- Read from nmap's own findings as well as the sweep's. Consulting only the
-  -- sweep meant a service -sV had already named AND versioned - Tomcat behind a
-  -- Coyote banner, say - was still probed, spending a request to learn what was
-  -- in hand before the script started.
+  -- sweep meant a service -sV had already named AND versioned - Tomcat behind
+  -- a Coyote banner, say - was still probed, spending a request to learn what
+  -- was in hand before the script started.
   local known = {}
   local function remember(cpe)
     if type(cpe) == "string" then
@@ -2993,15 +3038,15 @@ local function run_probes(host, port, triggered, discovered, deadline)
   return found
 end
 
---- The software banner inside nmap's service fingerprint.
+--; The software banner inside nmap's service fingerprint.
 --
--- service_fp is not a banner: it is a record of the probing. A header of nmap's
--- own metadata, then one %r(Probe,length,"payload") record per probe that
--- answered, wrapped across lines with "SF:" continuations.
+-- service_fp is not a banner: it is a record of the probing. A header of
+-- nmap's own metadata, then one %r(Probe,length,"payload") record per probe
+-- that answered, wrapped across lines with "SF:" continuations.
 --
 -- Sending it whole bought a credit for a string that is mostly not software,
--- and it carries %Time= - so two identical appliances produce DIFFERENT strings
--- and no cache could ever match them.
+-- and it carries %Time= - so two identical appliances produce DIFFERENT
+-- strings and no cache could ever match them.
 --
 -- @return the distinct probe payloads, or nil when there is no payload at all
 local function service_fp_payloads(fingerprint)
@@ -3011,8 +3056,9 @@ local function service_fp_payloads(fingerprint)
 
   local seen, payloads = {}, {}
   for payload in unwrapped:gmatch('%%r%([^,]*,[^,]*,"(.-)"%)') do
-    -- Undo nmap's escaping so the endpoint sees what the service actually sent.
-    -- The hex form goes first, or its backslash is eaten as a literal escape.
+    -- Undo nmap's escaping so the endpoint sees what the service actually
+    -- sent. The hex form goes first, or its backslash is eaten as a literal
+    -- escape.
     local text = payload:gsub("\\x(%x%x)", function(hex)
       return string.char(tonumber(hex, 16))
     end)
@@ -3033,7 +3079,7 @@ local function service_fp_payloads(fingerprint)
   return payloads
 end
 
---- The banner as one string, for the endpoint that is asked about text.
+--; The banner as one string, for the endpoint that is asked about text.
 --
 -- ascii() rather than ascii_lines(): the endpoint is asked about a piece of
 -- text, not matched line by line, so collapsing the payload's newlines back
@@ -3046,18 +3092,19 @@ local function decode_service_fp(fingerprint)
   return ascii(table.concat(payloads, " "), 512)
 end
 
---- The CPEs nmap's own service banner names.
+--; The CPEs nmap's own service banner names.
 --
 -- Free in every sense: the text is already in hand, so this costs no request,
 -- no credit and no time on the wire, and it runs with or without a token.
 --
 -- The subject is nmap's service fingerprint, which nmap records when its own
--- probes did NOT settle the service - which is exactly the case worth trying. A
--- port nmap could not name is a port with no CPE, and a port with no CPE is one
--- that would otherwise cost a credit at audit/smart, or go unreported entirely
--- in a keyless scan. Identities nmap can already emit itself were dropped when
--- the rules were imported, because this script reads port.version.cpe anyway
--- and re-deriving them would be 286 KB of weight for nothing.
+-- probes did NOT settle the service - which is exactly the case worth trying.
+-- A port nmap could not name is a port with no CPE, and a port with no CPE is
+-- one that would otherwise cost a credit at audit/smart, or go unreported
+-- entirely in a keyless scan. Identities nmap can already emit itself were
+-- dropped when the rules were imported, because this script reads
+-- port.version.cpe anyway and re-deriving them would be 286 KB of weight for
+-- nothing.
 --
 -- Matched line by line rather than as one blob: a recog banner pattern is
 -- written against a single greeting line and most of them are anchored with ^,
@@ -3077,8 +3124,8 @@ local function fingerprint_banner(port, deadline)
   end
 
   local found, seen = {}, {}
-  -- Defaulted, because the tests drive this function directly; production hands
-  -- it the port's one budget.
+  -- Defaulted, because the tests drive this function directly; production
+  -- hands it the port's one budget.
   deadline = deadline or (os.clock() + SWEEP_TIME_BUDGET)
   for _, payload in ipairs(payloads) do
     for line in (payload .. "\n"):gmatch("([^\r\n]*)[\r\n]") do
@@ -3099,7 +3146,7 @@ local function fingerprint_banner(port, deadline)
   return where
 end
 
---- Fingerprint the web stack of one port.
+--; Fingerprint the web stack of one port.
 --
 -- @return map of cpe -> the path it was found on
 local function fingerprint(host, port, paths, deadline)
@@ -3118,9 +3165,9 @@ local function fingerprint(host, port, paths, deadline)
   local spent = 0
   deadline = deadline or (os.clock() + SWEEP_TIME_BUDGET)
   local discovered_here = 0
-  -- Which targeted probes the responses make worth sending. Collected while the
-  -- subjects are in hand and acted on afterwards, so that a probe is only sent
-  -- once every passive rule has had its chance to make it unnecessary.
+  -- Which targeted probes the responses make worth sending. Collected while
+  -- the subjects are in hand and acted on afterwards, so that a probe is only
+  -- sent once every passive rule has had its chance to make it unnecessary.
   local triggered = {}
 
   for index, path in ipairs(paths) do
@@ -3130,9 +3177,9 @@ local function fingerprint(host, port, paths, deadline)
       local found = {}
 
       -- Bytes remain as a second barrier behind the clock. The two bound
-      -- different things: the clock bounds how long matching may take, which is
-      -- what an adversarial body attacks, and this bounds how much is read at
-      -- all, which is what a slow-but-honest one costs.
+      -- different things: the clock bounds how long matching may take, which
+      -- is what an adversarial body attacks, and this bounds how much is read
+      -- at all, which is what a slow-but-honest one costs.
       if spent < SWEEP_BYTE_BUDGET then
         spent = spent + #tostring(response.body or "")
         local rawheaders = response.rawheader
@@ -3148,8 +3195,8 @@ local function fingerprint(host, port, paths, deadline)
 
       for _, cpe in ipairs(found) do
         if discovered_here >= MAX_IDENTITIES_PER_PORT then
-          stdnse.verbose1("vulners: this port produced more than %d identities; " ..
-            "the rest are ignored", MAX_IDENTITIES_PER_PORT)
+          stdnse.verbose1("vulners: this port produced more than %d " ..
+            "identities; the rest are ignored", MAX_IDENTITIES_PER_PORT)
           break
         end
         discovered_here = discovered_here + 1
@@ -3159,8 +3206,8 @@ local function fingerprint(host, port, paths, deadline)
   end
 
   if os.clock() >= deadline then
-    stdnse.verbose1("vulners: the fingerprint sweep ran out of its time budget " ..
-      "on this port; some paths were not matched")
+    stdnse.verbose1("vulners: the fingerprint sweep ran out of its time " ..
+      "budget on this port; some paths were not matched")
   end
 
   for cpe, path in pairs(run_probes(host, port, triggered, where, deadline)) do
@@ -3170,7 +3217,7 @@ local function fingerprint(host, port, paths, deadline)
   return where
 end
 
---- Publish what the sweep found, so the rest of the scan can use it.
+--; Publish what the sweep found, so the rest of the scan can use it.
 --
 -- Both writes matter. The registry is what a third-party script reads; the
 -- port.version.cpe list is what puts the CPE into the <service> element of the
@@ -3183,7 +3230,8 @@ local function publish_cpes(host, port, discovered)
   end
 
   host.registry.vulners_cpe = host.registry.vulners_cpe or {}
-  host.registry.vulners_cpe[port.number] = host.registry.vulners_cpe[port.number] or {}
+  host.registry.vulners_cpe[port.number] =
+    host.registry.vulners_cpe[port.number] or {}
   local registry = host.registry.vulners_cpe[port.number]
 
   local in_registry = {}
@@ -3221,11 +3269,12 @@ local function publish_cpes(host, port, discovered)
   -- The probestate matters, and the default is a lie here. Measured on nmap
   -- 7.991 against a real listener with no -sV:
   --
-  --   without this script   <service name="http-alt" method="table"  conf="3"/>
-  --   set_port_version(h,p) <service name="http-alt" method="probed" conf="10">
+  --   without this script  <service name="http-alt" method="table" conf="3"/>
+  --   set_port_version(h,p) <service name="http-alt" method="probed"
+  --                          conf="10">
   --
-  -- so the two-argument form makes nmap report a hard version-probe match for a
-  -- service no version probe ever touched, in the XML other tools consume.
+  -- so the two-argument form makes nmap report a hard version-probe match for
+  -- a service no version probe ever touched, in the XML other tools consume.
   -- "incomplete" keeps method/conf as they were and still attaches the <cpe>.
   -- It is NOT passed unconditionally: on a genuine -sV hardmatch it would
   -- DOWNGRADE method="probed" conf="10" back to method="table" conf="3".
@@ -3235,7 +3284,7 @@ end
 
 -- -------------------------------------------------------------- 10. Render
 
---- Which optional columns this set of findings can actually fill.
+--; Which optional columns this set of findings can actually fill.
 --
 -- The columns follow the data rather than the licence: the script does not
 -- detect what its key is entitled to, it looks at what arrived. A column whose
@@ -3251,7 +3300,7 @@ local function columns_for(rows)
   return has
 end
 
---- The vulners.com page for one finding.
+--; The vulners.com page for one finding.
 --
 -- Composed, never read off the response. The enrich endpoint does return an
 -- href and it is the UPSTREAM source, not a vulners.com page: measured, it
@@ -3260,10 +3309,11 @@ end
 -- endpoint sends no href at all - 272 of 272 rows on one real CPE. The format
 -- below is the one nmap's own shipped 1.x copy of this script prints.
 local function vulners_link(row)
-  return string.format("https://vulners.com/%s/%s", row.type or "bulletin", row.id)
+  return string.format("https://vulners.com/%s/%s",
+    row.type or "bulletin", row.id)
 end
 
---- The FLAGS cell: fixed-width tokens, greppable, its own legend.
+--; The FLAGS cell: fixed-width tokens, greppable, its own legend.
 local function flags_of(row)
   local flags = {}
   if row.kev then
@@ -3275,14 +3325,16 @@ local function flags_of(row)
   return table.concat(flags, " ")
 end
 
---- One EPSS value in four characters.
+--; One EPSS value in four characters.
 --
 -- A probability of 0.00001 formatted as a percentage to one decimal reads
--- "0.0%", which a person reads as "zero" - and zero is the one thing EPSS never
--- reports. Anything that would round to nothing is shown as a bound instead.
+-- "0.0%", which a person reads as "zero" - and zero is the one thing EPSS
+-- never reports. Anything that would round to nothing is shown as a bound
+-- instead.
 local function epss_cell(epss)
   -- Bounded at the top for the same reason as the bottom: EPSS is a
-  -- probability, and printing "100%" asserts a certainty the model never states.
+  -- probability, and printing "100%" asserts a certainty the model never
+  -- states.
   if epss >= 0.995 then
     return ">99%"
   end
@@ -3295,7 +3347,7 @@ local function epss_cell(epss)
   return "<.1%"
 end
 
---- Lay findings out as an aligned ASCII table.
+--; Lay findings out as an aligned ASCII table.
 --
 -- Everything here is printable ASCII: nmap's escape_for_screen() passes only
 -- TAB, LF and 0x20-0x7E, so colour and box-drawing are not a stylistic choice
@@ -3341,17 +3393,17 @@ local function render_rows(rows, width, verbosity)
     hidden = #rows - #shown
   end
 
-  -- Computed on the rows that will actually be printed. Reading every row meant
-  -- a column could be created for data only the hidden rows carry, and then
-  -- every visible cell in it was blank - the "this finding is quiet" reading the
-  -- design forbids, and 56 of 100 columns spent saying nothing.
+  -- Computed on the rows that will actually be printed. Reading every row
+  -- meant a column could be created for data only the hidden rows carry, and
+  -- then every visible cell in it was blank - the "this finding is quiet"
+  -- reading the design forbids, and 56 of 100 columns spent saying nothing.
   local has = columns_for(shown)
 
   -- A link is atomic: it cannot be folded and cutting it produces something
-  -- that is no longer a link. It is bounded all the same, because the id inside
-  -- it is unvalidated response data - measured across 272 real findings on one
-  -- CPE, a vulners.com link runs 36 to 78 characters, so anything past this is
-  -- pathological and clipping is then the lesser evil.
+  -- that is no longer a link. It is bounded all the same, because the id
+  -- inside it is unvalidated response data - measured across 272 real findings
+  -- on one CPE, a vulners.com link runs 36 to 78 characters, so anything past
+  -- this is pathological and clipping is then the lesser evil.
   local MAX_LINK = 120
 
   local links = {}
@@ -3387,14 +3439,15 @@ local function render_rows(rows, width, verbosity)
   -- The optional numeric column is dropped when dropping it is what makes the
   -- table fit: at 40 columns - the narrowest the arguments allow - keeping it
   -- produced a 47-column line, so the promise to fit was quietly broken by the
-  -- one column that carries the least. It is NOT dropped for a link too long to
-  -- fit either way, because losing EPSS buys nothing there.
+  -- one column that carries the least. It is NOT dropped for a link too long
+  -- to fit either way, because losing EPSS buys nothing there.
   local header, widths, used = measure(false)
   local drop_numeric = false
   if width - used - 2 < longest_link then
     local plain_header, plain_widths, plain_used = measure(true)
     if width - plain_used - 2 >= longest_link then
-      header, widths, used, drop_numeric = plain_header, plain_widths, plain_used, true
+      header, widths, used, drop_numeric =
+        plain_header, plain_widths, plain_used, true
     end
   end
 
@@ -3431,7 +3484,8 @@ local function render_rows(rows, width, verbosity)
   local function row_text(cells)
     local parts = {}
     for index, cell in ipairs(cells) do
-      local numeric = index == 2 or header[index] == "EPSS" or header[index] == "AI"
+      local numeric = index == 2
+        or header[index] == "EPSS" or header[index] == "AI"
       if index == #cells then
         parts[#parts + 1] = cell or ""
       else
@@ -3449,12 +3503,14 @@ local function render_rows(rows, width, verbosity)
   lines[#lines + 1] = row_text(rule)
 
   for _, row in ipairs(shown) do
-    local cells = {row.severity, row.cvss and string.format("%.1f", row.cvss) or ""}
+    local cells = {row.severity,
+                   row.cvss and string.format("%.1f", row.cvss) or ""}
     if show_epss then
       cells[#cells + 1] = row.epss and epss_cell(row.epss) or ""
     end
     if show_ai then
-      cells[#cells + 1] = row.ai_score and string.format("%.1f", row.ai_score) or ""
+      cells[#cells + 1] =
+        row.ai_score and string.format("%.1f", row.ai_score) or ""
     end
     cells[#cells + 1] = flags_of(row)
     if title_width then
@@ -3487,7 +3543,7 @@ local function render_rows(rows, width, verbosity)
   return table.concat(lines, "\n")
 end
 
---- The structured element for one finding.
+--; The structured element for one finding.
 --
 -- stdnse.output_table(), never a plain table: a plain one renders its elements
 -- in hash order, and five consecutive runs of the same scan produced five
@@ -3575,8 +3631,8 @@ end
 -- The service_fp clause is the banner channel's, and without it that channel
 -- was dead where it was meant to pay. nmap records a service fingerprint
 -- exactly when its own probes did NOT settle the service - measured against a
--- listener greeting with an unrecognised banner, nmap hands the script a
--- 2 209-byte service_fp and leaves name, product, version and cpe all empty. So
+-- listener greeting with an unrecognised banner, nmap hands the script a 2
+-- 209-byte service_fp and leaves name, product, version and cpe all empty. So
 -- every other clause is false precisely on the ports the banner rules were
 -- imported for, and a keyed scan never reached audit/smart for them either:
 -- both features were unreachable through the front door.
@@ -3592,14 +3648,15 @@ portrule = function(host, port)
   return found ~= nil and found[port.number] ~= nil
 end
 
---- Collect the identities worth asking about, deduplicated.
+--; Collect the identities worth asking about, deduplicated.
 --
--- @return list, refused - the count of identities turned away for being absurd.
---         The caller needs that separately: a port whose only CPE was refused
---         is a port with a BAD identity, not a port with none, and treating the
---         two alike sent it to the billed endpoint. The trigger is
---         attacker-controlled, since nmap builds CPEs out of banner text - so
---         the target would have been choosing whether the operator pays.
+-- @return list, refused - the count of identities turned away for
+--         being absurd. The caller needs that separately: a port whose only
+--         CPE was refused is a port with a BAD identity, not a port with none,
+--         and treating the two alike sent it to the billed endpoint. The
+--         trigger is attacker-controlled, since nmap builds CPEs out of banner
+--         text - so the target would have been choosing whether the operator
+--         pays.
 local function collect_cpes(host, port, discovered)
   local list, seen = {}, {}
   local refused = 0
@@ -3609,7 +3666,8 @@ local function collect_cpes(host, port, discovered)
       return
     end
     if #cpe > MAX_IDENTITY then
-      stdnse.debug1("Refusing an identity of %d bytes; it cannot be real", #cpe)
+      stdnse.debug1("Refusing an identity of %d bytes; it cannot be real",
+        #cpe)
       refused = refused + 1
       return
     end
@@ -3624,10 +3682,11 @@ local function collect_cpes(host, port, discovered)
   for _, cpe in ipairs(dig(port, "version", "cpe") or {}) do
     add(cpe)
   end
-  -- Best-effort compatibility rather than a contract: dependencies is what puts
-  -- a script in a later runlevel, and with the 1.x scripts gone there is no
-  -- ordering guarantee that a third-party producer runs first.
-  for _, cpe in ipairs(dig(host, "registry", "vulners_cpe", port.number) or {}) do
+  -- Best-effort compatibility rather than a contract: dependencies is what
+  -- puts a script in a later runlevel, and with the 1.x scripts gone there is
+  -- no ordering guarantee that a third-party producer runs first.
+  local seeded = dig(host, "registry", "vulners_cpe", port.number) or {}
+  for _, cpe in ipairs(seeded) do
     add(cpe)
   end
   -- Sorted, because pairs() over string keys walks them in an order Lua seeds
@@ -3647,18 +3706,19 @@ local function collect_cpes(host, port, discovered)
   return list, refused
 end
 
---- Ask the free endpoint about one CPE, reusing what the scan already knows.
+--; Ask the free endpoint about one CPE, reusing what the scan already knows.
 --
 -- Only an answer is remembered. A rate limit or an exhausted retry budget
--- leaves the cache untouched, so the next host asks again instead of inheriting
--- a silent "no vulnerabilities" for the rest of the scan.
+-- leaves the cache untouched, so the next host asks again instead of
+-- inheriting a silent "no vulnerabilities" for the rest of the scan.
 local function lookup(key, software, version, kind)
   local shared = state()
 
   -- A ceiling nothing in a response can move. The number of identities is
   -- target-controlled through the sweep, and one hostile page was measured to
   -- turn into 903 outbound requests.
-  if shared.lookups[key] == nil and shared.looked_up >= MAX_LOOKUPS_PER_SCAN then
+  if shared.lookups[key] == nil
+      and shared.looked_up >= MAX_LOOKUPS_PER_SCAN then
     stdnse.debug1("This scan reached its ceiling of %d identities",
       MAX_LOOKUPS_PER_SCAN)
     return nil, false
@@ -3678,9 +3738,9 @@ local function lookup(key, software, version, kind)
   -- Two passes: wait once for a lookup in flight, then ask for ourselves if
   -- that lookup produced nothing. The wait happens on the FIRST pass only.
   -- Waiting on both passes made a contended identity cost 2 x
-  -- PENDING_WAIT_LIMIT, which the three-spelling nginx fan-out turns into three
-  -- minutes on one port - and the whole point of the bound is that an owner
-  -- which died must not hang the scan.
+  -- PENDING_WAIT_LIMIT, which the three-spelling nginx fan-out turns into
+  -- three minutes on one port - and the whole point of the bound is that an
+  -- owner which died must not hang the scan.
   for attempt = 1, 2 do
     local cached = shared.lookups[key]
     if cached ~= nil then
@@ -3690,8 +3750,9 @@ local function lookup(key, software, version, kind)
     if attempt == 1 and shared.pending[key] then
       wait_for_pending(shared.pending, key)
     else
-      -- On the second pass the claim may still be held by whoever died with it;
-      -- it is left alone rather than cleared, because it is not ours to release.
+      -- On the second pass the claim may still be held by whoever died with
+      -- it; it is left alone rather than cleared, because it is not ours to
+      -- release.
       local ours = not shared.pending[key]
       if ours then
         shared.pending[key] = true
@@ -3712,16 +3773,17 @@ local function lookup(key, software, version, kind)
   end
 end
 
---- Did burp resolve the identity it was asked about?
+--; Did burp resolve the identity it was asked about?
 --
 -- The endpoint reports this in search_explain, by echoing back the CPE it
--- matched. Three answers, and the third is the one that earns the function:
--- an answer that says nothing either way - no search_explain at all, or one
--- half of it missing - is not evidence, and the safe reading of "nothing either
+-- matched. Three answers, and the third is the one that earns the function: an
+-- answer that says nothing either way - no search_explain at all, or one half
+-- of it missing - is not evidence, and the safe reading of "nothing either
 -- way" is not to bill for it. Reading only search_cpe left every clean CPE
 -- billing again the moment the service omitted matched_cpe.
 --
--- @return true resolved, false positively unresolved, nil no evidence either way
+-- @return true resolved, false positively unresolved, nil no evidence
+--       either way
 local function resolution_of(explain)
   local asked = as_string(dig(explain, "search_cpe"))
   local matched = as_string(dig(explain, "matched_cpe"))
@@ -3731,12 +3793,12 @@ local function resolution_of(explain)
   return matched == asked
 end
 
---- Look a CPE up, asking every nginx spelling and merging the answers.
+--; Look a CPE up, asking every nginx spelling and merging the answers.
 --
--- "Did this identity resolve" is a question about the PRODUCT, not about one of
--- its three vendor spellings, so the verdict is formed here across all of them
--- rather than handed outwards as one spelling's search_explain. Both halves of
--- it are aggregated, and that symmetry is the point:
+-- "Did this identity resolve" is a question about the PRODUCT, not about one
+-- of its three vendor spellings, so the verdict is formed here across all of
+-- them rather than handed outwards as one spelling's search_explain. Both
+-- halves of it are aggregated, and that symmetry is the point:
 --
 --   * any spelling resolving means the identity resolved, even if the others
 --     said nothing - otherwise a product :nginx:nginx: resolved cleanly still
@@ -3792,7 +3854,7 @@ local function lookup_cpe(cpe)
   return rows, answered, resolution
 end
 
---- What one port contributes to the report.
+--; What one port contributes to the report.
 local function port_action(host, port)
   local cfg = config()
   local shared = state()
@@ -3822,21 +3884,23 @@ local function port_action(host, port)
   -- LIKELY_HTTP_SERVICES - so the sweep was silently skipped on exactly the
   -- ports the portrule was widened to reach.
   --
-  -- LIKELY_HTTP_SERVICES is a LIST, not a set, so indexing it by name yields nil
-  -- for every service including "http" itself. tableaux.contains with the array
-  -- flag is how shortport.service itself reads that same list
-  -- (nselib/shortport.lua:110), so this asks the question exactly as nmap does.
+  -- LIKELY_HTTP_SERVICES is a LIST, not a set, so indexing it by name yields
+  -- nil for every service including "http" itself. tableaux.contains with the
+  -- array flag is how shortport.service itself reads that same list
+  -- (nselib/shortport.lua:110), so this asks the question exactly as nmap
+  -- does.
   local probed = dig(port, "version", "service_dtype") == "probed"
-  local named = as_string(port.service) or as_string(dig(port, "version", "name"))
+  local named = as_string(port.service)
+    or as_string(dig(port, "version", "name"))
   local misidentified = probed and named ~= nil
     and not tableaux.contains(shortport.LIKELY_HTTP_SERVICES, named, true)
   -- The banner rules run on EVERY port, HTTP or not, because their subject is
   -- nmap's own service fingerprint - text already in hand. An SSH, SMTP or
   -- MySQL port that nmap could not name is exactly where this pays: it is a
-  -- port with no CPE, which in a keyless scan is a port that reports nothing at
-  -- all, and in a keyed one is a port about to spend a credit.
-  -- One budget for everything this port matches: the banner pass, the sweep and
-  -- the probe extraction all read the same clock.
+  -- port with no CPE, which in a keyless scan is a port that reports nothing
+  -- at all, and in a keyed one is a port about to spend a credit. One budget
+  -- for everything this port matches: the banner pass, the sweep and the probe
+  -- extraction all read the same clock.
   local deadline = os.clock() + SWEEP_TIME_BUDGET
   local discovered = fingerprint_banner(port, deadline)
 
@@ -3911,8 +3975,8 @@ local function port_action(host, port)
   end
 
   -- A port with NO CPE goes to audit/smart instead when there is a token: that
-  -- was measured to answer where this free text lookup does not ("Apache httpd"
-  -- as text returned 0 where the CPE returned 342).
+  -- was measured to answer where this free text lookup does not ("Apache
+  -- httpd" as text returned 0 where the CPE returned 342).
   --
   -- But a port that HAS a CPE never reaches audit/smart - by design, since a
   -- CPE must not cost a credit - so without this clause a keyed scan reported
@@ -3957,9 +4021,9 @@ local function port_action(host, port)
 
     if #strings > 0 then
       local answers = audit_smart(strings)
-      -- Walked in the order the strings were SENT, not in the order the answers
-      -- happen to hash: the same three inputs came back in three different group
-      -- orders on three runs.
+      -- Walked in the order the strings were SENT, not in the order the
+      -- answers happen to hash: the same three inputs came back in three
+      -- different group orders on three runs.
       local answered = answers or {}
       for _, input in ipairs(strings) do
         local answer = answered[input]
@@ -3973,10 +4037,11 @@ local function port_action(host, port)
           -- being handed an invented CPE.
           --
           -- Written out rather than as a conditional expression: the form
-          -- "answer.cpe and nil or ..." is always the right-hand branch in Lua,
-          -- because "X and nil" is falsy. Every group was stamped "software",
-          -- including the ones keyed by a real CPE the service resolved -
-          -- telling every importer that a valid CPE key was not a CPE.
+          -- "answer.cpe and nil or ..." is always the right-hand branch in
+          -- Lua, because "X and nil" is falsy. Every group was stamped
+          -- "software", including the ones keyed by a real CPE the service
+          -- resolved - telling every importer that a valid CPE key was not a
+          -- CPE.
           local identity = nil
           if answer.cpe == nil then
             identity = "software"
@@ -3989,9 +4054,10 @@ local function port_action(host, port)
 
   if next(groups) == nil then
     -- Counted only when there was no usable identity at all. A port whose CPE
-    -- resolved to nothing was identified perfectly well, and telling the user a
-    -- key would have named it is simply false.
-    if #cpes == 0 and refused_identities == 0 and (label or version.service_fp) then
+    -- resolved to nothing was identified perfectly well, and telling the user
+    -- a key would have named it is simply false.
+    if #cpes == 0 and refused_identities == 0
+        and (label or version.service_fp) then
       shared.unnamed = shared.unnamed + 1
     end
     return nil
@@ -4056,12 +4122,13 @@ local function port_action(host, port)
         end
       end
 
-      -- Returning a plain string loses nmap's own "| <key>:" grouping lines, so
-      -- each group opens with its own header.
-      -- The suffix is measured, not assumed, and the allowance is nmap's real
-      -- prefix: the FIRST line of a script's output carries "| vulners: ", which
-      -- is 11 columns, not 2. Assuming a flat 30 put every group header over
-      -- budget at every width - 48 columns at a configured 40.
+      -- Returning a plain string loses nmap's own "| <key>:" grouping
+      -- lines, so each group opens with its own header.
+      -- The suffix is measured, not assumed, and the allowance is nmap's
+      -- real prefix: the FIRST line of a script's output carries
+      -- "| vulners: ", which is 11 columns, not 2. Assuming a flat 30 put
+      -- every group header over budget at every width - 48 columns at a
+      -- configured 40.
       local suffix = string.format("  %d finding%s, %d exploitable",
         #rows, #rows == 1 and "" or "s", exploitable)
       local room = cfg.width - #suffix - 11
@@ -4077,20 +4144,20 @@ local function port_action(host, port)
   return output, table.concat(text, "\n")
 end
 
---- What the scan says once, at the end.
+--; What the scan says once, at the end.
 local function post_action()
   local shared = nmap.registry.vulners
   if not shared or not shared.consulted then
-    -- Nothing was looked up, so there is nothing to advertise. A -sn sweep that
-    -- consulted no port gets no advertisement.
+    -- Nothing was looked up, so there is nothing to advertise. A -sn sweep
+    -- that consulted no port gets no advertisement.
     return nil
   end
 
   -- Said in every branch below, because it is independent of the API key: a
   -- scan can have a perfectly good key and still have done no web
-  -- fingerprinting, and the operator has to be able to tell that from a network
-  -- where nothing was found. Silence about a capability that did not run reads
-  -- as a capability that found nothing.
+  -- fingerprinting, and the operator has to be able to tell that from a
+  -- network where nothing was found. Silence about a capability that did not
+  -- run reads as a capability that found nothing.
   local function with_notes(text)
     local notes = {}
     if shared.catalog_note then
@@ -4128,11 +4195,11 @@ local function post_action()
 
   -- Said before anything else, and instead of everything else. An operator who
   -- names a key file means that file, so a file that cannot be read stops the
-  -- run - port_action returns nothing for every port. That was reported only to
-  -- stdnse.verbose1, so without -v the scan produced an empty report and a
-  -- notice offering a free key to somebody who already has one and mistyped its
-  -- path. Measured against a live scan: the same host reports 272 findings with
-  -- no key at all, and nothing whatever with an unreadable one.
+  -- run - port_action returns nothing for every port. That was reported only
+  -- to stdnse.verbose1, so without -v the scan produced an empty report and a
+  -- notice offering a free key to somebody who already has one and mistyped
+  -- its path. Measured against a live scan: the same host reports 272 findings
+  -- with no key at all, and nothing whatever with an unreadable one.
   local fatal = config().fatal
   if fatal then
     return nil, with_notes("\n  Nothing was looked up: " .. fatal .. "." ..
@@ -4160,18 +4227,20 @@ local function post_action()
   -- Reported before the mode is even looked at. Every path that stops the
   -- spending also drops the mode to free or sets billing_off, so reporting the
   -- spend inside the keyed branch suppressed the number at exactly the moment
-  -- the user most needed it: the scan that hit a ceiling or ran the wallet down.
+  -- the user most needed it: the scan that hit a ceiling or ran the wallet
+  -- down.
   if shared.spent > 0 then
     local lines = {}
     for _, line in ipairs(nothing_was_checked() or {}) do
       lines[#lines + 1] = line
     end
-    local balance = shared.balance and string.format(", %d remaining", shared.balance) or ""
+    local balance = shared.balance
+      and string.format(", %d remaining", shared.balance) or ""
     lines[#lines + 1] = string.format("%d credit%s spent%s",
       shared.spent, shared.spent == 1 and "" or "s", balance)
     if shared.billing_stopped then
-      lines[#lines + 1] = "  Identification stopped: " .. shared.billing_stopped ..
-        ". Everything else ran normally."
+      lines[#lines + 1] = "  Identification stopped: " ..
+        shared.billing_stopped .. ". Everything else ran normally."
     end
     if shared.degraded then
       lines[#lines + 1] = "  " .. shared.degraded .. "."
@@ -4201,36 +4270,42 @@ local function post_action()
     lines[#lines + 1] = ""
   end
   if shared.degraded then
-    lines[#lines + 1] = "  Ran without a usable API key: " .. shared.degraded .. "."
+    lines[#lines + 1] =
+      "  Ran without a usable API key: " .. shared.degraded .. "."
   else
     lines[#lines + 1] = "  Ran without an API key."
   end
   -- Deliberately unspecific about which fields a key adds: what comes back
   -- depends on the licence behind it, and a notice promising EPSS to somebody
   -- whose licence withholds it would have lied.
-  lines[#lines + 1] = "  A key adds more detail per finding - exploitation status, titles"
-  lines[#lines + 1] = "  and dates - and can identify software this scan could not name"
+  lines[#lines + 1] =
+    "  A key adds more detail per finding - exploitation status, titles"
+  lines[#lines + 1] =
+    "  and dates - and can identify software this scan could not name"
   if shared.unnamed > 0 then
     lines[#lines + 1] = string.format(
-      "  (%d service%s here showed a banner that produced no usable identity).",
+      "  (%d service%s here showed a banner that produced no usable " ..
+      "identity).",
       shared.unnamed, shared.unnamed == 1 and "" or "s")
   else
     lines[#lines + 1] = "  from its raw banner alone."
   end
   lines[#lines + 1] = "  Get a free key at https://vulners.com/userinfo"
-  lines[#lines + 1] = "  (register first at https://vulners.com/), then either:"
-  lines[#lines + 1] = "    * put it in ~/.nmap/vulners.key   - picked up automatically"
+  lines[#lines + 1] =
+    "  (register first at https://vulners.com/), then either:"
+  lines[#lines + 1] =
+    "    * put it in ~/.nmap/vulners.key   - picked up automatically"
   lines[#lines + 1] = "    * or set VULNERS_API_KEY in the environment"
 
   return nil, with_notes(table.concat(lines, "\n"))
 end
 
---- Load the catalogue, once, before any host is touched.
+--; Load the catalogue, once, before any host is touched.
 --
 -- The prerule exists for exactly this. It is the only phase that runs once per
--- scan rather than once per open port, so the dictionaries are fetched a single
--- time however many ports answer - and no two ports can race each other into
--- the same download.
+-- scan rather than once per open port, so the dictionaries are fetched a
+-- single time however many ports answer - and no two ports can race each other
+-- into the same download.
 --
 -- It reports nothing. A catalogue that could not be loaded is a fact about the
 -- whole scan, so it is said once at the end, next to the other scan-wide
@@ -4240,11 +4315,12 @@ local function pre_action()
   return nil
 end
 
-local actions = {prerule = pre_action, portrule = port_action, postrule = post_action}
+local actions =
+  {prerule = pre_action, portrule = port_action, postrule = post_action}
 
--- SCRIPT_TYPE is read inside action() and never at file scope: it is undeclared
--- in the load-time environment, where a top-level read kills the whole script
--- engine rather than just this script.
+-- SCRIPT_TYPE is read inside action() and never at file scope: it is
+-- undeclared in the load-time environment, where a top-level read kills the
+-- whole script engine rather than just this script.
 
 prerule = function() return true end
 postrule = function() return true end
@@ -4258,9 +4334,10 @@ end
 -- costs nothing at scan time.
 --
 -- Kept honest by deletion. Sixteen names were exported that no test reached,
--- which reads as a tested seam and is not one - and four of them named the very
--- functions a reader would assume were covered. Anything reachable only through
--- a full action() call belongs here the day a case calls it, not before.
+-- which reads as a tested seam and is not one - and four of them named the
+-- very functions a reader would assume were covered. Anything reachable only
+-- through a full action() call belongs here the day a case calls it, not
+-- before.
 _TEST = {
   config = config,
   decode_service_fp = decode_service_fp,

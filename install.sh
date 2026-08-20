@@ -2,7 +2,8 @@
 # Install the nmap-vulners scripts where the local nmap will find them.
 #
 # From a checkout:            ./install.sh
-# Without one:                curl -fsSL https://raw.githubusercontent.com/vulnersCom/nmap-vulners/master/install.sh | sh
+# Without one:                curl -fsSL https://raw.githubusercontent.com/
+#                               vulnersCom/nmap-vulners/master/install.sh | sh
 # Without root:               ./install.sh --user
 # Somewhere specific:         ./install.sh --prefix /usr/local/share/nmap
 # Removing it again:          ./install.sh --uninstall
@@ -12,7 +13,8 @@
 #   --no-key      do not offer to store an API key
 #   --help
 #
-# macOS, Linux, Kali, WSL - anything with a POSIX shell. Windows has install.ps1.
+# macOS, Linux, Kali, WSL - anything with a POSIX shell. Windows uses
+# install.ps1.
 
 set -eu
 
@@ -25,7 +27,8 @@ ASK_KEY="yes"
 
 # 2.0 is one file that downloads its dictionaries at scan time. The 1.x trio
 # is still listed, because
-# installing over it has to REMOVE it: a leftover http-vulners-regex.nse carries
+# installing over it has to REMOVE it: a leftover http-vulners-regex.nse
+# carries
 # the "default" category and keeps sweeping targets under a plain -sC, which is
 # exactly what this release stopped doing.
 SCRIPTS="vulners.nse"
@@ -43,8 +46,13 @@ usage() { sed -n '2,/^[^#]/p' "$0" | sed -n 's/^# \{0,1\}//p'; exit 0; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --user) MODE="user"; shift ;;
-    --prefix) PREFIX="${2:-}"; [ -n "$PREFIX" ] || die "--prefix needs a directory"; MODE="prefix"; shift 2 ;;
-    --ref) REF="${2:-}"; [ -n "$REF" ] || die "--ref needs a branch or tag"; shift 2 ;;
+    --prefix)
+      PREFIX="${2:-}"
+      [ -n "$PREFIX" ] || die "--prefix needs a directory"
+      MODE="prefix"; shift 2 ;;
+    --ref)
+      REF="${2:-}"
+      [ -n "$REF" ] || die "--ref needs a branch or tag"; shift 2 ;;
     --uninstall) ACTION="uninstall"; shift ;;
     --no-key) ASK_KEY="no"; shift ;;
     -h|--help) usage ;;
@@ -109,7 +117,8 @@ run_at() {
   elif command -v sudo >/dev/null 2>&1; then
     sudo "$@"
   else
-    die "$target is not writable and sudo is not available; re-run as root or use --user"
+    die "$target is not writable and there is no sudo; re-run as root, or
+ use --user"
   fi
 }
 
@@ -158,7 +167,8 @@ validate_key() {
     code=$(curl -sS -o /dev/null -w '%{http_code}' \
       -H "X-Api-Key: $key" \
       -H "User-Agent: Vulners NMAP Plugin installer" \
-      "https://vulners.com/api/v3/audit/getSupportedOS/" 2>/dev/null || printf '000')
+      "https://vulners.com/api/v3/audit/getSupportedOS/" 2>/dev/null \
+      || printf '000')
   elif command -v wget >/dev/null 2>&1; then
     code=$(wget -qS -O /dev/null \
       --header="X-Api-Key: $key" \
@@ -194,7 +204,8 @@ store_key() {
 
   mkdir -p "$dir" || { say "  could not create $dir"; return 1; }
   umask 077
-  printf '%s\n' "$key" > "$file.tmp" || { say "  could not write $file"; return 1; }
+  printf '%s\n' "$key" > "$file.tmp" \
+    || { say "  could not write $file"; return 1; }
   chmod 600 "$file.tmp"
   mv -f "$file.tmp" "$file"
 
@@ -233,7 +244,7 @@ offer_key_entry() {
   # answer, so say where a key goes and carry on.
   if ! { exec 3<>/dev/tty; } 2>/dev/null; then
     say ""
-    say "No API key configured. It works without one; to add a key later, put it"
+    say "No API key configured. It works without one; to add one later,"
     say "in $existing or set VULNERS_API_KEY."
     return 0
   fi
@@ -276,7 +287,7 @@ offer_key_entry() {
       say "  $existing yourself, or re-run this installer."
       ;;
     unlicensed)
-      say "  that key is recognised but has no active licence; it was NOT saved."
+      say "  that key is recognised but has no licence; it was NOT saved."
       ;;
     ratelimited)
       say "  vulners.com is rate limiting right now, so the key could not be"
@@ -316,7 +327,9 @@ remove_legacy() {
 if [ "$ACTION" = "uninstall" ]; then
   say "Removing nmap-vulners from $DATADIR"
   for name in $SCRIPTS; do
-    [ -f "$SCRIPTDIR/$name" ] && run_at "$SCRIPTDIR" rm -f "$SCRIPTDIR/$name" && say "  scripts/$name"
+    [ -f "$SCRIPTDIR/$name" ] \
+      && run_at "$SCRIPTDIR" rm -f "$SCRIPTDIR/$name" \
+      && say "  scripts/$name"
   done
   remove_legacy
   update_db
@@ -375,25 +388,31 @@ update_db
 # is *which* file it resolves to.
 if [ "$MODE" = "system" ]; then
   resolved=$(nmap -d2 --script-help vulners 2>/dev/null |
-             sed -n 's|^Fetchfile found \(.*/scripts/vulners\.nse\)$|\1|p' | head -n 1)
+             sed -n 's|^Fetchfile found \(.*/scripts/vulners\.nse\)$|\1|p' |
+             head -n 1)
 else
   resolved=$(NMAPDIR="$DATADIR" nmap -d2 --script-help vulners 2>/dev/null |
-             sed -n 's|^Fetchfile found \(.*/scripts/vulners\.nse\)$|\1|p' | head -n 1)
+             sed -n 's|^Fetchfile found \(.*/scripts/vulners\.nse\)$|\1|p' |
+             head -n 1)
 fi
 
-[ -n "$resolved" ] || die "the files were copied but nmap does not list them; check $SCRIPTDIR"
+[ -n "$resolved" ] \
+  || die "the files were copied but nmap does not list them; check $SCRIPTDIR"
 
-if [ "$(cd "$(dirname "$resolved")" && pwd)/vulners.nse" != "$SCRIPTDIR/vulners.nse" ]; then
+resolved_dir=$(cd "$(dirname "$resolved")" && pwd)
+if [ "$resolved_dir/vulners.nse" != "$SCRIPTDIR/vulners.nse" ]; then
   say ""
   say "warning: nmap resolves 'vulners' to $resolved,"
   say "         not to the copy just installed in $SCRIPTDIR."
   if [ "$MODE" != "system" ]; then
-    say "         Set NMAPDIR=\"$DATADIR\" so this one wins, or install system-wide."
+    say "         Set NMAPDIR=\"$DATADIR\" so this one wins, or install"
+    say "         system-wide."
   fi
 fi
 
 say ""
-installed_version=$(sed -n 's/^local api_version = "\(.*\)"$/\1/p' "$SCRIPTDIR/vulners.nse" | head -n 1)
+installed_version=$(sed -n 's/^local api_version = "\(.*\)"$/\1/p' \
+  "$SCRIPTDIR/vulners.nse" | head -n 1)
 say "Installed. vulners.nse $installed_version is in place. Try it:"
 if [ "$MODE" = "system" ]; then
   say "  nmap -sV --script vulners scanme.nmap.org"
