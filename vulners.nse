@@ -108,6 +108,7 @@ categories = {"discovery", "intrusive", "vuln", "external"}
 local http = require "http"
 local io = require "io"
 local json = require "json"
+local lpeg = require "lpeg"
 local math = require "math"
 local nmap = require "nmap"
 local os = require "os"
@@ -3038,6 +3039,44 @@ local function run_probes(host, port, triggered, discovered, deadline)
   return found
 end
 
+--; nmap's escaping of a probe payload, undone in ONE left-to-right pass.
+--
+-- This is the grammar out of nmap's own nselib/lpeg-utility, which is the
+-- authority on the escaping - it is written nowhere else but service_scan.cc.
+-- What is NOT borrowed is how that library applies it. lpeg-utility.parse_fp
+-- runs escaped_quote() first, which already turns \\ into \, and then runs
+-- this over the result, so a backslash that was DATA is read a second time as
+-- the start of an escape. Measured on nmap 7.991, parse_fp turns back\\slash
+-- into "backslash" and C:\\temp into "C:" plus a TAB.
+--
+-- The four sequential gsub passes this replaced had the same disease from the
+-- other end: the pass for \t found the second half of a \\ next to the
+-- following letter. Measured against a captured fingerprint, three ways -
+-- \0 became the digit zero instead of a NUL, C:\\temp became a TAB, and the
+-- literal text \x28 was decoded into "(", a character the service never sent,
+-- inside a string this script matches version rules against and sends to the
+-- endpoint as software text.
+--
+-- One pass is the fix, and a PEG is how a single pass is stated: each escape
+-- consumes its own body, so nothing it produces is offered to the next rule.
+-- Compiled once, at load.
+--
+-- Two hex digits are REQUIRED where lpeg-utility asks for at most two. With
+-- fewer, its tonumber("", 16) is nil and string.char(nil) raises - and a
+-- raising script costs nmap the entire port, not one banner.
+local UNESCAPE = lpeg.P {
+  lpeg.Cs((lpeg.V "plain" + lpeg.V "escape") ^ 0),
+  esc = lpeg.P "\\",
+  plain = lpeg.P(1) - lpeg.V "esc",
+  escape = (lpeg.V "esc" *
+    lpeg.Cs(lpeg.V "named" + lpeg.V "hex" + lpeg.P(1))) / "%1",
+  -- The only single-character escapes service_scan writes.
+  named = lpeg.S "trn0" / {t = "\t", r = "\r", n = "\n", ["0"] = "\0"},
+  digit = lpeg.R("09", "af", "AF"),
+  hex = (lpeg.P "x" * lpeg.C(lpeg.V "digit" * lpeg.V "digit")) /
+    function(digits) return string.char(tonumber(digits, 16)) end,
+}
+
 --; The software banner inside nmap's service fingerprint.
 --
 -- service_fp is not a banner: it is a record of the probing. A header of
@@ -3055,16 +3094,13 @@ local function service_fp_payloads(fingerprint)
   local unwrapped = fingerprint:gsub("\nSF:", "")
 
   local seen, payloads = {}, {}
+  -- Terminating on the two characters ") is safe, and was checked rather than
+  -- assumed: a service was made to answer with a banner containing ")", and
+  -- `nmap -sV --version-all` wrote it as \"\). nmap escapes the payload as a
+  -- READY-MADE REGEX - " ) ( . \ all take a backslash and a space becomes
+  -- \x20 - so a bare ") can only be the end of the record.
   for payload in unwrapped:gmatch('%%r%([^,]*,[^,]*,"(.-)"%)') do
-    -- Undo nmap's escaping so the endpoint sees what the service actually
-    -- sent. The hex form goes first, or its backslash is eaten as a literal
-    -- escape.
-    local text = payload:gsub("\\x(%x%x)", function(hex)
-      return string.char(tonumber(hex, 16))
-    end)
-    text = text:gsub("\\r", "\r"):gsub("\\n", "\n"):gsub("\\t", "\t")
-    text = text:gsub("\\(.)", "%1")
-    text = ascii_lines(text, 256)
+    local text = ascii_lines(UNESCAPE:match(payload), 256)
     -- 22 probes were measured to produce one distinct string, so deduplicating
     -- is most of the saving.
     if text ~= "" and not seen[text] then

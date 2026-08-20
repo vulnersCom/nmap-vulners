@@ -349,6 +349,116 @@ suite[#suite + 1] = {
   end,
 }
 
+-- A real fingerprint, captured rather than imagined: a local service was made
+-- to answer with a banner carrying every sequence the decoding is delicate
+-- about, and `nmap -sV --version-all` was pointed at it. What came back is
+-- pasted below unchanged, and it settles how nmap escapes:
+--
+--   "  -> \"      )  -> \)      (  -> \(      .  -> \.
+--   \  -> \\      NUL -> \0     space -> \x20
+--
+-- Two consequences. A bare ") never occurs inside a payload, so the record
+-- terminator is not ambiguous. And a literal backslash in the data arrives as
+-- \\, which is what makes undoing the escapes in SEQUENTIAL passes wrong: the
+-- pass for \t sees the second half of a \\ followed by a t and rewrites data
+-- as though it were an escape.
+local ODD_FP = table.concat({
+  'SF-Port9077-TCP:V=7.991%I=9%D=8/20%Time=6A86AA59' ..
+    '%P=arm-apple-darwin25.6.0%',
+  'SF:r(NULL,31,"ODD/1\\.0\\x20say\\x20\\"\\)\\"\\x20here' ..
+    '\\x20\\0\\0\\x20back\\\\slash\\x20',
+  'SF:\\(paren\\)\\x20done\\r\\n");',
+}, "\n")
+
+suite[#suite + 1] = {
+  name = "every escape nmap writes is undone once, and only as an escape",
+  fn = function()
+    local payloads = load({})._TEST.service_fp_payloads(ODD_FP)
+
+    t.length(payloads, 1, "one probe answered, so one payload")
+    local text = payloads[1]
+
+    -- ascii_lines() maps a byte outside 32..126 to a space and then collapses
+    -- runs of blanks, so two NULs decoded correctly leave "here back". The
+    -- digits are the tell: \0 falling through to a catch-all that strips the
+    -- backslash arrives as the character "0", survives the ascii filter, and
+    -- puts a number the service never sent into a banner that is matched
+    -- against version rules and sent to the endpoint as software text.
+    t.is_true(text:find("here back", 1, true) ~= nil,
+      "\\0 is a NUL byte, which the ascii filter then drops")
+    t.is_true(text:find("here 00 back", 1, true) == nil,
+      "and must not arrive as the digit zero")
+
+    -- Windows paths are the common case, not a contrived one: an error page
+    -- naming C:\temp arrives as C:\\temp, and a pass for \t turns it into a
+    -- tab.
+    t.is_true(text:find("back\\slash", 1, true) ~= nil,
+      "a literal backslash must survive as one backslash")
+    t.is_true(text:find("\t") == nil,
+      "and must not be re-read as the escape that follows it")
+
+    -- The other direction, so the fix cannot be an over-correction that stops
+    -- undoing escapes at all.
+    t.is_true(text:find('say ")" here', 1, true) ~= nil,
+      "an escaped quote and paren are still data, and still get unescaped")
+    t.is_true(text:find("(paren)", 1, true) ~= nil,
+      "as is an escaped paren pair")
+    t.is_true(text:find("ODD/1.0", 1, true) ~= nil,
+      "and an escaped dot is a dot")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a literal escape sequence in a banner is text, not an escape",
+  fn = function()
+    -- The same defect seen from the side that matters for identity: text that
+    -- merely LOOKS like an escape must not be executed. nmap writes the four
+    -- characters \x28 as \\x28; decoding the hex form before the backslash
+    -- form turns them into "(" - a character the service never sent.
+    --
+    -- Assembled here rather than captured, because a service answering with a
+    -- Windows path is easier to describe than to stand up. The escaping is the
+    -- capture's, verified above.
+    local fp = 'SF-Port9077-TCP:V=7.991%I=9%D=8/20%r(NULL,10,' ..
+      '"eval\\\\x28\\\\x29\\x20in\\x20C:\\\\temp\\\\report.log")'
+    local payloads = load({})._TEST.service_fp_payloads(fp)
+
+    t.length(payloads, 1, "one record, one payload")
+    local text = payloads[1]
+
+    t.is_true(text:find("eval\\x28\\x29", 1, true) ~= nil,
+      "an escaped backslash protects what follows it from being decoded")
+    -- The one every Windows error page hits. C:\temp arrives as C:\\temp, and
+    -- a pass for \t reads the second backslash and the t as an escape.
+    t.is_true(text:find("C:\\temp\\report.log", 1, true) ~= nil,
+      "a Windows path survives as a path")
+    t.is_true(text:find("\t") == nil,
+      "with no tab invented where the service sent a backslash")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "a truncated hex escape is text, not a crash",
+  fn = function()
+    -- nmap always writes two digits, so this is a guard rather than a case
+    -- from the field - but lpeg-utility asks for AT MOST two, and on one digit
+    -- its tonumber("", 16) is nil and string.char(nil) raises. A raising
+    -- script does not lose a banner, it loses the whole port: nmap replaces
+    -- every finding the port had with "Script execution failed".
+    local fp = 'SF-Port9077-TCP:V=7.991%I=9%D=8/20%r(NULL,8,' ..
+      '"HTTP\\x20\\xZZ\\x2")'
+    local payloads = load({})._TEST.service_fp_payloads(fp)
+
+    t.length(payloads, 1, "the record still parses")
+    -- Pinned rather than merely "did not crash": an escape that is not one
+    -- loses its backslash and the rest is text, so \xZZ is xZZ and a trailing
+    -- \x2 is x2. Asserting the whole string is what makes this case fail if
+    -- the fallback ever starts swallowing the bytes instead.
+    t.equals(payloads[1], "HTTP xZZx2",
+      "a bad escape degrades to its own text, byte for byte")
+  end,
+}
+
 suite[#suite + 1] = {
   name = "the decoded banner is one bounded string for the paid endpoint",
   fn = function()
