@@ -202,7 +202,17 @@ plugin generations apart.
 * **offer to store an API key**, validating it against the API first and writing
   it mode 600. Under `sudo` they resolve the home directory from `$SUDO_USER`,
   because nmap resolves `~/.nmap` through `getpwuid(getuid())` and not `$HOME`.
-  `--no-key` / `-NoKey` skips the prompt, and a redirected stdin skips it too
+  `--no-key` / `-NoKey` skips the prompt, and so does having no terminal to ask
+  on - CI, a Dockerfile, cron. **The question is asked on `/dev/tty`, not on
+  stdin**, and it has to be: installed the documented way, `curl ... | sh`,
+  stdin is the pipe carrying the script, so testing it found no terminal and
+  skipped the offer on exactly the path most people take - and reading it would
+  have eaten the part of the script `sh` had not parsed yet
+* **refuse a ref that does not carry this release.** In download mode they fetch
+  `vulners.nse` from `--ref` (default `master`) and check it for the line naming
+  where the catalogue lives. A ref still holding 1.x would otherwise be
+  installed while the two data files 1.x needs were being deleted, which is a
+  downgrade to something that cannot run, arriving silently
 * verify by resolution, not by copying: they check that `--script vulners`
   resolves to the file they installed, and warn when it does not
 

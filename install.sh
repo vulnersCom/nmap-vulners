@@ -223,8 +223,15 @@ offer_key_entry() {
     return 0
   fi
 
-  # Piped into sh, or run by CI, there is nobody to answer.
-  if [ ! -t 0 ]; then
+  # The question is asked on the terminal, not on stdin, and it has to be:
+  # installed the documented way - curl ... | sh - stdin is the pipe carrying
+  # this script, so testing it found no terminal and skipped the offer on
+  # exactly the path most people take. Reading it would be worse than useless,
+  # because sh has not finished parsing what is still coming down it.
+  #
+  # No controlling terminal - CI, a Dockerfile, cron - and there is nobody to
+  # answer, so say where a key goes and carry on.
+  if ! { exec 3<>/dev/tty; } 2>/dev/null; then
     say ""
     say "No API key configured. It works without one; to add a key later, put it"
     say "in $existing or set VULNERS_API_KEY."
@@ -242,13 +249,14 @@ offer_key_entry() {
 
   # Read without echoing: a key pasted into a terminal otherwise stays in the
   # scrollback and in any recording of the session.
-  if stty -echo 2>/dev/null; then
-    read -r entered || entered=""
-    stty echo 2>/dev/null
+  if stty -echo <&3 2>/dev/null; then
+    read -r entered <&3 || entered=""
+    stty echo <&3 2>/dev/null
     printf '\n'
   else
-    read -r entered || entered=""
+    read -r entered <&3 || entered=""
   fi
+  exec 3>&-
 
   entered=$(printf '%s' "$entered" | tr -d '[:space:]')
   if [ -z "$entered" ]; then
@@ -264,7 +272,8 @@ offer_key_entry() {
       ;;
     bad)
       say "  vulners.com does not recognise that key; it was NOT saved."
-      say "  Check it at https://vulners.com/userinfo and re-run with --key."
+      say "  Check it at https://vulners.com/userinfo, then put the key in"
+      say "  $existing yourself, or re-run this installer."
       ;;
     unlicensed)
       say "  that key is recognised but has no active licence; it was NOT saved."
@@ -328,6 +337,14 @@ if [ -z "$HERE" ] || [ ! -f "$HERE/vulners.nse" ]; then
   for name in $SCRIPTS $DATA; do
     fetch "$REPO_RAW/$REF/$name" "$TMP/$name"
   done
+  # A ref that still carries 1.x answers with a 1.x vulners.nse, which this
+  # installer would then put in place while deleting the two data files that
+  # release cannot run without - a downgrade to something broken, silently.
+  # 2.0 fetches its dictionaries at scan time, and the line naming where from
+  # is what tells the two apart.
+  if ! grep -q '^local CATALOG_BASE' "$TMP/vulners.nse"; then
+    die "$REF does not carry the 2.x script; nothing was installed"
+  fi
   SOURCE="$TMP"
 fi
 

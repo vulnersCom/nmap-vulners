@@ -281,6 +281,15 @@ if (-not $here -or -not (Test-Path (Join-Path $here "vulners.nse"))) {
     foreach ($name in ($Scripts + $DataFiles)) {
         Invoke-WebRequest -Uri "$RepoRaw/$Ref/$name" -OutFile (Join-Path $temp $name) -UseBasicParsing
     }
+    # A ref that still carries 1.x answers with a 1.x vulners.nse, which this
+    # installer would then put in place while deleting the two data files that
+    # release cannot run without - a downgrade to something broken, silently.
+    # 2.0 fetches its dictionaries at scan time, and the line naming where from
+    # is what tells the two apart.
+    $fetched = Join-Path $temp "vulners.nse"
+    if (-not (Select-String -Path $fetched -Pattern '^local CATALOG_BASE' -Quiet)) {
+        throw "$Ref does not carry the 2.x script; nothing was installed"
+    }
     $source = $temp
 }
 

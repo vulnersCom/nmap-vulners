@@ -129,6 +129,23 @@ jobs:
           echo "serial=$live" >> "$GITHUB_OUTPUT"
           echo "currently published: serial $live"
 
+      # A merge carries catalog/ into another branch and triggers this
+      # workflow with dictionaries that are already live, unchanged. Failing
+      # there would put a red cross on the merge that ships a release, for a
+      # publish with nothing to publish. The serial guard below exists to stop
+      # a CHANGED catalogue going out at a stale serial; a no-op is not that.
+      - name: Already published, byte for byte
+        id: same
+        if: steps.live.outputs.published == 'yes'
+        run: |
+          if diff -r -q catalog /tmp/published >/dev/null 2>&1; then
+            echo "same=yes" >> "$GITHUB_OUTPUT"
+            echo "serial ${{ steps.live.outputs.serial }} is live and identical" \
+                 "to this one; nothing to publish"
+          else
+            echo "same=no" >> "$GITHUB_OUTPUT"
+          fi
+
       # catalog_diff is what stands between a hand-edited catalog/ and every
       # installed scanner. It used to run only in catalog-refresh.yml, so the
       # automated path was gated and the human one - a push, or a manual run -
@@ -136,7 +153,9 @@ jobs:
       # cleanly. Exit 1 is "broken", exit 2 is "a human should look", and on
       # this path the human is right here.
       - name: The rebuild does not lose what is already published
-        if: steps.live.outputs.published == 'yes' && !inputs.skip_loss_gate
+        if: >-
+          steps.live.outputs.published == 'yes' && !inputs.skip_loss_gate
+          && steps.same.outputs.same != 'yes'
         run: |
           set +e
           python3 tools/catalog_diff.py --before /tmp/published --after catalog
@@ -151,6 +170,7 @@ jobs:
           esac
 
       - name: The serial moved forward
+        if: steps.same.outputs.same != 'yes'
         run: |
           new=$(python3 -c 'import json; print(json.load(open("catalog/index.json"))["serial"])')
           live=${{ steps.live.outputs.serial }}
@@ -166,6 +186,7 @@ jobs:
           fi
 
       - name: Push the dictionaries
+        if: steps.same.outputs.same != 'yes'
         run: |
           new=$(python3 -c 'import json; print(json.load(open("catalog/index.json"))["serial"])')
           # The branch holds ONLY the dictionaries, at its root, so the fetch
