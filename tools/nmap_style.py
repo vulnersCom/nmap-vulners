@@ -118,7 +118,8 @@ class Findings:
             print("nmap style ok - %d tracked files checked" % self.checked)
             return 0
         for where, rule, detail in self.items[:40]:
-            print("%-44s %s%s" % (where, rule, "  " + detail if detail else ""))
+            note = "  " + detail if detail else ""
+            print("%-44s %s%s" % (where, rule, note))
         if len(self.items) > 40:
             print("... and %d more" % (len(self.items) - 40))
         print("\n%d findings against Nmap's Code Standards" % len(self.items))
@@ -179,7 +180,8 @@ def check_lua(name, text, lines, found):
         if line.startswith("---"):
             break
         if re.match(r"^-- *@", line):
-            found.add("%s:%d" % (name, n), "an @tag before the first --- block")
+            found.add("%s:%d" % (name, n),
+                      "an @tag before the first --- block")
             break
 
     # Private documentation opens with --;. A --- block belongs to something
@@ -223,7 +225,8 @@ def check_python(names, found):
     for line in out.stdout.splitlines():
         parts = line.split(":", 3)
         if len(parts) == 4:
-            found.add("%s:%s" % (parts[0], parts[1]), "PEP 8", parts[3].strip())
+            found.add("%s:%s" % (parts[0], parts[1]), "PEP 8",
+                      parts[3].strip())
         else:
             found.add(line, "PEP 8")
 
