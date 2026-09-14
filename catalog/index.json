@@ -5,7 +5,7 @@
    "file": "fingerprints.json"
   },
   "paths": {
-   "entries": 944,
+   "entries": 945,
    "file": "paths.json"
   },
   "probes": {
@@ -13,7 +13,7 @@
    "file": "probes.json"
   }
  },
- "generated": "2026-09-07T04:12:28Z",
+ "generated": "2026-09-14T04:12:25Z",
  "schema": 1,
- "serial": 9
+ "serial": 10
 }
