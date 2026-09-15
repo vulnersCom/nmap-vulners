@@ -119,7 +119,7 @@ local table = require "table"
 local tableaux = require "tableaux"
 local url = require "url"
 
-local api_version = "2.0"
+local api_version = "2.1"
 
 -- The User-Agent is a wire contract, not decoration: the free endpoint sits
 -- behind a CDN rule that answers 403 to any keyless request whose UA does not
@@ -1097,8 +1097,11 @@ local function burp_lookup(software, version, kind)
   for _, pair in ipairs({{"software", software}, {"version", version},
                          {"type", kind}}) do
     if pair[2] ~= nil then
-      -- Sent the way nmap's own shipped copy sends it: verbatim apart from
-      -- what would change the meaning of the request. ':' and '/' are legal in
+      local value = tostring(pair[2])
+      if pair[1] == "version" then
+        value = json.generate(value)
+      end
+      -- Keep ':' and '/' literal, as in nmap's shipped copy: they are legal in
       -- a query (RFC 3986 3.4), and leaving them alone means the lookup does
       -- not depend on the endpoint decoding anything - which mattered on
       -- 2026-08-18, when escaped values were answered with errorCode 303 for a
@@ -1107,7 +1110,7 @@ local function burp_lookup(software, version, kind)
       -- is the ANY wildcard, and a CPE carrying one - which any other script
       -- can put in host.registry - would widen one lookup into "every
       -- vulnerability for this product".
-      local escaped = tostring(pair[2]):gsub("[^!$'(),%-./0-9:;@A-Z_a-z~]",
+      local escaped = value:gsub("[^!$'(),%-./0-9:;@A-Z_a-z~]",
         function(char) return ("%%%02X"):format(char:byte()) end)
       parts[#parts + 1] = pair[1] .. "=" .. escaped
     end
