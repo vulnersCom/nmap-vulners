@@ -25,6 +25,7 @@
 local t, testdir, root = ...
 
 local json = require "json"
+local url = require "url"
 
 --; Load the merged script on the free path, with the path sweep off.
 --
@@ -146,7 +147,7 @@ suite[#suite + 1] = {
       "the burp endpoint is used")
     t.matches(request.path, "type=cpe",
       "the request must be typed as a CPE lookup")
-    t.matches(request.path, "version=9%.8%.2",
+    t.matches(request.path, "version=%%229%.8%.2%%22",
       "the version goes into the query")
     t.matches(request.path, "software=cpe:/a:isc:bind:9%.8%.2",
       "the CPE goes into the query exactly as it is")
@@ -203,9 +204,37 @@ suite[#suite + 1] = {
       "space and ampersand are escaped")
     t.is_nil(path:find("+", 1, true),
       "a plus would be read back as a space, so it is escaped too")
-    t.matches(path, "version=1%.0%%20beta",
+    t.matches(path, "version=%%221%.0%%20beta%%22",
       "the version keeps its own argument")
     t.length(t.split_query(path), 3, "exactly three query arguments are sent")
+  end,
+}
+
+suite[#suite + 1] = {
+  name = "versions stay strings in CPE lookups and software fallbacks",
+  fn = function()
+    for _, version in ipairs({"4.100", "4.90", "9.8.2"}) do
+      t.reset_registry()
+      local env, http = load_free()
+      answer(http, api_body({}))
+
+      env.action(t.host(), t.port({product = "Exim", version = version,
+        cpe = {"cpe:/a:exim:exim:" .. version}}))
+
+      local kinds = {}
+      for _, request in ipairs(burp(http)) do
+        t.equals(request.method, "GET", "lookups remain CDN-cacheable")
+        local encoded = request.path:match("[?&]version=([^&]*)")
+        t.is_true(encoded, "each lookup carries a version")
+        local ok, decoded = json.parse(url.unescape(encoded))
+        t.is_true(ok, "the version is valid JSON")
+        t.equals(type(decoded), "string", "a version is not a JSON number")
+        t.equals(decoded, version, "the version keeps every component")
+        kinds[request.path:match("[?&]type=([^&]*)")] = true
+      end
+      t.same(kinds, {cpe = true, software = true},
+        "the test must reach both lookup paths")
+    end
   end,
 }
 
@@ -780,13 +809,8 @@ suite[#suite + 1] = {
 }
 
 suite[#suite + 1] = {
-  name = "the request is byte-identical to the one nmap's own copy sends",
+  name = "the GET keeps raw CPE separators and quotes the version",
   fn = function()
-    -- The answers are cached at the CDN for four hours, keyed by the URL. The
-    -- copy of this script that ships with nmap sends
-    -- "?software=<raw>&version=<raw>&type=<raw>", so sending anything else -
-    -- a different argument order, or escaped characters - would miss every
-    -- entry that population has already warmed and add load to the origin.
     local env, http = load_free()
     answer(http, api_body({vuln({id = "CVE-2012-1667", cvss = 8.5})}))
 
@@ -795,9 +819,9 @@ suite[#suite + 1] = {
     local lookups = burp(http)
     t.length(lookups, 1, "one CPE, one lookup, nothing else on that endpoint")
     t.equals(lookups[1].path,
-      "/api/v3/burp/software/?software=" .. CPE .. "&version=9.8.2&type=cpe",
-      "the query must match what the installed plugin sends, argument for " ..
-        "argument")
+      "/api/v3/burp/software/?software=" .. CPE ..
+        "&version=%229.8.2%22&type=cpe",
+      "the version is quoted without changing the other query fields")
   end,
 }
 
