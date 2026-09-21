@@ -1,0 +1,19 @@
+{
+ "catalogs": {
+  "fingerprints": {
+   "entries": 721,
+   "file": "fingerprints.json"
+  },
+  "paths": {
+   "entries": 948,
+   "file": "paths.json"
+  },
+  "probes": {
+   "entries": 6,
+   "file": "probes.json"
+  }
+ },
+ "generated": "2026-09-21T04:12:35Z",
+ "schema": 1,
+ "serial": 11
+}
