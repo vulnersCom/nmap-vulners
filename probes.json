@@ -1,0 +1,180 @@
+{
+ "probes": [
+  {
+   "alias": "cpe:/a:concrete5:concrete5",
+   "detect": [
+    {
+     "anchor": "/concrete/js/",
+     "channel": "script",
+     "regex": "/[cC][oO][nN][cC][rR][eE][tT][eE]/[jJ][sS]/"
+    }
+   ],
+   "extract": [
+    {
+     "anchor": "concrete5",
+     "regex": "Concrete5 ([0-9.][0-9.]*)"
+    },
+    {
+     "anchor": "powered by concrete5",
+     "regex": "Powered by Concrete5 ([0-9.][0-9.]*)"
+    }
+   ],
+   "name": "Concrete5 Detection",
+   "paths": [
+    "/concrete/js/build/",
+    "/concrete/block/"
+   ],
+   "source": "nuclei:concrete5-detect + wappalyzer"
+  },
+  {
+   "alias": "cpe:/a:drupal:drupal",
+   "detect": [
+    {
+     "anchor": "19 nov 1978",
+     "channel": "hdr:expires",
+     "regex": "19 [nN][oO][vV] 1978"
+    },
+    {
+     "anchor": "\"/sites/default/themes/",
+     "channel": "body",
+     "regex": "<[lL][iI][nN][kK][^>][^>]*\"/[sS][iI][tT][eE][sS]/[dD][eE][fF][aA][uU][lL][tT]/[tT][hH][eE][mM][eE][sS]/"
+    },
+    {
+     "anchor": "drupal.js",
+     "channel": "script",
+     "regex": "[dD][rR][uU][pP][aA][lL]%.[jJ][sS]"
+    }
+   ],
+   "extract": [
+    {
+     "anchor": "class=\"site-version\">",
+     "regex": "class=\"site%-version\">([0-9.x%-][0-9.x%-]*)"
+    }
+   ],
+   "name": "Drupal - Detect",
+   "paths": [
+    "/CHANGELOG.txt",
+    "/core/install.php"
+   ],
+   "source": "nuclei:drupal-detect + wappalyzer"
+  },
+  {
+   "alias": "cpe:/a:atlassian:jira",
+   "detect": [
+    {
+     "anchor": "jira",
+     "channel": "meta:application-name",
+     "regex": "[jJ][iI][rR][aA]"
+    }
+   ],
+   "extract": [
+    {
+     "anchor": "title=\"jiraversion\" value=\"",
+     "regex": "title=\"JiraVersion\" value=\"([0-9.][0-9.]*)"
+    }
+   ],
+   "name": "Jira Detect",
+   "paths": [
+    "/secure/Dashboard.jspa",
+    "/jira/secure/Dashboard.jspa"
+   ],
+   "source": "nuclei:jira-detect + wappalyzer"
+  },
+  {
+   "alias": "cpe:/a:joomla:joomla",
+   "detect": [
+    {
+     "anchor": "id=\"wrapper_r\"",
+     "channel": "body",
+     "regex": "<[dD][iI][vV][^>][^>]*[iI][dD]=\"[wW][rR][aA][pP][pP][eE][rR]_[rR]\""
+    }
+   ],
+   "extract": [
+    {
+     "anchor": "_version_history",
+     "regex": "[jJ][oO][oO][mM][lL][aA]_([%d.|%d][%d.|%d]*)_[vV][eE][rR][sS][iI][oO][nN]_[hH][iI][sS][tT][oO][rR][yY]"
+    }
+   ],
+   "name": "Joomla! Detect",
+   "paths": [
+    "/administrator/manifests/files/joomla.xml",
+    "/language/en-GB/en-GB.xml"
+   ],
+   "source": "nuclei:joomla-detect + wappalyzer"
+  },
+  {
+   "alias": "cpe:/a:apache:tomcat",
+   "detect": [
+    {
+     "anchor": "apache-coyote",
+     "channel": "hdr:server",
+     "regex": "^[aA][pP][aA][cC][hH][eE]%-[cC][oO][yY][oO][tT][eE]"
+    }
+   ],
+   "extract": [
+    {
+     "anchor": "apache tomcat",
+     "regex": "[aA][pP][aA][cC][hH][eE] [tT][oO][mM][cC][aA][tT][^\r\n]*%D([1-9]*[0-9]%.[0-9][0-9]*%.[0-9][0-9]*)"
+    }
+   ],
+   "name": "Tomcat Detection",
+   "paths": [
+    "/docs/introduction.html"
+   ],
+   "source": "nuclei:tomcat-detect + wappalyzer"
+  },
+  {
+   "alias": "cpe:/a:wordpress:wordpress",
+   "detect": [
+    {
+     "anchor": "/xmlrpc.php",
+     "channel": "hdr:x-pingback",
+     "regex": "/[xX][mM][lL][rR][pP][cC]%.[pP][hH][pP]$"
+    },
+    {
+     "anchor": "rel=\"https://api.w.org/\"",
+     "channel": "hdr:link",
+     "regex": "[rR][eE][lL]=\"[hH][tT][tT][pP][sS]://[aA][pP][iI]%.[wW]%.[oO][rR][gG]/\""
+    },
+    {
+     "anchor": "/wp-content/",
+     "channel": "body",
+     "regex": "<[lL][iI][nN][kK] [^>][^>]*[rR][eE][lL]=[\"'][sS][tT][yY][lL][eE][sS][hH][eE][eE][tT][\"'] [^>][^>]*/[wW][pP]%-[cC][oO][nN][tT][eE][nN][tT]/"
+    },
+    {
+     "anchor": "/wp-content/",
+     "channel": "body",
+     "regex": "<[lL][iI][nN][kK] [^>][^>]*/[wW][pP]%-[cC][oO][nN][tT][eE][nN][tT]/[^>][^>]* [rR][eE][lL]=[\"'][sS][tT][yY][lL][eE][sS][hH][eE][eE][tT][\"']"
+    },
+    {
+     "anchor": ".wp.com",
+     "channel": "body",
+     "regex": "<[lL][iI][nN][kK][^>][^>]*[sS]%d%d*%.[wW][pP]%.[cC][oO][mM]"
+    },
+    {
+     "anchor": "/wp-content/",
+     "channel": "script",
+     "regex": "/[wW][pP]%-[cC][oO][nN][tT][eE][nN][tT]/"
+    },
+    {
+     "anchor": "wp-embed.min.js",
+     "channel": "script",
+     "regex": "[wW][pP]%-[eE][mM][bB][eE][dD]%.[mM][iI][nN]%.[jJ][sS]"
+    }
+   ],
+   "extract": [
+    {
+     "anchor": "https://wordpress",
+     "regex": "https://wordpress[^\r\n]org/%?v=([0-9.][0-9.]*)"
+    }
+   ],
+   "name": "WordPress Detect",
+   "paths": [
+    "/wp-admin/install.php",
+    "/feed/"
+   ],
+   "source": "nuclei:wordpress-detect + wappalyzer"
+  }
+ ],
+ "schema": 1
+}
