@@ -6507,28 +6507,39 @@
   },
   "jQuery, script": {
    "alias": "cpe:/a:jquery:jquery",
-   "anchor": "/jquery",
+   "anchor": "/jquery.js",
    "channel": "script",
    "example": {
-    "subject": "/7.7.7/jquery.q",
+    "subject": "/7.7.7/jquery.js",
     "version": "7.7.7"
    },
-   "regex": "/(%d%d*%.%d%d*%.%d%d*)/[jJ][qQ][uU][eE][rR][yY][/.%-][^uU]",
+   "regex": "/(%d%d*%.%d%d*%.%d%d*)/[jJ][qQ][uU][eE][rR][yY]%.[jJ][sS]",
    "source": "wappalyzer:jQuery/scriptSrc"
   },
   "jQuery, script_1": {
+   "alias": "cpe:/a:jquery:jquery",
+   "anchor": "/jquery.slim.min.js",
+   "channel": "script",
+   "example": {
+    "subject": "/7.7.7/jquery.slim.min.js",
+    "version": "7.7.7"
+   },
+   "regex": "/(%d%d*%.%d%d*%.%d%d*)/[jJ][qQ][uU][eE][rR][yY]%.[sS][lL][iI][mM]%.[mM][iI][nN]%.[jJ][sS]",
+   "source": "wappalyzer:jQuery/scriptSrc"
+  },
+  "jQuery, script_2": {
    "alias": "cpe:/a:jquery:jquery",
    "anchor": "/jquery.js",
    "channel": "script",
    "regex": "/([%d.]+)/jquery%.js"
   },
-  "jQuery, script_2": {
+  "jQuery, script_3": {
    "alias": "cpe:/a:jquery:jquery",
    "anchor": "/jquery.min.js",
    "channel": "script",
    "regex": "/([%d.]+)/jquery%.min%.js"
   },
-  "jQuery, script_3": {
+  "jQuery, script_4": {
    "alias": "cpe:/a:jquery:jquery",
    "anchor": "/jquery-",
    "channel": "script",
@@ -6539,13 +6550,13 @@
    "regex": "/[jJ][qQ][uU][eE][rR][yY]%-(%d%d*%.%d%d*%.%d%d*)[/.%-]",
    "source": "wappalyzer:jQuery/scriptSrc"
   },
-  "jQuery, script_4": {
+  "jQuery, script_5": {
    "alias": "cpe:/a:jquery:jquery",
    "anchor": ".js?ver=",
    "channel": "script",
    "regex": "jquery[^\"'<>]-%.js%?ver=([%d.]+)"
   },
-  "jQuery, script_5": {
+  "jQuery, script_6": {
    "alias": "cpe:/a:jquery:jquery",
    "anchor": ".js?version=",
    "channel": "script",
