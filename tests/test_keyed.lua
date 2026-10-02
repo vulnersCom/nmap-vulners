@@ -406,7 +406,7 @@ suite[#suite + 1] = {
 
     local asked = query_args(burp[1].path)
     t.equals(asked.software, CPE)
-    t.equals(asked.version, "7.4")
+    t.equals(asked.version, '"7.4"')
     t.equals(asked.type, "cpe")
     t.is_true(burp[1].path:find("software=" .. CPE, 1, true),
       "the CPE travels verbatim: the endpoint does not decode it")
