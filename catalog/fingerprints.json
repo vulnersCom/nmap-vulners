@@ -6815,7 +6815,7 @@
     "version": "5.3.0-dev+20220208.47252f9cf8"
    },
    "regex": "%S%S*:%d%d?%d?%d?%d? / %S%S* | phpMyAdmin ([%d.][%d.]*%-[a-zA-Z0-9][a-zA-Z0-9]*%+%d%d%d%d%d%d%d%d%.[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]*)",
-   "source": "recog:html_title.xml#408"
+   "source": "recog:html_title.xml#409"
   },
   "phpMyAdmin, title_1": {
    "alias": "cpe:/a:phpmyadmin:phpmyadmin",
@@ -6826,7 +6826,7 @@
     "version": "5.0.4"
    },
    "regex": "%S%S*:%d%d?%d?%d?%d? / %S%S* | phpMyAdmin ([%d.][%d.]*)",
-   "source": "recog:html_title.xml#408"
+   "source": "recog:html_title.xml#409"
   },
   "phpMyAdmin, title_2": {
    "alias": "cpe:/a:phpmyadmin:phpmyadmin",
@@ -6837,7 +6837,7 @@
     "version": "5.3.0-dev+20220208.47252f9cf8"
    },
    "regex": "phpMyAdmin ([%d.][%d.]*%-[a-zA-Z0-9][a-zA-Z0-9]*%+%d%d%d%d%d%d%d%d%.[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]*)",
-   "source": "recog:html_title.xml#408"
+   "source": "recog:html_title.xml#409"
   },
   "phpMyAdmin, title_3": {
    "alias": "cpe:/a:phpmyadmin:phpmyadmin",
@@ -6848,7 +6848,7 @@
     "version": "5.0.0-rc1"
    },
    "regex": "phpMyAdmin ([%d.][%d.]*%-[a-zA-Z0-9][a-zA-Z0-9]*)",
-   "source": "recog:html_title.xml#408"
+   "source": "recog:html_title.xml#409"
   },
   "phpMyAdmin, title_4": {
    "alias": "cpe:/a:phpmyadmin:phpmyadmin",
@@ -6859,7 +6859,7 @@
     "version": "2.10.0.2"
    },
    "regex": "phpMyAdmin ([%d.][%d.]*)",
-   "source": "recog:html_title.xml#408"
+   "source": "recog:html_title.xml#409"
   },
   "thttpd, header": {
    "alias": "cpe:/a:acme:thttpd",
