@@ -3693,6 +3693,17 @@
    "regex": "^(%d%d?%.%d%d?%d?%.[a-f%d][a-f%d]?[a-f%d]?[sS][pP]1)",
    "source": "recog:mysql_banners.xml#34"
   },
+  "N-central, cookie": {
+   "alias": "cpe:/a:n-able:n-central",
+   "anchor": "ncentral_version=",
+   "channel": "cookie",
+   "example": {
+    "subject": "ncentral_version=2026.3.0.5; Path=/; SameSite=Lax",
+    "version": "2026.3.0.5"
+   },
+   "regex": "^ncentral_version=(%d%d*%.%d%d*%.%d%d*%.%d%d*)",
+   "source": "recog:http_cookies.xml#81"
+  },
   "NTP, banner": {
    "alias": "cpe:/o:hp:hp-ux",
    "anchor": "version=\"ntpd",
